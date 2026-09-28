@@ -170,7 +170,8 @@ module.exports = async (req, res) => {
         const name = String(b.name || '').trim().slice(0, 40), r = R.includes(b.rarity) ? b.rarity : 'c', pr = int(b.price, 1e6);
         if (name.length < 2 || pr < 1) return fail('Nom et prix requis');
         cu.objs = cu.objs.filter((x) => x.name !== name);
-        cu.objs.push({ name, r, price: pr });
+        const st = parseInt(b.stock, 10);
+        cu.objs.push({ name, r, price: pr, stock: st > 0 ? Math.min(st, 1e6) : null });
         await redis.set('custom', cu);
         return ok({ done: true });
       }
@@ -236,8 +237,10 @@ module.exports = async (req, res) => {
     } else if (b.action === 'buyobj') {
       const x = cu.objs.find((o) => !o.gone && 'obj:' + o.name === b.id);
       if (!x) return fail('Objet indisponible');
+      if (x.stock != null && x.stock <= 0) return fail('Objet épuisé');
       if (u.coins < x.price) return fail('Pas assez de coins');
       u.coins -= x.price; add(u, b.id, 1);
+      if (x.stock != null) { x.stock -= 1; await redis.set('custom', cu); }
     } else if (b.action === 'sell') {
       const list = b.mode === 'dupes'
         ? Object.entries(u.cards).filter(([id, n]) => n > 1 && !u.fav.includes(id) && (!b.theme || id.startsWith(b.theme + ':'))).map(([id, n]) => [id, n - 1])

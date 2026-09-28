@@ -2,7 +2,8 @@
 <html lang="fr" data-th="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#10141c">
 <title>Codex</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
@@ -56,6 +57,25 @@ details{border-top:1px solid var(--line);padding:8px 0}summary{cursor:pointer;fo
 #toasts{position:fixed;bottom:16px;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:20;pointer-events:none}
 .toast{pointer-events:auto;background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:12px;padding:10px 16px;max-width:90%;box-shadow:0 4px 20px #0006;cursor:pointer;animation:pop .4s both}
 .ov .box{color:var(--txt)}
+html{-webkit-text-size-adjust:100%}
+button,select,input,textarea{min-height:44px;font-size:16px;touch-action:manipulation}
+.card .ac button{min-height:36px;font-size:13px}
+canvas{touch-action:none}
+.pad button{min-width:60px;min-height:60px;font-size:24px}
+@media(max-width:600px){
+main{padding:8px 8px calc(84px + env(safe-area-inset-bottom))}
+.bar{padding:6px 0}.bar b{font-size:18px}
+.tabs{position:fixed;bottom:0;left:0;right:0;margin:0;background:var(--panel);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom));display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;z-index:4}
+.tabs button{padding:8px 2px;font-size:13px}
+.grid{grid-template-columns:repeat(2,1fr);gap:10px}
+.grid2{grid-template-columns:1fr}
+.box{padding:12px}
+.card .ct{font-size:16px}
+.ov{padding:10px}
+.pk.big{width:140px;height:190px;margin-top:12vh}
+#toasts{bottom:calc(76px + env(safe-area-inset-bottom))}
+.auth{margin:6vh auto}
+}
 </style>
 </head>
 <body><main id="app"></main>
@@ -152,7 +172,7 @@ function shopHTML() {
     const pr = sh.blocked ? '<b class="err">Indisponible pour le moment</b>' : sh.discount ? '<s>100</s> <b>' + sh.price + ' coins</b> <span class="pill">-' + sh.discount + '%</span>' : '<b>' + sh.price + ' coins</b>';
     return '<div class="box"><div class="pk" style="--pc:' + o.color + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button></div></div>';
   }).join('');
-  const objs = S.objs.length ? '<h2>Objets</h2><div class="grid2">' + S.objs.map((x) => '<div class="box"><b style="color:var(--' + x.r + ')">' + esc(x.name) + '</b> — ' + RN[x.r] + '<p>' + x.price + ' coins</p><button data-ob="' + esc('obj:' + x.name) + '"' + (S.coins < x.price ? ' disabled' : '') + '>Acheter</button></div>').join('') + '</div>' : '';
+  const objs = S.objs.length ? '<h2>Objets</h2><div class="grid2">' + S.objs.map((x) => '<div class="box"><b style="color:var(--' + x.r + ')">' + esc(x.name) + '</b> — ' + RN[x.r] + '<p>' + x.price + ' coins' + (x.stock != null ? (x.stock > 0 ? ' · Reste ' + x.stock : ' · Épuisé') : '') + '</p><button data-ob="' + esc('obj:' + x.name) + '"' + (S.coins < x.price || (x.stock != null && x.stock <= 0) ? ' disabled' : '') + '>Acheter</button></div>').join('') + '</div>' : '';
   return '<div class="box"><p>Un sachet gratuit toutes les 10 minutes (10 maximum). Sachets gratuits : <b>' + S.packs + '/10</b>. <span id="cd"></span></p></div><div class="grid2">' + packs + '</div>' + objs;
 }
 function idsOf(t) {
@@ -172,7 +192,7 @@ function mkHTML() {
   return '<div class="box"><p>Achète les cartes des autres joueurs, ou mets tes cartes en vente depuis ta collection (bouton 🏷️) au prix que tu choisis. La vente directe à la banque rapporte peu.</p></div>' + (S.market.length ? '<div class="grid" id="gm"></div>' : '<p>Aucune annonce pour le moment.</p>');
 }
 function jeuHTML() {
-  return '<div class="box"><h2>Jeux d\'argent</h2><p>Mise entre 10 et 500 coins. Repère : un sachet coûte 100 coins.</p><div class="row"><input id="bet" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button data-g="snake">🐍 Snake</button><button data-g="tetris">🧱 Tetris</button></div></div>' +
+  return '<div class="box"><h2>Jeux d\'argent</h2><p>Mise entre 10 et 500 coins. Repère : un sachet coûte 100 coins. Sur téléphone, glisse le doigt sur le jeu (Tetris : touche = tourner, glisser vers le bas = chute).</p><div class="row"><input id="bet" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button data-g="snake">🐍 Snake</button><button data-g="tetris">🧱 Tetris</button></div></div>' +
     '<div class="box"><h2>🎡 Roulette</h2><p>Mise de 10 à 500 coins. Rouge, noir, pair, impair : gain ×2,5. Douzaine (1-12, 13-24, 25-36) : ×3,7. Numéro exact (0 à 36) : ×43. Le 0 fait perdre tous les paris sauf celui sur le numéro 0. Bien plus généreux que Snake et Tetris.</p><div class="row"><input id="rb" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise roulette"></div><div class="row" style="margin-top:8px"><button data-rk="red">🔴 Rouge</button><button data-rk="black">⚫ Noir</button><button data-rk="even">Pair</button><button data-rk="odd">Impair</button></div><div class="row" style="margin-top:8px"><button data-rk="dozen" data-rv="0">1-12</button><button data-rk="dozen" data-rv="1">13-24</button><button data-rk="dozen" data-rv="2">25-36</button><input id="rn" type="number" min="0" max="36" placeholder="N°" style="width:80px" aria-label="Numéro"><button data-rk="num">Numéro</button></div><div style="text-align:center;margin-top:10px"><canvas id="rc" width="260" height="260" style="max-width:100%"></canvas></div><div id="rw" style="text-align:center;font-size:40px;min-height:80px"></div></div>' +
     '<div class="box"><b>Gains</b><p>🐍 Snake (pommes mangées) : gain = mise × (pommes − 5) ÷ 10, maximum ×4. Avec 100 coins : 15 pommes rendent 100, 45 pommes rendent 400.</p><p>🧱 Tetris (lignes) : gain = mise × (lignes − 3) ÷ 6, maximum ×4. Avec 100 coins : 9 lignes rendent 100, 27 lignes rendent 400. Moins de 5 pommes ou 3 lignes : tu perds ta mise.</p></div>';
 }
@@ -358,7 +378,7 @@ function wheel(cv, n, done, still) {
 }
 function play(kind, gid, bet) {
   const sn = kind === 'snake';
-  const ov = overlay('<div style="text-align:center"><h2>' + (sn ? '🐍 Snake' : '🧱 Tetris') + ' — mise ' + bet + ' 🪙</h2><p>' + (sn ? 'Pommes' : 'Lignes') + ' : <b id="sc">0</b></p><canvas id="cv" style="max-width:100%;border:2px solid var(--line)"></canvas><div class="pad row" style="justify-content:center;margin:10px 0"><button class="g" data-k="L">◀</button><button class="g" data-k="U">' + (sn ? '▲' : '⟳') + '</button><button class="g" data-k="D">▼</button><button class="g" data-k="R">▶</button>' + (sn ? '' : '<button class="g" data-k="X">⤓</button>') + '</div><button class="g" id="ab">Abandonner</button><div id="rs"></div></div>');
+  const ov = overlay('<div style="text-align:center"><h2>' + (sn ? '🐍 Snake' : '🧱 Tetris') + ' — mise ' + bet + ' 🪙</h2><p>' + (sn ? 'Pommes' : 'Lignes') + ' : <b id="sc">0</b></p><canvas id="cv" style="max-width:100%;max-height:50vh;width:auto;border:2px solid var(--line)"></canvas><div class="pad row" style="justify-content:center;margin:10px 0"><button class="g" data-k="L">◀</button><button class="g" data-k="U">' + (sn ? '▲' : '⟳') + '</button><button class="g" data-k="D">▼</button><button class="g" data-k="R">▶</button>' + (sn ? '' : '<button class="g" data-k="X">⤓</button>') + '</div><button class="g" id="ab">Abandonner</button><div id="rs"></div></div>');
   let cur = 0, done = false, g;
   const sc = (n) => { cur = n; ov.querySelector('#sc').textContent = n; };
   const kd = (e) => { const k = { ArrowLeft: 'L', ArrowRight: 'R', ArrowUp: 'U', ArrowDown: 'D', ' ': 'X' }[e.key]; if (k) { e.preventDefault(); g.cmd(k); } };
@@ -374,6 +394,14 @@ function play(kind, gid, bet) {
   };
   g = (sn ? snake : tetris)(ov.querySelector('#cv'), sc, over);
   document.addEventListener('keydown', kd);
+  const cvs = ov.querySelector('#cv'); let ts;
+  cvs.addEventListener('touchstart', (e) => { const t = e.touches[0]; ts = [t.clientX, t.clientY]; e.preventDefault(); }, { passive: false });
+  cvs.addEventListener('touchend', (e) => {
+    if (!ts || done) return; const t = e.changedTouches[0], dx = t.clientX - ts[0], dy = t.clientY - ts[1]; ts = null; e.preventDefault();
+    if (Math.abs(dx) < 15 && Math.abs(dy) < 15) { if (!sn) g.cmd('U'); }
+    else if (Math.abs(dx) > Math.abs(dy)) g.cmd(dx > 0 ? 'R' : 'L');
+    else g.cmd(dy > 0 ? (sn ? 'D' : 'X') : 'U');
+  }, { passive: false });
   ov.querySelectorAll('[data-k]').forEach((b) => (b.onclick = () => g.cmd(b.dataset.k)));
   ov.querySelector('#ab').onclick = () => over(cur);
 }
@@ -389,12 +417,12 @@ async function opView(m) {
   }).join('') || '<p>Aucun joueur pour le moment.</p>';
   const now = Date.now();
   const cols = custom.cols.filter((c) => c.until > now).map((c) => '<div class="row">' + c.icon + ' <b>' + esc(c.name) + '</b> jusqu\'au ' + new Date(c.until).toLocaleDateString('fr-FR') + ' <button class="g" data-ec="' + c.key + '">Terminer maintenant</button></div>').join('');
-  const objs = custom.objs.filter((o) => !o.gone).map((o) => '<div class="row">🎁 <b>' + esc(o.name) + '</b> ' + RN[o.r] + ' — ' + o.price + ' coins <button class="g" data-do="' + esc(o.name) + '">Retirer</button></div>').join('');
+  const objs = custom.objs.filter((o) => !o.gone).map((o) => '<div class="row">🎁 <b>' + esc(o.name) + '</b> ' + RN[o.r] + ' — ' + o.price + ' coins' + (o.stock != null ? ' (reste ' + o.stock + ')' : '') + ' <button class="g" data-do="' + esc(o.name) + '">Retirer</button></div>').join('');
   const reps = reports.map((r) => '<div class="row" style="border-top:1px solid var(--line);padding:8px 0"><div style="flex:1"><b>' + esc(r.pseudo) + '</b> <small>' + new Date(r.t).toLocaleString('fr-FR') + '</small><br><span class="rt"></span></div><button class="g" data-dr="' + r.id + '">Supprimer</button></div>').join('') || '<p>Aucun signalement.</p>';
   app.innerHTML = '<div class="bar"><b>Espace opérateur</b><span class="row"><button class="g" id="pv">🎮 Espace joueur</button><button class="g" id="th">🌓</button><button class="g" id="lo">Quitter</button></span></div>' +
     '<div class="box"><h2>Boutique</h2><div class="grid2">' + Object.keys(shop).map((t) => '<div class="row"><b>' + CAT[t].icon + ' ' + esc(CAT[t].name) + '</b><input type="number" min="0" max="90" value="' + shop[t].discount + '" id="d-' + t + '" style="width:80px" aria-label="Réduction en %"> %<label><input type="checkbox" id="b-' + t + '"' + (shop[t].blocked ? ' checked' : '') + '> bloqué</label><button data-sv="' + t + '">Enregistrer</button></div>').join('') + '</div><div class="err" id="e2"></div></div>' +
     '<div class="grid2"><form class="box" id="fc" style="display:grid;gap:10px"><h2>Collection provisoire</h2><input id="cn" placeholder="Nom" required><input id="ci" placeholder="Emoji (ex : 🎃)" maxlength="4"><input id="cd" type="number" min="1" max="365" value="7" aria-label="Durée en jours"><textarea id="cl" rows="6" placeholder="Une carte par ligne (titre Wikipédia). Préfixe r: e: l: pour la rareté, sans préfixe = commune"></textarea><button>Créer</button><div class="err" id="e3"></div>' + cols + '</form>' +
-    '<form class="box" id="fo" style="display:grid;gap:10px"><h2>Objet en boutique</h2><input id="on" placeholder="Nom de la carte (titre Wikipédia)" required><select id="or"><option value="c">Commune</option><option value="r">Rare</option><option value="e">Épique</option><option value="l">Légendaire</option></select><input id="op" type="number" min="1" placeholder="Prix en coins" required><button>Ajouter</button><div class="err" id="e4"></div>' + objs + '</form></div>' +
+    '<form class="box" id="fo" style="display:grid;gap:10px"><h2>Objet en boutique</h2><input id="on" placeholder="Nom de la carte (titre Wikipédia)" required><select id="or"><option value="c">Commune</option><option value="r">Rare</option><option value="e">Épique</option><option value="l">Légendaire</option></select><input id="op" type="number" min="1" placeholder="Prix en coins" required><input id="os" type="number" min="1" placeholder="Quantité disponible (vide = illimité)"><button>Ajouter</button><div class="err" id="e4"></div>' + objs + '</form></div>' +
     '<div class="box"><h2>Joueurs (' + users.length + ')</h2>' + list + '</div>' +
     '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + ' — 🪙 ' + u.coins + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="ca" multiple size="6" aria-label="Cartes"></select><small id="ch"></small><button>Valider</button><div class="err" id="e"></div></form>' +
     '<form class="box" id="fm" style="display:grid;gap:10px"><h2>Envoyer une notification</h2><select id="mt"><option value="*">Tous les joueurs</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="mx" maxlength="200" placeholder="Message" required><button>Envoyer</button><div class="err" id="e5"></div></form>' +
@@ -417,7 +445,7 @@ async function opView(m) {
   app.querySelectorAll('[data-do]').forEach((b) => (b.onclick = act('e4', () => api('delobj', { name: b.dataset.do }), 'Objet retiré')));
   app.querySelectorAll('[data-dr]').forEach((b) => (b.onclick = act('e2', () => api('delreport', { id: +b.dataset.dr }), 'Signalement supprimé')));
   $('#fc').onsubmit = act('e3', () => api('addcol', { name: $('#cn').value, icon: $('#ci').value, days: $('#cd').value, cards: $('#cl').value }), 'Collection créée');
-  $('#fo').onsubmit = act('e4', () => api('addobj', { name: $('#on').value, rarity: $('#or').value, price: $('#op').value }), 'Objet ajouté à la boutique');
+  $('#fo').onsubmit = act('e4', () => api('addobj', { name: $('#on').value, rarity: $('#or').value, price: $('#op').value, stock: $('#os').value }), 'Objet ajouté à la boutique');
   $('#f').onsubmit = act('e', () => api('give', { pseudo: $('#u').value, mode: $('#m').value, coins: $('#co').value, packs: $('#pk').value, cards: [...$('#ca').selectedOptions].map((o) => o.value) }), 'Fait');
   $('#fm').onsubmit = act('e5', () => api('msg', { pseudo: $('#mt').value, text: $('#mx').value }), 'Notification envoyée');
   app.querySelectorAll('[data-du]').forEach((b) => (b.onclick = (e) => { if (confirm('Supprimer définitivement le compte ' + b.dataset.du + ' ?')) act('e', () => api('deluser', { pseudo: b.dataset.du }), 'Compte supprimé')(e); }));
