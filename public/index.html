@@ -170,6 +170,7 @@ function mkHTML() {
 }
 function jeuHTML() {
   return '<div class="box"><h2>Jeux d\'argent</h2><p>Mise entre 10 et 500 coins. Repère : un sachet coûte 100 coins.</p><div class="row"><input id="bet" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button data-g="snake">🐍 Snake</button><button data-g="tetris">🧱 Tetris</button></div></div>' +
+    '<div class="box"><h2>🎡 Roulette</h2><p>Mise de 10 à 500 coins. Rouge, noir, pair, impair : gain ×2,5. Douzaine (1-12, 13-24, 25-36) : ×3,7. Numéro exact (0 à 36) : ×43. Le 0 fait perdre tous les paris sauf celui sur le numéro 0. Bien plus généreux que Snake et Tetris.</p><div class="row"><input id="rb" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise roulette"></div><div class="row" style="margin-top:8px"><button data-rk="red">🔴 Rouge</button><button data-rk="black">⚫ Noir</button><button data-rk="even">Pair</button><button data-rk="odd">Impair</button></div><div class="row" style="margin-top:8px"><button data-rk="dozen" data-rv="0">1-12</button><button data-rk="dozen" data-rv="1">13-24</button><button data-rk="dozen" data-rv="2">25-36</button><input id="rn" type="number" min="0" max="36" placeholder="N°" style="width:80px" aria-label="Numéro"><button data-rk="num">Numéro</button></div><div id="rw" style="text-align:center;font-size:44px;min-height:90px;margin-top:10px"></div></div>' +
     '<div class="box"><b>Gains</b><p>🐍 Snake (pommes mangées) : gain = mise × (pommes − 5) ÷ 10, maximum ×4. Avec 100 coins : 15 pommes rendent 100, 45 pommes rendent 400.</p><p>🧱 Tetris (lignes) : gain = mise × (lignes − 3) ÷ 6, maximum ×4. Avec 100 coins : 9 lignes rendent 100, 27 lignes rendent 400. Moins de 5 pommes ou 3 lignes : tu perds ta mise.</p></div>';
 }
 function setHTML() {
@@ -225,6 +226,20 @@ function playerView() {
       gm.append(el);
     });
   } else if (tab === 'jeu') {
+    const bt = app.querySelectorAll('[data-rk]');
+    bt.forEach((b) => (b.onclick = async () => {
+      bt.forEach((x) => (x.disabled = true)); const rw = $('#rw'); let j;
+      try { j = await api('roulette', { amount: $('#rb').value, kind: b.dataset.rk, value: b.dataset.rk === 'num' ? $('#rn').value : b.dataset.rv }); }
+      catch (e) { bt.forEach((x) => (x.disabled = false)); return msg(e.message); }
+      msg('');
+      const iv = setInterval(() => (rw.textContent = '🎡 ' + Math.floor(Math.random() * 37)), 80);
+      setTimeout(() => {
+        clearInterval(iv); setS(j.state);
+        if (!document.body.contains(rw)) return;
+        rw.innerHTML = '<span style="color:' + (j.n === 0 ? '#3fb950' : j.red ? '#f85149' : 'inherit') + '">' + j.n + '</span><div style="font-size:18px">' + (j.win ? 'Gagné : +' + j.gain + ' 🪙' : 'Perdu : −' + j.bet + ' 🪙') + '</div>';
+        app.querySelector('.bar .pill').textContent = '🪙 ' + S.coins; bt.forEach((x) => (x.disabled = false));
+      }, 2200);
+    }));
     app.querySelectorAll('[data-g]').forEach((b) => (b.onclick = () => run(async () => { const j = await api('bet', { game: b.dataset.g, amount: $('#bet').value }); setS(j.state); play(b.dataset.g, j.gid, +$('#bet').value); })));
   } else {
     $('#tsel').onchange = (e) => run(async () => { setTheme(e.target.value); await api('settings', { theme: e.target.value }); });
@@ -335,10 +350,16 @@ async function opView(m) {
     '<div class="grid2"><form class="box" id="fc" style="display:grid;gap:10px"><h2>Collection provisoire</h2><input id="cn" placeholder="Nom" required><input id="ci" placeholder="Emoji (ex : 🎃)" maxlength="4"><input id="cd" type="number" min="1" max="365" value="7" aria-label="Durée en jours"><textarea id="cl" rows="6" placeholder="Une carte par ligne (titre Wikipédia). Préfixe r: e: l: pour la rareté, sans préfixe = commune"></textarea><button>Créer</button><div class="err" id="e3"></div>' + cols + '</form>' +
     '<form class="box" id="fo" style="display:grid;gap:10px"><h2>Objet en boutique</h2><input id="on" placeholder="Nom de la carte (titre Wikipédia)" required><select id="or"><option value="c">Commune</option><option value="r">Rare</option><option value="e">Épique</option><option value="l">Légendaire</option></select><input id="op" type="number" min="1" placeholder="Prix en coins" required><button>Ajouter</button><div class="err" id="e4"></div>' + objs + '</form></div>' +
     '<div class="box"><h2>Joueurs (' + users.length + ')</h2>' + list + '</div>' +
-    '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option>' + u.pseudo + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="ca"><option value="">Aucune carte</option>' + opts + '</select><button>Valider</button><div class="err" id="e"></div></form>' +
+    '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option>' + u.pseudo + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="ca" multiple size="6" aria-label="Cartes"></select><small id="ch"></small><button>Valider</button><div class="err" id="e"></div></form>' +
     '<div class="box"><h2>Signalements (' + reports.length + ')</h2>' + reps + '</div>';
   app.querySelectorAll('.rt').forEach((el, i) => (el.textContent = reports[i].text));
   $('#pv').onclick = () => { asP = true; localStorage.asp = '1'; start(); };
+  const fillCards = () => {
+    const u = users.find((x) => x.pseudo === $('#u').value), take = $('#m').value === 'take';
+    $('#ca').innerHTML = take ? (u ? Object.entries(u.cards).map(([id, n]) => '<option value="' + esc(id) + '">' + esc(id.slice(id.indexOf(':') + 1)) + ' ×' + n + ' (' + (RN[RAR[id]] || '?') + ')</option>').join('') : '') : opts;
+    $('#ch').textContent = take ? (u ? (Object.keys(u.cards).length ? 'Cartes que ce joueur possède (Ctrl ou Cmd pour en choisir plusieurs)' : "Ce joueur n'a aucune carte") : "Choisis d'abord un joueur") : 'Ctrl ou Cmd pour choisir plusieurs cartes';
+  };
+  $('#u').onchange = fillCards; $('#m').onchange = fillCards; fillCards();
   $('#lo').onclick = logout; $('#th').onclick = flip;
   const act = (eid, fn, okm) => async (e) => {
     if (e) e.preventDefault(); const el = $('#' + eid);
@@ -350,10 +371,18 @@ async function opView(m) {
   app.querySelectorAll('[data-dr]').forEach((b) => (b.onclick = act('e2', () => api('delreport', { id: +b.dataset.dr }), 'Signalement supprimé')));
   $('#fc').onsubmit = act('e3', () => api('addcol', { name: $('#cn').value, icon: $('#ci').value, days: $('#cd').value, cards: $('#cl').value }), 'Collection créée');
   $('#fo').onsubmit = act('e4', () => api('addobj', { name: $('#on').value, rarity: $('#or').value, price: $('#op').value }), 'Objet ajouté à la boutique');
-  $('#f').onsubmit = act('e', () => api('give', { pseudo: $('#u').value, mode: $('#m').value, coins: $('#co').value, packs: $('#pk').value, card: $('#ca').value }), 'Fait');
+  $('#f').onsubmit = act('e', () => api('give', { pseudo: $('#u').value, mode: $('#m').value, coins: $('#co').value, packs: $('#pk').value, cards: [...$('#ca').selectedOptions].map((o) => o.value) }), 'Fait');
   if (m) { const [i, t] = m.split('|'), el = $('#' + i); el.style.color = '#3fb950'; el.textContent = t; }
 }
 
+async function poll() {
+  if (!tok || document.hidden || (isOp && !asP)) return;
+  try {
+    const j = await api('me'); setS(j.state);
+    if (j.notifs && j.notifs.length) { if (!document.querySelector('.ov')) playerView(); notify(j.notifs); }
+  } catch {}
+}
+setInterval(poll, 10000);
 async function start() {
   try { isOp && !asP ? await opView() : await refresh(); } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); }
 }
