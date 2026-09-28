@@ -32,23 +32,24 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 details{border-top:1px solid var(--line);padding:8px 0}summary{cursor:pointer;font-weight:500}
 .sm{height:6px;background:var(--line);border-radius:4px;overflow:hidden;margin:4px 0}.sm i{display:block;height:100%;transition:width .2s}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:10px}
-.card{background:var(--cb);border:3px solid var(--rc);border-radius:12px;overflow:hidden;box-shadow:0 0 14px var(--rg);position:relative}
-.card .im{width:100%;aspect-ratio:3/4;object-fit:cover;background:#222b3b;display:block}
-.card .ct{padding:8px 8px 2px;font-size:19px;line-height:1.1;text-align:center;min-height:2.4em;display:flex;align-items:center;justify-content:center}
+.card{background:var(--cb);border:3px solid var(--rc);border-radius:12px;overflow:hidden;box-shadow:0 0 14px var(--rg);position:relative;isolation:isolate;-webkit-transform:translateZ(0);transform:translateZ(0)}
+.card .iw{position:relative;width:100%;height:0;padding-top:133.334%;background:#222b3b;overflow:hidden}
+.card .iw img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;-webkit-user-drag:none}
+.card .iw .ph{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:40px;color:var(--dim)}
+.card .ct{padding:8px 8px 2px;font-size:19px;line-height:1.1;text-align:center;min-height:2.4em;display:flex;align-items:center;justify-content:center;overflow-wrap:anywhere;word-break:break-word}
 .card .rn{padding:0 8px 6px;text-align:center;color:var(--rc);font-weight:500;font-size:14px}
 .card .n{position:absolute;top:6px;right:6px;background:#000b;color:#fff;border-radius:999px;padding:0 8px;font-size:13px}
 .card .ac{display:flex;gap:4px;padding:0 6px 8px}.card .ac button{padding:4px 8px;font-size:13px}.card .ac button:last-child{flex:1}
 .card.c{--rc:var(--c);--rg:transparent}.card.r{--rc:var(--r);--rg:#3fb95044}
 .card.e{--rc:var(--e);--rg:#a371f755}.card.l{--rc:var(--l);--rg:#f5c51877}
-.card.e::after,.card.l::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,transparent 30%,#fff5 50%,transparent 70%);background-size:250% 100%;animation:sh 3s infinite}
+.card.e::after,.card.l::after{content:'';position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;background:linear-gradient(115deg,transparent 30%,#fff5 50%,transparent 70%);background-size:250% 100%;animation:sh 3s infinite}
 @keyframes sh{from{background-position:150% 0}to{background-position:-50% 0}}
 .card.lock{border-color:var(--line);box-shadow:none;opacity:.5}
-.card.lock .im{display:flex;align-items:center;justify-content:center;font-size:48px;color:var(--dim)}
 .pk{display:flex;align-items:center;justify-content:center;height:90px;border-radius:10px;font-size:52px;background:linear-gradient(135deg,var(--pc),#0009);margin-bottom:8px}
 .pk.big{width:180px;height:240px;font-size:96px;margin:18vh auto 0}
 .shake{animation:shake .16s infinite}
 @keyframes shake{0%,100%{transform:rotate(-5deg) scale(1.05)}50%{transform:rotate(5deg) scale(1.12)}}
-.ov{position:fixed;inset:0;background:#000d;overflow:auto;padding:16px;z-index:5;color:#e8ecf3}
+.ov{position:fixed;top:0;right:0;bottom:0;left:0;background:#000d;overflow:auto;-webkit-overflow-scrolling:touch;padding:16px;z-index:5;color:#e8ecf3}
 .ov .grid{max-width:900px;margin:8vh auto 16px}
 .pop{animation:pop .5s both;animation-delay:calc(var(--i)*.3s)}
 @keyframes pop{from{opacity:0;transform:translateY(30px) scale(.8)}}
@@ -102,28 +103,44 @@ async function api(action, d = {}) {
 }
 function logout() { localStorage.removeItem('tok'); localStorage.removeItem('op'); localStorage.removeItem('asp'); asP = false; tok = null; isOp = false; clearInterval(timer); authView(); }
 
-// --- Wikipédia : image + titre, mis en cache
-const wc = {};
+// --- Wikipédia : image mise en cache (4 requêtes à la fois, réessais, erreurs jamais mémorisées)
+const wc = {}, wwait = []; let wq = 0;
+const wslot = () => new Promise((res) => { const go = () => { if (wq < 4) { wq++; res(); } else wwait.push(go); }; go(); });
+const wfree = () => { wq--; const n = wwait.shift(); if (n) n(); };
+const wsave = (t, w) => { try { localStorage['w:' + t] = JSON.stringify(w); } catch {} return w; };
 function wiki(t) {
   return wc[t] ||= (async () => {
-    try { const c = localStorage['w:' + t]; if (c) return JSON.parse(c); } catch {}
-    try {
-      const r = await fetch('https://fr.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(t.replace(/ /g, '_')));
-      const j = await r.json();
-      const w = { img: (j.thumbnail && j.thumbnail.source) || null, title: j.title || t };
-      try { localStorage['w:' + t] = JSON.stringify(w); } catch {}
-      return w;
-    } catch { return { img: null, title: t }; }
+    try { const c = JSON.parse(localStorage['w:' + t]); if (c && c.v === 2) return c; } catch {}
+    for (let k = 0; k < 3; k++) {
+      await wslot();
+      try {
+        const r = await fetch('https://fr.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(t.replace(/ /g, '_')));
+        if (r.status === 404) return wsave(t, { v: 2, img: null });
+        if (!r.ok) throw new Error(r.status);
+        const j = await r.json();
+        return wsave(t, { v: 2, img: (j.thumbnail && j.thumbnail.source) || null });
+      } catch {} finally { wfree(); }
+      await new Promise((r) => setTimeout(r, 600 * (k + 1)));
+    }
+    delete wc[t];
+    return { img: null };
   })();
 }
+function loadImg(iw, src, tries) {
+  const im = new Image(); im.alt = ''; im.decoding = 'async'; im.referrerPolicy = 'no-referrer';
+  im.onload = () => { const ph = iw.querySelector('.ph'); if (ph) ph.remove(); iw.append(im); };
+  im.onerror = () => { if (tries > 0) setTimeout(() => loadImg(iw, src, tries - 1), 900); };
+  im.src = src;
+}
+const clean = (n) => n.replace(/\s*\([^)]*\)\s*$/, '');
 function cardEl(id, count, i) {
   const name = id.slice(id.indexOf(':') + 1), r = RAR[id] || 'c';
   const el = document.createElement('div');
   el.className = 'card ' + r + (i != null ? ' pop' : '');
   if (i != null) el.style.setProperty('--i', i);
-  el.innerHTML = '<img class="im" alt=""><div class="ct"></div><div class="rn">' + RN[r] + '</div>' + (count > 1 ? '<span class="n">×' + count + '</span>' : '');
-  el.querySelector('.ct').textContent = name;
-  wiki(name).then((w) => { el.querySelector('.ct').textContent = w.title; const im = el.querySelector('img'); if (w.img) im.src = w.img; else im.style.visibility = 'hidden'; });
+  el.innerHTML = '<div class="iw"><div class="ph">🖼️</div></div><div class="ct"></div><div class="rn">' + RN[r] + '</div>' + (count > 1 ? '<span class="n">×' + count + '</span>' : '');
+  el.querySelector('.ct').textContent = clean(name);
+  wiki(name).then((w) => { if (w.img) loadImg(el.querySelector('.iw'), w.img, 2); });
   return el;
 }
 
@@ -229,7 +246,7 @@ function playerView() {
     for (const [t, o] of Object.entries(CAT)) {
       const g = $('#g-' + t); if (!g) continue;
       idsOf(t).forEach((id) => {
-        if (!S.cards[id]) { if (!o.hidden && !(o.until && o.until < Date.now())) g.insertAdjacentHTML('beforeend', '<div class="card lock"><div class="im">?</div><div class="ct">???</div><div class="rn">&nbsp;</div></div>'); return; }
+        if (!S.cards[id]) { if (!o.hidden && !(o.until && o.until < Date.now())) g.insertAdjacentHTML('beforeend', '<div class="card lock"><div class="iw"><div class="ph">?</div></div><div class="ct">???</div><div class="rn">&nbsp;</div></div>'); return; }
         const el = cardEl(id, S.cards[id]);
         el.insertAdjacentHTML('beforeend', '<div class="ac"><button class="g" data-f aria-label="Favori">' + (S.fav.includes(id) ? '⭐' : '☆') + '</button><button class="g" data-m title="Mettre à la boutique">🏷️</button><button class="g" data-s>Vendre 1 · ' + S.vals[id] + '🪙</button></div>');
         el.querySelector('[data-f]').onclick = () => run(async () => { setS((await api('fav', { card: id })).state); playerView(); });
@@ -273,6 +290,7 @@ function playerView() {
 }
 function overlay(html) { const ov = document.createElement('div'); ov.className = 'ov'; ov.innerHTML = html; document.body.append(ov); return ov; }
 function reveal(ids, t) {
+  ids.forEach((id) => wiki(id.slice(id.indexOf(':') + 1)));
   const o = CAT[t], ov = overlay('<div class="pk big shake" style="--pc:' + o.color + '">' + o.icon + '</div>');
   setTimeout(() => {
     ov.innerHTML = ''; const g = document.createElement('div'); g.className = 'grid';
