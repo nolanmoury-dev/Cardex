@@ -31,6 +31,11 @@ const val = (u, id, cat, cu) => {
 const add = (u, id, n) => { if (!u.cards[id]) u.since[id] = Date.now(); u.cards[id] = (u.cards[id] || 0) + n; };
 const rm = (u, id, n) => { u.cards[id] -= n; if (u.cards[id] <= 0) { delete u.cards[id]; delete u.since[id]; u.fav = u.fav.filter((x) => x !== id); } };
 
+function note(u, text) {
+  (u.notifs ||= []).push(text);
+  (u.inbox ||= []).unshift({ id: Date.now() + Math.random().toString(36).slice(2, 6), text, t: Date.now() });
+  u.inbox = u.inbox.slice(0, 30);
+}
 function tick(u) {
   const now = Date.now();
   if (u.packs >= MAXP) { u.last = now; return; }
@@ -43,7 +48,7 @@ const shopOf = async (cat) => {
 };
 const price = (sh) => Math.round((PRICE * (100 - sh.discount)) / 100);
 const view = (u, sh, cat, cu, mk) => ({
-  market: mk || [],
+  market: mk || [], inbox: u.inbox || [],
   pseudo: u.pseudo, coins: u.coins, packs: u.packs, bought: u.bought || {},
   next: u.packs >= MAXP ? null : u.last + STEP, cards: u.cards, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
@@ -137,7 +142,7 @@ module.exports = async (req, res) => {
           if (sg > 0) add(u, id, 1); else rm(u, id, 1);
           parts.push('la carte ' + id.slice(id.indexOf(':') + 1));
         }
-        if (parts.length) u.notifs.push((sg > 0 ? "🎁 L'opérateur t'a donné : " : "⚠️ L'opérateur t'a retiré : ") + parts.join(', '));
+        if (parts.length) note(u, (sg > 0 ? "🎁 L'opérateur t'a donné : " : "⚠️ L'opérateur t'a retiré : ") + parts.join(', '));
         await redis.set(key(u.pseudo), u);
         return ok({ done: true });
       }
@@ -176,6 +181,25 @@ module.exports = async (req, res) => {
         await redis.set('custom', cu);
         return ok({ done: true });
       }
+      if (b.action === 'msg') {
+        const text = String(b.text || '').trim().slice(0, 200);
+        if (!text) return fail('Message vide');
+        const names = b.pseudo === '*' ? await redis.smembers('users') : [String(b.pseudo || '')];
+        let n = 0;
+        for (const p of names) {
+          const u = await redis.get(key(p)); if (!u) continue;
+          note(u, '📢 Staff : ' + text); await redis.set(key(u.pseudo), u); n++;
+        }
+        if (!n) return fail('Joueur introuvable');
+        return ok({ done: true, n });
+      }
+      if (b.action === 'deluser') {
+        const u = await redis.get(key(String(b.pseudo || '')));
+        if (!u) return fail('Joueur introuvable');
+        await redis.del(key(u.pseudo)); await redis.srem('users', u.pseudo);
+        await redis.set('market', ((await redis.get('market')) || []).filter((x) => x.seller !== u.pseudo));
+        return ok({ done: true });
+      }
       if (b.action === 'delreport') {
         await redis.set('reports', ((await redis.get('reports')) || []).filter((x) => x.id !== b.id));
         return ok({ done: true });
@@ -185,7 +209,7 @@ module.exports = async (req, res) => {
 
     const u = await redis.get(key(s.p));
     if (!u) return fail('Session expirée, reconnecte-toi', 401);
-    u.bought ||= {}; u.since ||= {}; u.fav ||= []; u.notifs ||= [];
+    u.bought ||= {}; u.since ||= {}; u.fav ||= []; u.notifs ||= []; u.inbox ||= [];
     tick(u);
     const sh = await shopOf(cat);
     let mk = (await redis.get('market')) || [];
@@ -272,6 +296,8 @@ module.exports = async (req, res) => {
       const m = sn ? Math.min(4, Math.max(0, (sc - 5) / 10)) : Math.min(4, Math.max(0, (sc - 3) / 6));
       const gain = Math.floor(g.bet * m);
       u.coins += gain; extra = { gain, score: sc };
+    } else if (b.action === 'delnote') {
+      u.inbox = b.id === 'all' ? [] : u.inbox.filter((x) => x.id !== b.id);
     } else if (b.action === 'list') {
       const pr = int(b.price, 1e6);
       if (pr < 1) return fail('Prix invalide');
@@ -296,7 +322,7 @@ module.exports = async (req, res) => {
       const v = await redis.get(key(x.seller));
       if (v) {
         v.coins += x.price;
-        (v.notifs ||= []).push('💰 ' + u.pseudo + ' a acheté ta carte ' + x.card.slice(x.card.indexOf(':') + 1) + ' pour ' + x.price + ' coins');
+        note(v, '💰 ' + u.pseudo + ' a acheté ta carte ' + x.card.slice(x.card.indexOf(':') + 1) + ' pour ' + x.price + ' coins');
         await redis.set(key(v.pseudo), v);
       }
     } else if (b.action !== 'me') return fail('Action inconnue');

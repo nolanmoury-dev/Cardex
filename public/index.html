@@ -53,6 +53,9 @@ details{border-top:1px solid var(--line);padding:8px 0}summary{cursor:pointer;fo
 @keyframes pop{from{opacity:0;transform:translateY(30px) scale(.8)}}
 @media(prefers-reduced-motion:reduce){.pop,.shake,.card::after{animation:none!important}}
 @media(min-width:700px){.grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:16px}}
+#toasts{position:fixed;bottom:16px;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:20;pointer-events:none}
+.toast{pointer-events:auto;background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:12px;padding:10px 16px;max-width:90%;box-shadow:0 4px 20px #0006;cursor:pointer;animation:pop .4s both}
+.ov .box{color:var(--txt)}
 </style>
 </head>
 <body><main id="app"></main>
@@ -140,7 +143,7 @@ function authView(msg) {
 // --- Joueur
 const packsOf = (t) => (S.bought[t] || 0) + S.packs;
 function head() {
-  return '<div class="bar"><b>' + S.pseudo + '</b><span class="row"><span class="pill">🪙 ' + S.coins + '</span><span class="pill">📦 ' + S.packs + '/10</span>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button><button class="g" id="lo">Quitter</button></span></div><div class="tabs">' +
+  return '<div class="bar"><b>' + S.pseudo + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">📦 ' + S.packs + '/10</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button><button class="g" id="lo">Quitter</button></span></div><div class="tabs">' +
     [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['set', 'Réglages']].map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
 }
 function shopHTML() {
@@ -170,7 +173,7 @@ function mkHTML() {
 }
 function jeuHTML() {
   return '<div class="box"><h2>Jeux d\'argent</h2><p>Mise entre 10 et 500 coins. Repère : un sachet coûte 100 coins.</p><div class="row"><input id="bet" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button data-g="snake">🐍 Snake</button><button data-g="tetris">🧱 Tetris</button></div></div>' +
-    '<div class="box"><h2>🎡 Roulette</h2><p>Mise de 10 à 500 coins. Rouge, noir, pair, impair : gain ×2,5. Douzaine (1-12, 13-24, 25-36) : ×3,7. Numéro exact (0 à 36) : ×43. Le 0 fait perdre tous les paris sauf celui sur le numéro 0. Bien plus généreux que Snake et Tetris.</p><div class="row"><input id="rb" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise roulette"></div><div class="row" style="margin-top:8px"><button data-rk="red">🔴 Rouge</button><button data-rk="black">⚫ Noir</button><button data-rk="even">Pair</button><button data-rk="odd">Impair</button></div><div class="row" style="margin-top:8px"><button data-rk="dozen" data-rv="0">1-12</button><button data-rk="dozen" data-rv="1">13-24</button><button data-rk="dozen" data-rv="2">25-36</button><input id="rn" type="number" min="0" max="36" placeholder="N°" style="width:80px" aria-label="Numéro"><button data-rk="num">Numéro</button></div><div id="rw" style="text-align:center;font-size:44px;min-height:90px;margin-top:10px"></div></div>' +
+    '<div class="box"><h2>🎡 Roulette</h2><p>Mise de 10 à 500 coins. Rouge, noir, pair, impair : gain ×2,5. Douzaine (1-12, 13-24, 25-36) : ×3,7. Numéro exact (0 à 36) : ×43. Le 0 fait perdre tous les paris sauf celui sur le numéro 0. Bien plus généreux que Snake et Tetris.</p><div class="row"><input id="rb" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise roulette"></div><div class="row" style="margin-top:8px"><button data-rk="red">🔴 Rouge</button><button data-rk="black">⚫ Noir</button><button data-rk="even">Pair</button><button data-rk="odd">Impair</button></div><div class="row" style="margin-top:8px"><button data-rk="dozen" data-rv="0">1-12</button><button data-rk="dozen" data-rv="1">13-24</button><button data-rk="dozen" data-rv="2">25-36</button><input id="rn" type="number" min="0" max="36" placeholder="N°" style="width:80px" aria-label="Numéro"><button data-rk="num">Numéro</button></div><div style="text-align:center;margin-top:10px"><canvas id="rc" width="260" height="260" style="max-width:100%"></canvas></div><div id="rw" style="text-align:center;font-size:40px;min-height:80px"></div></div>' +
     '<div class="box"><b>Gains</b><p>🐍 Snake (pommes mangées) : gain = mise × (pommes − 5) ÷ 10, maximum ×4. Avec 100 coins : 15 pommes rendent 100, 45 pommes rendent 400.</p><p>🧱 Tetris (lignes) : gain = mise × (lignes − 3) ÷ 6, maximum ×4. Avec 100 coins : 9 lignes rendent 100, 27 lignes rendent 400. Moins de 5 pommes ou 3 lignes : tu perds ta mise.</p></div>';
 }
 function setHTML() {
@@ -184,6 +187,7 @@ function playerView() {
   app.innerHTML = head() + { shop: shopHTML, col: colHTML, mk: mkHTML, jeu: jeuHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
   $('#lo').onclick = logout; $('#th').onclick = flip;
   if (isOp) $('#ob').onclick = () => { asP = false; localStorage.asp = '0'; start(); };
+  $('#bl').onclick = inbox;
   app.querySelectorAll('[data-t]').forEach((b) => (b.onclick = () => { tab = b.dataset.t; playerView(); }));
   const msg = (t, good) => { const e = $('#e'); e.style.color = good ? '#3fb950' : ''; e.textContent = t; };
   const run = async (fn) => { try { await fn(); } catch (e) { msg(e.message); } };
@@ -226,19 +230,19 @@ function playerView() {
       gm.append(el);
     });
   } else if (tab === 'jeu') {
+    wheel($('#rc'), 0, () => {}, true);
     const bt = app.querySelectorAll('[data-rk]');
     bt.forEach((b) => (b.onclick = async () => {
       bt.forEach((x) => (x.disabled = true)); const rw = $('#rw'); let j;
       try { j = await api('roulette', { amount: $('#rb').value, kind: b.dataset.rk, value: b.dataset.rk === 'num' ? $('#rn').value : b.dataset.rv }); }
       catch (e) { bt.forEach((x) => (x.disabled = false)); return msg(e.message); }
-      msg('');
-      const iv = setInterval(() => (rw.textContent = '🎡 ' + Math.floor(Math.random() * 37)), 80);
-      setTimeout(() => {
-        clearInterval(iv); setS(j.state);
+      msg(''); rw.textContent = '';
+      wheel($('#rc'), j.n, () => {
+        setS(j.state);
         if (!document.body.contains(rw)) return;
         rw.innerHTML = '<span style="color:' + (j.n === 0 ? '#3fb950' : j.red ? '#f85149' : 'inherit') + '">' + j.n + '</span><div style="font-size:18px">' + (j.win ? 'Gagné : +' + j.gain + ' 🪙' : 'Perdu : −' + j.bet + ' 🪙') + '</div>';
-        app.querySelector('.bar .pill').textContent = '🪙 ' + S.coins; bt.forEach((x) => (x.disabled = false));
-      }, 2200);
+        updHead(); bt.forEach((x) => (x.disabled = false));
+      });
     }));
     app.querySelectorAll('[data-g]').forEach((b) => (b.onclick = () => run(async () => { const j = await api('bet', { game: b.dataset.g, amount: $('#bet').value }); setS(j.state); play(b.dataset.g, j.gid, +$('#bet').value); })));
   } else {
@@ -259,8 +263,27 @@ function reveal(ids, t) {
   }, 1400);
 }
 function notify(l) {
-  const ov = overlay('<div class="box" style="max-width:420px;margin:15vh auto"><h2>Notifications</h2>' + l.map((x) => '<p>' + esc(x) + '</p>').join('') + '<button>OK</button></div>');
-  ov.querySelector('button').onclick = () => ov.remove();
+  let c = $('#toasts'); if (!c) { c = document.createElement('div'); c.id = 'toasts'; document.body.append(c); }
+  l.forEach((x) => { const t = document.createElement('div'); t.className = 'toast'; t.textContent = x; t.onclick = () => t.remove(); c.append(t); setTimeout(() => t.remove(), 8000); });
+}
+function updHead() {
+  if (!$('#pc')) return;
+  $('#pc').textContent = '🪙 ' + S.coins; $('#pp').textContent = '📦 ' + S.packs + '/10'; $('#bl').textContent = '🔔' + (S.inbox.length ? ' ' + S.inbox.length : '');
+}
+function inbox() {
+  document.querySelectorAll('.ovn').forEach((x) => x.remove());
+  const ov = overlay('<div class="box" style="max-width:480px;margin:10vh auto"><h2>Notifications</h2><div id="nl"></div><div class="row" style="margin-top:10px"><button class="g" id="nc">Tout effacer</button><button id="nx">Fermer</button></div></div>');
+  ov.classList.add('ovn');
+  const nl = ov.querySelector('#nl'); if (!S.inbox.length) nl.textContent = 'Aucune notification.';
+  S.inbox.forEach((n) => {
+    const d = document.createElement('div'); d.className = 'row'; d.style.cssText = 'border-top:1px solid var(--line);padding:6px 0';
+    d.innerHTML = '<span style="flex:1"></span><small>' + new Date(n.t).toLocaleString('fr-FR') + '</small><button class="g">✕</button>';
+    d.firstChild.textContent = n.text;
+    d.querySelector('button').onclick = async () => { setS((await api('delnote', { id: n.id })).state); updHead(); inbox(); };
+    nl.append(d);
+  });
+  ov.querySelector('#nc').onclick = async () => { setS((await api('delnote', { id: 'all' })).state); updHead(); inbox(); };
+  ov.querySelector('#nx').onclick = () => ov.remove();
 }
 async function refresh() { const j = await api('me'); setS(j.state); playerView(); if (j.notifs && j.notifs.length) notify(j.notifs); }
 
@@ -310,6 +333,29 @@ function tetris(cv, sc, over) {
     stop: () => { dead = true; clearTimeout(t); },
   };
 }
+const WO = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
+const RD = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+function wheel(cv, n, done, still) {
+  const x = cv.getContext('2d'), Z = cv.width, c = Z / 2, R = c - 8, st = 2 * Math.PI / 37, i = WO.indexOf(n), te = 10 * Math.PI - i * st, T = 5000, t0 = performance.now();
+  const col = (v) => (v === 0 ? '#2ea043' : RD.includes(v) ? '#d1242f' : '#1c1f26');
+  const frame = (now) => {
+    const t = still ? 1 : Math.min(1, (now - t0) / T), e = 1 - Math.pow(1 - t, 3), th = te * e;
+    x.clearRect(0, 0, Z, Z);
+    x.fillStyle = '#6b4423'; x.beginPath(); x.arc(c, c, R + 6, 0, 7); x.fill();
+    WO.forEach((v, k) => {
+      const a0 = k * st + th - Math.PI / 2 - st / 2;
+      x.fillStyle = col(v); x.beginPath(); x.moveTo(c, c); x.arc(c, c, R, a0, a0 + st); x.closePath(); x.fill();
+      x.save(); x.translate(c, c); x.rotate(a0 + st / 2); x.fillStyle = '#fff'; x.font = 'bold 10px sans-serif'; x.textAlign = 'center'; x.fillText(v, R * 0.87, 3); x.restore();
+    });
+    x.fillStyle = '#2a2f3a'; x.beginPath(); x.arc(c, c, R * 0.62, 0, 7); x.fill();
+    x.fillStyle = '#c99700'; x.beginPath(); x.arc(c, c, R * 0.12, 0, 7); x.fill();
+    const ph = -Math.PI / 2 + 14 * Math.PI * (1 - e), r = t < 0.7 ? R * 0.97 : R * (0.97 - (t - 0.7) / 0.3 * 0.1);
+    x.fillStyle = '#fff'; x.beginPath(); x.arc(c + r * Math.cos(ph), c + r * Math.sin(ph), 6, 0, 7); x.fill();
+    x.fillStyle = '#f5c518'; x.beginPath(); x.moveTo(c - 8, 1); x.lineTo(c + 8, 1); x.lineTo(c, 17); x.fill();
+    if (t < 1) requestAnimationFrame(frame); else done();
+  };
+  requestAnimationFrame(frame);
+}
 function play(kind, gid, bet) {
   const sn = kind === 'snake';
   const ov = overlay('<div style="text-align:center"><h2>' + (sn ? '🐍 Snake' : '🧱 Tetris') + ' — mise ' + bet + ' 🪙</h2><p>' + (sn ? 'Pommes' : 'Lignes') + ' : <b id="sc">0</b></p><canvas id="cv" style="max-width:100%;border:2px solid var(--line)"></canvas><div class="pad row" style="justify-content:center;margin:10px 0"><button class="g" data-k="L">◀</button><button class="g" data-k="U">' + (sn ? '▲' : '⟳') + '</button><button class="g" data-k="D">▼</button><button class="g" data-k="R">▶</button>' + (sn ? '' : '<button class="g" data-k="X">⤓</button>') + '</div><button class="g" id="ab">Abandonner</button><div id="rs"></div></div>');
@@ -339,7 +385,7 @@ async function opView(m) {
   const list = users.map((u) => {
     const nb = u.packs + Object.values(u.bought).reduce((a, b) => a + b, 0);
     const cards = Object.entries(u.cards).map(([id, n]) => esc(id.slice(id.indexOf(':') + 1)) + ' ×' + n + ' (' + (RN[RAR[id]] || '?') + ')').join(', ') || 'Aucune carte';
-    return '<details><summary>' + u.pseudo + ' — 🪙 ' + u.coins + ' — 📦 ' + nb + '</summary><p>' + cards + '</p></details>';
+    return '<details><summary>' + u.pseudo + ' — 🪙 ' + u.coins + ' — 📦 ' + nb + '</summary><p>' + cards + '</p><button class="g" data-du="' + u.pseudo + '">🗑️ Supprimer le compte</button></details>';
   }).join('') || '<p>Aucun joueur pour le moment.</p>';
   const now = Date.now();
   const cols = custom.cols.filter((c) => c.until > now).map((c) => '<div class="row">' + c.icon + ' <b>' + esc(c.name) + '</b> jusqu\'au ' + new Date(c.until).toLocaleDateString('fr-FR') + ' <button class="g" data-ec="' + c.key + '">Terminer maintenant</button></div>').join('');
@@ -350,7 +396,8 @@ async function opView(m) {
     '<div class="grid2"><form class="box" id="fc" style="display:grid;gap:10px"><h2>Collection provisoire</h2><input id="cn" placeholder="Nom" required><input id="ci" placeholder="Emoji (ex : 🎃)" maxlength="4"><input id="cd" type="number" min="1" max="365" value="7" aria-label="Durée en jours"><textarea id="cl" rows="6" placeholder="Une carte par ligne (titre Wikipédia). Préfixe r: e: l: pour la rareté, sans préfixe = commune"></textarea><button>Créer</button><div class="err" id="e3"></div>' + cols + '</form>' +
     '<form class="box" id="fo" style="display:grid;gap:10px"><h2>Objet en boutique</h2><input id="on" placeholder="Nom de la carte (titre Wikipédia)" required><select id="or"><option value="c">Commune</option><option value="r">Rare</option><option value="e">Épique</option><option value="l">Légendaire</option></select><input id="op" type="number" min="1" placeholder="Prix en coins" required><button>Ajouter</button><div class="err" id="e4"></div>' + objs + '</form></div>' +
     '<div class="box"><h2>Joueurs (' + users.length + ')</h2>' + list + '</div>' +
-    '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option>' + u.pseudo + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="ca" multiple size="6" aria-label="Cartes"></select><small id="ch"></small><button>Valider</button><div class="err" id="e"></div></form>' +
+    '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + ' — 🪙 ' + u.coins + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="ca" multiple size="6" aria-label="Cartes"></select><small id="ch"></small><button>Valider</button><div class="err" id="e"></div></form>' +
+    '<form class="box" id="fm" style="display:grid;gap:10px"><h2>Envoyer une notification</h2><select id="mt"><option value="*">Tous les joueurs</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="mx" maxlength="200" placeholder="Message" required><button>Envoyer</button><div class="err" id="e5"></div></form>' +
     '<div class="box"><h2>Signalements (' + reports.length + ')</h2>' + reps + '</div>';
   app.querySelectorAll('.rt').forEach((el, i) => (el.textContent = reports[i].text));
   $('#pv').onclick = () => { asP = true; localStorage.asp = '1'; start(); };
@@ -360,6 +407,8 @@ async function opView(m) {
     $('#ch').textContent = take ? (u ? (Object.keys(u.cards).length ? 'Cartes que ce joueur possède (Ctrl ou Cmd pour en choisir plusieurs)' : "Ce joueur n'a aucune carte") : "Choisis d'abord un joueur") : 'Ctrl ou Cmd pour choisir plusieurs cartes';
   };
   $('#u').onchange = fillCards; $('#m').onchange = fillCards; fillCards();
+  $('#fm').onsubmit = act('e5', () => api('msg', { pseudo: $('#mt').value, text: $('#mx').value }), 'Notification envoyée');
+  app.querySelectorAll('[data-du]').forEach((b) => (b.onclick = (e) => { if (confirm('Supprimer définitivement le compte ' + b.dataset.du + ' ?')) act('e', () => api('deluser', { pseudo: b.dataset.du }), 'Compte supprimé')(e); }));
   $('#lo').onclick = logout; $('#th').onclick = flip;
   const act = (eid, fn, okm) => async (e) => {
     if (e) e.preventDefault(); const el = $('#' + eid);
@@ -378,11 +427,12 @@ async function opView(m) {
 async function poll() {
   if (!tok || document.hidden || (isOp && !asP)) return;
   try {
-    const j = await api('me'); setS(j.state);
-    if (j.notifs && j.notifs.length) { if (!document.querySelector('.ov')) playerView(); notify(j.notifs); }
+    const j = await api('me'); setS(j.state); updHead();
+    if (j.notifs && j.notifs.length) { notify(j.notifs); if (!document.querySelector('.ov') && tab !== 'jeu' && tab !== 'set') playerView(); }
   } catch {}
 }
-setInterval(poll, 10000);
+setInterval(poll, 5000);
+document.addEventListener('visibilitychange', poll);
 async function start() {
   try { isOp && !asP ? await opView() : await refresh(); } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); }
 }
