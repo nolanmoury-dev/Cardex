@@ -25,6 +25,8 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .auth{max-width:340px;margin:12vh auto;display:grid;gap:10px}
 .err{color:#ff7b72;min-height:1.3em}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+details{border-top:1px solid var(--line);padding:8px 0}summary{cursor:pointer}
 .sm{height:6px;background:var(--line);border-radius:4px;overflow:hidden;margin:4px 0}.sm i{display:block;height:100%;transition:width .2s}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
 .card{background:#141923;border:3px solid var(--rc);border-radius:12px;overflow:hidden;box-shadow:0 0 14px var(--rg);position:relative}
@@ -121,13 +123,17 @@ function authView(msg) {
 function head() {
   return '<div class="bar"><b>' + S.pseudo + '</b><span class="row"><span class="pill">🪙 ' + S.coins + '</span><span class="pill">📦 ' + S.packs + '/10</span><button class="g" id="lo">Quitter</button></span></div><div class="tabs"><button class="' + (tab === 'shop' ? '' : 'g') + '" data-t="shop">Boutique</button><button class="' + (tab === 'col' ? '' : 'g') + '" data-t="col">Ma collection</button></div>';
 }
+function packsOf(t) { return (S.bought[t] || 0) + S.packs; }
 function playerView() {
   clearInterval(timer);
   let h = head();
   if (tab === 'shop') {
-    h += '<div class="box"><h2>Mes sachets</h2><p>Un sachet gratuit toutes les 10 minutes (10 maximum). <span id="cd"></span></p><div class="row">' +
-      Object.entries(CAT).map(([t, o]) => '<button data-o="' + t + '"' + (S.packs < 1 ? ' disabled' : '') + '>Ouvrir un sachet ' + o.name + '</button>').join('') +
-      '</div></div><div class="box"><h2>Boutique</h2><p>Un sachet contient 5 cartes, à ouvrir dans le thème de ton choix.</p><button id="buy"' + (S.coins < 100 ? ' disabled' : '') + '>Acheter un sachet — 100 coins</button></div><div class="err" id="e"></div>';
+    h += '<div class="box"><p>Un sachet gratuit toutes les 10 minutes (10 maximum). Sachets gratuits : <b>' + S.packs + '/10</b>. <span id="cd"></span></p></div><div class="grid2">' +
+      Object.entries(CAT).map(([t, o]) => {
+        const sh = S.shop[t];
+        const pr = sh.blocked ? '<b class="err">Indisponible pour le moment</b>' : sh.discount ? '<s>100</s> <b>' + sh.price + ' coins</b> <span class="pill">-' + sh.discount + '%</span>' : '<b>' + sh.price + ' coins</b>';
+        return '<div class="box"><h2>Sachet ' + o.name + '</h2><p>5 cartes. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button></div></div>';
+      }).join('') + '</div><div class="err" id="e"></div>';
   } else {
     h += Object.entries(CAT).map(([t, o]) => {
       const ids = 'crel'.split('').flatMap((r) => o[r].map((n) => t + ':' + n));
@@ -149,12 +155,12 @@ function playerView() {
     return;
   }
   const run = async (fn) => { try { await fn(); } catch (e) { $('#e').textContent = e.message; } };
-  $('#buy').onclick = () => run(async () => { S = (await api('buy')).state; playerView(); });
+  app.querySelectorAll('[data-b]').forEach((b) => (b.onclick = () => run(async () => { S = (await api('buy', { theme: b.dataset.b })).state; playerView(); })));
   app.querySelectorAll('[data-o]').forEach((b) => (b.onclick = () => run(async () => {
     const j = await api('open', { theme: b.dataset.o }); S = j.state; reveal(j.drawn);
   })));
   if (S.next) {
-    const tick = () => { const s = Math.ceil((S.next - Date.now()) / 1000); if (s <= 0) { clearInterval(timer); refresh(); return; } $('#cd').textContent = 'Prochain sachet dans ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+    const tick = () => { const s = Math.ceil((S.next - Date.now()) / 1000); if (s <= 0) { clearInterval(timer); refresh(); return; } $('#cd').textContent = 'Prochain dans ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
     tick(); timer = setInterval(tick, 1000);
   } else $('#cd').textContent = 'Stock plein : ouvre un sachet pour relancer le compteur.';
 }
@@ -170,16 +176,29 @@ async function refresh() { S = (await api('me')).state; playerView(); }
 
 // --- Opérateur
 async function opView() {
-  const users = (await api('users')).users;
-  const opts = 'crel'.split('').length && Object.entries(CAT).map(([t, o]) => '<optgroup label="' + o.name + '">' + 'crel'.split('').flatMap((r) => o[r].map((n) => '<option value="' + t + ':' + n + '">' + RN[r] + ' — ' + n + '</option>')).join('') + '</optgroup>').join('');
-  app.innerHTML = '<div class="bar"><b>Espace opérateur</b><button class="g" id="lo">Quitter</button></div><form class="box row" id="f" style="display:grid"><h2>Donner à un joueur</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option>' + u + '</option>').join('') + '</select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="ca"><option value="">Aucune carte</option>' + opts + '</select><button>Donner</button><div class="err" id="e"></div></form>';
+  const { users, shop } = await api('users');
+  const opts = Object.entries(CAT).map(([t, o]) => '<optgroup label="' + o.name + '">' + 'crel'.split('').flatMap((r) => o[r].map((n) => '<option value="' + t + ':' + n + '">' + RN[r] + ' — ' + n + '</option>')).join('') + '</optgroup>').join('');
+  const list = users.map((u) => {
+    const nb = u.packs + Object.values(u.bought).reduce((a, b) => a + b, 0);
+    const cards = Object.entries(u.cards).map(([id, n]) => id.slice(id.indexOf(':') + 1) + ' ×' + n + ' (' + (RN[RAR[id]] || '?') + ')').join(', ') || 'Aucune carte';
+    return '<details><summary>' + u.pseudo + ' — 🪙 ' + u.coins + ' — 📦 ' + nb + '</summary><p>' + cards + '</p></details>';
+  }).join('') || '<p>Aucun joueur pour le moment.</p>';
+  app.innerHTML = '<div class="bar"><b>Espace opérateur</b><button class="g" id="lo">Quitter</button></div>' +
+    '<div class="box"><h2>Boutique</h2><div class="grid2">' + Object.entries(CAT).map(([t, o]) => '<div class="row"><b>' + o.name + '</b><input type="number" min="0" max="90" value="' + shop[t].discount + '" id="d-' + t + '" style="width:80px" aria-label="Réduction en %"> %<label><input type="checkbox" id="b-' + t + '"' + (shop[t].blocked ? ' checked' : '') + '> bloqué</label><button data-sv="' + t + '">Enregistrer</button></div>').join('') + '</div><div class="err" id="e2"></div></div>' +
+    '<div class="box"><h2>Joueurs (' + users.length + ')</h2>' + list + '</div>' +
+    '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option>' + u.pseudo + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="ca"><option value="">Aucune carte</option>' + opts + '</select><button>Valider</button><div class="err" id="e"></div></form>';
   $('#lo').onclick = logout;
+  app.querySelectorAll('[data-sv]').forEach((b) => (b.onclick = async () => {
+    const t = b.dataset.sv, e = $('#e2');
+    try { await api('shop', { theme: t, discount: $('#d-' + t).value, blocked: $('#b-' + t).checked }); e.style.color = '#3fb950'; e.textContent = 'Boutique mise à jour'; }
+    catch (er) { e.style.color = ''; e.textContent = er.message; }
+  }));
   $('#f').onsubmit = async (e) => {
     e.preventDefault();
+    const who = $('#u').value;
     try {
-      await api('give', { pseudo: $('#u').value, coins: $('#co').value, packs: $('#pk').value, card: $('#ca').value });
-      $('#e').style.color = '#3fb950'; $('#e').textContent = 'Envoyé à ' + $('#u').value;
-      $('#co').value = $('#pk').value = ''; $('#ca').value = '';
+      await api('give', { pseudo: who, mode: $('#m').value, coins: $('#co').value, packs: $('#pk').value, card: $('#ca').value });
+      await opView(); $('#e').style.color = '#3fb950'; $('#e').textContent = 'Fait pour ' + who;
     } catch (er) { $('#e').style.color = ''; $('#e').textContent = er.message; }
   };
 }
