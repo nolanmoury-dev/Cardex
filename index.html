@@ -338,7 +338,7 @@ async function opView(m) {
 }
 
 async function start() {
-  try { isOp ? await opView() : await refresh(); } catch (e) { app.textContent = 'Erreur de chargement : ' + e.message; }
+  try { isOp ? await opView() : await refresh(); } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); }
 }
 tok ? start() : authView();
 </script>
