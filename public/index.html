@@ -407,8 +407,6 @@ async function opView(m) {
     $('#ch').textContent = take ? (u ? (Object.keys(u.cards).length ? 'Cartes que ce joueur possède (Ctrl ou Cmd pour en choisir plusieurs)' : "Ce joueur n'a aucune carte") : "Choisis d'abord un joueur") : 'Ctrl ou Cmd pour choisir plusieurs cartes';
   };
   $('#u').onchange = fillCards; $('#m').onchange = fillCards; fillCards();
-  $('#fm').onsubmit = act('e5', () => api('msg', { pseudo: $('#mt').value, text: $('#mx').value }), 'Notification envoyée');
-  app.querySelectorAll('[data-du]').forEach((b) => (b.onclick = (e) => { if (confirm('Supprimer définitivement le compte ' + b.dataset.du + ' ?')) act('e', () => api('deluser', { pseudo: b.dataset.du }), 'Compte supprimé')(e); }));
   $('#lo').onclick = logout; $('#th').onclick = flip;
   const act = (eid, fn, okm) => async (e) => {
     if (e) e.preventDefault(); const el = $('#' + eid);
@@ -421,6 +419,8 @@ async function opView(m) {
   $('#fc').onsubmit = act('e3', () => api('addcol', { name: $('#cn').value, icon: $('#ci').value, days: $('#cd').value, cards: $('#cl').value }), 'Collection créée');
   $('#fo').onsubmit = act('e4', () => api('addobj', { name: $('#on').value, rarity: $('#or').value, price: $('#op').value }), 'Objet ajouté à la boutique');
   $('#f').onsubmit = act('e', () => api('give', { pseudo: $('#u').value, mode: $('#m').value, coins: $('#co').value, packs: $('#pk').value, cards: [...$('#ca').selectedOptions].map((o) => o.value) }), 'Fait');
+  $('#fm').onsubmit = act('e5', () => api('msg', { pseudo: $('#mt').value, text: $('#mx').value }), 'Notification envoyée');
+  app.querySelectorAll('[data-du]').forEach((b) => (b.onclick = (e) => { if (confirm('Supprimer définitivement le compte ' + b.dataset.du + ' ?')) act('e', () => api('deluser', { pseudo: b.dataset.du }), 'Compte supprimé')(e); }));
   if (m) { const [i, t] = m.split('|'), el = $('#' + i); el.style.color = '#3fb950'; el.textContent = t; }
 }
 
