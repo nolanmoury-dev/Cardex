@@ -128,10 +128,14 @@ module.exports = async (req, res) => {
         u.packs = Math.max(0, u.packs + sg * p);
         if (c) parts.push(c + ' coins');
         if (p) parts.push(p + ' sachet' + (p > 1 ? 's' : ''));
-        if (b.card) {
-          if (!rarOf(cat, b.card)) return fail('Carte inconnue');
-          if (sg > 0) add(u, b.card, 1); else if (u.cards[b.card]) rm(u, b.card, 1);
-          parts.push('la carte ' + b.card.slice(b.card.indexOf(':') + 1));
+        const ids = [].concat(b.cards || (b.card ? [b.card] : [])).map(String);
+        for (const id of ids) {
+          if (!rarOf(cat, id)) return fail('Carte inconnue');
+          if (sg < 0 && !u.cards[id]) return fail("Ce joueur n'a pas la carte " + id.slice(id.indexOf(':') + 1));
+        }
+        for (const id of ids) {
+          if (sg > 0) add(u, id, 1); else rm(u, id, 1);
+          parts.push('la carte ' + id.slice(id.indexOf(':') + 1));
         }
         if (parts.length) u.notifs.push((sg > 0 ? "🎁 L'opérateur t'a donné : " : "⚠️ L'opérateur t'a retiré : ") + parts.join(', '));
         await redis.set(key(u.pseudo), u);
@@ -247,6 +251,18 @@ module.exports = async (req, res) => {
       const gid = crypto.randomBytes(12).toString('hex');
       await redis.set('g:' + gid, { p: u.pseudo, game: b.game, bet: a, t: Date.now() }, { ex: 3600 });
       extra = { gid };
+    } else if (b.action === 'roulette') {
+      const a = int(b.amount, 500), k = b.kind, v = int(b.value, 36), n = crypto.randomInt(37);
+      const RED = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36], red = RED.includes(n);
+      if (a < 10) return fail('Mise minimale : 10 coins (maximale : 500)');
+      if (u.coins < a) return fail('Pas assez de coins');
+      let win, mult;
+      if (k === 'red') { win = red; mult = 2.5; } else if (k === 'black') { win = n > 0 && !red; mult = 2.5; }
+      else if (k === 'even') { win = n > 0 && n % 2 === 0; mult = 2.5; } else if (k === 'odd') { win = n % 2 === 1; mult = 2.5; }
+      else if (k === 'dozen' && v <= 2) { win = n > 0 && Math.floor((n - 1) / 12) === v; mult = 3.7; }
+      else if (k === 'num') { win = n === v; mult = 43; } else return fail('Pari inconnu');
+      const gain = win ? Math.floor(a * mult) : 0;
+      u.coins += gain - a; extra = { n, red, win, gain, bet: a };
     } else if (b.action === 'betend') {
       const g = await redis.get('g:' + b.gid);
       if (!g || g.p !== u.pseudo) return fail('Partie introuvable');
