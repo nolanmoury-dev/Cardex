@@ -42,7 +42,8 @@ const shopOf = async (cat) => {
   return Object.fromEntries(Object.entries(cat).filter(([, o]) => live(o)).map(([t]) => [t, { discount: int(s[t] && s[t].discount, 90), blocked: !!(s[t] && s[t].blocked) }]));
 };
 const price = (sh) => Math.round((PRICE * (100 - sh.discount)) / 100);
-const view = (u, sh, cat, cu) => ({
+const view = (u, sh, cat, cu, mk) => ({
+  market: mk || [],
   pseudo: u.pseudo, coins: u.coins, packs: u.packs, bought: u.bought || {},
   next: u.packs >= MAXP ? null : u.last + STEP, cards: u.cards, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
@@ -91,9 +92,17 @@ module.exports = async (req, res) => {
       return ok({ token });
     }
 
-    const s = b.token && (await redis.get('s:' + b.token));
+    let s = b.token && (await redis.get('s:' + b.token));
     if (!s) return fail('Session expirée, reconnecte-toi', 401);
     const cu = await loadCu(), cat = full(cu);
+    if (s.op && b.as === 'player' && OP_ID) {
+      s = { p: OP_ID };
+      if (!(await redis.get(key(OP_ID)))) {
+        const salt = crypto.randomBytes(16).toString('hex'), nm = OP_ID[0].toUpperCase() + OP_ID.slice(1);
+        await redis.set(key(nm), { pseudo: nm, salt, hash: hash(crypto.randomBytes(8).toString('hex'), salt), coins: 200, packs: 1, bought: {}, last: Date.now(), cards: {}, since: {}, fav: [], notifs: [] });
+        await redis.sadd('users', nm);
+      }
+    }
 
     if (s.op) {
       if (b.action === 'users') {
@@ -175,6 +184,7 @@ module.exports = async (req, res) => {
     u.bought ||= {}; u.since ||= {}; u.fav ||= []; u.notifs ||= [];
     tick(u);
     const sh = await shopOf(cat);
+    let mk = (await redis.get('market')) || [];
     let extra = {};
     const pack = () => {
       if (!sh[b.theme]) return 'Ce sachet n\'existe pas ou n\'est plus disponible';
@@ -246,11 +256,38 @@ module.exports = async (req, res) => {
       const m = sn ? Math.min(4, Math.max(0, (sc - 5) / 10)) : Math.min(4, Math.max(0, (sc - 3) / 6));
       const gain = Math.floor(g.bet * m);
       u.coins += gain; extra = { gain, score: sc };
+    } else if (b.action === 'list') {
+      const pr = int(b.price, 1e6);
+      if (pr < 1) return fail('Prix invalide');
+      if (!u.cards[b.card]) return fail('Carte non possédée');
+      if (mk.filter((x) => x.seller === u.pseudo).length >= 20) return fail('20 annonces maximum');
+      rm(u, b.card, 1);
+      mk.push({ id: crypto.randomBytes(6).toString('hex'), seller: u.pseudo, card: b.card, price: pr, t: Date.now() });
+      await redis.set('market', mk);
+    } else if (b.action === 'unlist') {
+      const x = mk.find((y) => y.id === b.id && y.seller === u.pseudo);
+      if (!x) return fail('Annonce introuvable');
+      mk = mk.filter((y) => y !== x); add(u, x.card, 1);
+      await redis.set('market', mk);
+    } else if (b.action === 'buymk') {
+      const x = mk.find((y) => y.id === b.id);
+      if (!x) return fail('Annonce déjà vendue ou retirée');
+      if (x.seller === u.pseudo) return fail("C'est ta propre annonce");
+      if (u.coins < x.price) return fail('Pas assez de coins');
+      mk = mk.filter((y) => y !== x);
+      await redis.set('market', mk);
+      u.coins -= x.price; add(u, x.card, 1);
+      const v = await redis.get(key(x.seller));
+      if (v) {
+        v.coins += x.price;
+        (v.notifs ||= []).push('💰 ' + u.pseudo + ' a acheté ta carte ' + x.card.slice(x.card.indexOf(':') + 1) + ' pour ' + x.price + ' coins');
+        await redis.set(key(v.pseudo), v);
+      }
     } else if (b.action !== 'me') return fail('Action inconnue');
 
     if (b.action === 'me') { extra = { notifs: u.notifs }; u.notifs = []; }
     await redis.set(key(u.pseudo), u);
-    return ok({ ...extra, state: view(u, sh, cat, cu) });
+    return ok({ ...extra, state: view(u, sh, cat, cu, mk) });
   } catch (e) {
     console.error(e);
     return fail('Erreur serveur : ' + e.message, 500);

@@ -60,7 +60,7 @@ details{border-top:1px solid var(--line);padding:8px 0}summary{cursor:pointer;fo
 const $ = (s) => document.querySelector(s), app = $('#app');
 const RN = { c: 'Commune', r: 'Rare', e: 'Épique', l: 'Légendaire' };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-let tok = localStorage.tok, isOp = localStorage.op === '1', S, CAT = {}, RAR = {}, tab = 'shop', timer, sort = 'def', openT = new Set();
+let tok = localStorage.tok, isOp = localStorage.op === '1', asP = localStorage.asp === '1', S, CAT = {}, RAR = {}, tab = 'shop', timer, sort = 'def', openT = new Set();
 
 function setTheme(t) { document.documentElement.dataset.th = t; localStorage.th = t; }
 setTheme(localStorage.th || 'dark');
@@ -72,12 +72,12 @@ function setCat(c) { CAT = c; RAR = {}; for (const [t, o] of Object.entries(CAT)
 function setS(s) { S = s; setCat(s.themes); if (s.theme && s.theme !== localStorage.th) setTheme(s.theme); }
 
 async function api(action, d = {}) {
-  const r = await fetch('/api/game', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, token: tok, ...d }) });
+  const r = await fetch('/api/game', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, token: tok, ...(isOp && asP ? { as: 'player' } : {}), ...d }) });
   const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = { error: 'Réponse invalide (code ' + r.status + ') : ' + t.slice(0, 120) }; if (r.ok) throw new Error(j.error); }
   if (!r.ok) { if (r.status === 401 && tok) logout(); throw new Error(j.error || 'Erreur'); }
   return j;
 }
-function logout() { localStorage.removeItem('tok'); localStorage.removeItem('op'); tok = null; isOp = false; clearInterval(timer); authView(); }
+function logout() { localStorage.removeItem('tok'); localStorage.removeItem('op'); localStorage.removeItem('asp'); asP = false; tok = null; isOp = false; clearInterval(timer); authView(); }
 
 // --- Wikipédia : image + titre, mis en cache
 const wc = {};
@@ -140,8 +140,8 @@ function authView(msg) {
 // --- Joueur
 const packsOf = (t) => (S.bought[t] || 0) + S.packs;
 function head() {
-  return '<div class="bar"><b>' + S.pseudo + '</b><span class="row"><span class="pill">🪙 ' + S.coins + '</span><span class="pill">📦 ' + S.packs + '/10</span><button class="g" id="th" aria-label="Changer de thème">🌓</button><button class="g" id="lo">Quitter</button></span></div><div class="tabs">' +
-    [['shop', 'Boutique'], ['col', 'Collection'], ['jeu', 'Jeux'], ['set', 'Réglages']].map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
+  return '<div class="bar"><b>' + S.pseudo + '</b><span class="row"><span class="pill">🪙 ' + S.coins + '</span><span class="pill">📦 ' + S.packs + '/10</span>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button><button class="g" id="lo">Quitter</button></span></div><div class="tabs">' +
+    [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['set', 'Réglages']].map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
 }
 function shopHTML() {
   const packs = Object.entries(S.shop).map(([t, sh]) => {
@@ -165,6 +165,9 @@ function colHTML() {
       return '<details data-d="' + t + '"' + (openT.has(t) ? ' open' : '') + '><summary>' + o.icon + ' ' + esc(o.name) + ' — ' + n + '/' + tot + '</summary><div class="grid" id="g-' + t + '"></div></details>';
     }).join('');
 }
+function mkHTML() {
+  return '<div class="box"><p>Achète les cartes des autres joueurs, ou mets tes cartes en vente depuis ta collection (bouton 🏷️) au prix que tu choisis. La vente directe à la banque rapporte peu.</p></div>' + (S.market.length ? '<div class="grid" id="gm"></div>' : '<p>Aucune annonce pour le moment.</p>');
+}
 function jeuHTML() {
   return '<div class="box"><h2>Jeux d\'argent</h2><p>Mise entre 10 et 500 coins. Repère : un sachet coûte 100 coins.</p><div class="row"><input id="bet" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button data-g="snake">🐍 Snake</button><button data-g="tetris">🧱 Tetris</button></div></div>' +
     '<div class="box"><b>Gains</b><p>🐍 Snake (pommes mangées) : gain = mise × (pommes − 5) ÷ 10, maximum ×4. Avec 100 coins : 15 pommes rendent 100, 45 pommes rendent 400.</p><p>🧱 Tetris (lignes) : gain = mise × (lignes − 3) ÷ 6, maximum ×4. Avec 100 coins : 9 lignes rendent 100, 27 lignes rendent 400. Moins de 5 pommes ou 3 lignes : tu perds ta mise.</p></div>';
@@ -177,8 +180,9 @@ function setHTML() {
 }
 function playerView() {
   clearInterval(timer);
-  app.innerHTML = head() + { shop: shopHTML, col: colHTML, jeu: jeuHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
+  app.innerHTML = head() + { shop: shopHTML, col: colHTML, mk: mkHTML, jeu: jeuHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
   $('#lo').onclick = logout; $('#th').onclick = flip;
+  if (isOp) $('#ob').onclick = () => { asP = false; localStorage.asp = '0'; start(); };
   app.querySelectorAll('[data-t]').forEach((b) => (b.onclick = () => { tab = b.dataset.t; playerView(); }));
   const msg = (t, good) => { const e = $('#e'); e.style.color = good ? '#3fb950' : ''; e.textContent = t; };
   const run = async (fn) => { try { await fn(); } catch (e) { msg(e.message); } };
@@ -202,12 +206,24 @@ function playerView() {
       idsOf(t).forEach((id) => {
         if (!S.cards[id]) { if (!o.hidden && !(o.until && o.until < Date.now())) g.insertAdjacentHTML('beforeend', '<div class="card lock"><div class="im">?</div><div class="ct">???</div><div class="rn">&nbsp;</div></div>'); return; }
         const el = cardEl(id, S.cards[id]);
-        el.insertAdjacentHTML('beforeend', '<div class="ac"><button class="g" data-f aria-label="Favori">' + (S.fav.includes(id) ? '⭐' : '☆') + '</button><button class="g" data-s>Vendre 1 · ' + S.vals[id] + '🪙</button></div>');
+        el.insertAdjacentHTML('beforeend', '<div class="ac"><button class="g" data-f aria-label="Favori">' + (S.fav.includes(id) ? '⭐' : '☆') + '</button><button class="g" data-m title="Mettre à la boutique">🏷️</button><button class="g" data-s>Vendre 1 · ' + S.vals[id] + '🪙</button></div>');
         el.querySelector('[data-f]').onclick = () => run(async () => { setS((await api('fav', { card: id })).state); playerView(); });
         el.querySelector('[data-s]').onclick = () => run(async () => { const j = await api('sell', { card: id }); setS(j.state); playerView(); msg('Vendue : +' + j.gain + ' 🪙', true); });
+        el.querySelector('[data-m]').onclick = () => run(async () => {
+          const pr = prompt('Prix en boutique (coins) ? Vente directe : ' + S.vals[id] + ' 🪙', S.vals[id] * 4); if (!pr) return;
+          setS((await api('list', { card: id, price: pr })).state); playerView(); msg('Carte mise en vente au Marché', true);
+        });
         g.append(el);
       });
     }
+  } else if (tab === 'mk') {
+    const gm = $('#gm');
+    if (gm) [...S.market].sort((a, b) => b.t - a.t).forEach((x) => {
+      const el = cardEl(x.card, 1), mine = x.seller === S.pseudo;
+      el.insertAdjacentHTML('beforeend', '<div class="ac" style="flex-direction:column"><small style="text-align:center">' + esc(x.seller) + '</small><button' + (mine ? ' class="g"' : S.coins < x.price ? ' disabled' : '') + ' data-mb>' + (mine ? 'Retirer' : 'Acheter · ' + x.price + '🪙') + '</button></div>');
+      el.querySelector('[data-mb]').onclick = () => run(async () => { setS((await api(mine ? 'unlist' : 'buymk', { id: x.id })).state); playerView(); });
+      gm.append(el);
+    });
   } else if (tab === 'jeu') {
     app.querySelectorAll('[data-g]').forEach((b) => (b.onclick = () => run(async () => { const j = await api('bet', { game: b.dataset.g, amount: $('#bet').value }); setS(j.state); play(b.dataset.g, j.gid, +$('#bet').value); })));
   } else {
@@ -314,7 +330,7 @@ async function opView(m) {
   const cols = custom.cols.filter((c) => c.until > now).map((c) => '<div class="row">' + c.icon + ' <b>' + esc(c.name) + '</b> jusqu\'au ' + new Date(c.until).toLocaleDateString('fr-FR') + ' <button class="g" data-ec="' + c.key + '">Terminer maintenant</button></div>').join('');
   const objs = custom.objs.filter((o) => !o.gone).map((o) => '<div class="row">🎁 <b>' + esc(o.name) + '</b> ' + RN[o.r] + ' — ' + o.price + ' coins <button class="g" data-do="' + esc(o.name) + '">Retirer</button></div>').join('');
   const reps = reports.map((r) => '<div class="row" style="border-top:1px solid var(--line);padding:8px 0"><div style="flex:1"><b>' + esc(r.pseudo) + '</b> <small>' + new Date(r.t).toLocaleString('fr-FR') + '</small><br><span class="rt"></span></div><button class="g" data-dr="' + r.id + '">Supprimer</button></div>').join('') || '<p>Aucun signalement.</p>';
-  app.innerHTML = '<div class="bar"><b>Espace opérateur</b><span class="row"><button class="g" id="th">🌓</button><button class="g" id="lo">Quitter</button></span></div>' +
+  app.innerHTML = '<div class="bar"><b>Espace opérateur</b><span class="row"><button class="g" id="pv">🎮 Espace joueur</button><button class="g" id="th">🌓</button><button class="g" id="lo">Quitter</button></span></div>' +
     '<div class="box"><h2>Boutique</h2><div class="grid2">' + Object.keys(shop).map((t) => '<div class="row"><b>' + CAT[t].icon + ' ' + esc(CAT[t].name) + '</b><input type="number" min="0" max="90" value="' + shop[t].discount + '" id="d-' + t + '" style="width:80px" aria-label="Réduction en %"> %<label><input type="checkbox" id="b-' + t + '"' + (shop[t].blocked ? ' checked' : '') + '> bloqué</label><button data-sv="' + t + '">Enregistrer</button></div>').join('') + '</div><div class="err" id="e2"></div></div>' +
     '<div class="grid2"><form class="box" id="fc" style="display:grid;gap:10px"><h2>Collection provisoire</h2><input id="cn" placeholder="Nom" required><input id="ci" placeholder="Emoji (ex : 🎃)" maxlength="4"><input id="cd" type="number" min="1" max="365" value="7" aria-label="Durée en jours"><textarea id="cl" rows="6" placeholder="Une carte par ligne (titre Wikipédia). Préfixe r: e: l: pour la rareté, sans préfixe = commune"></textarea><button>Créer</button><div class="err" id="e3"></div>' + cols + '</form>' +
     '<form class="box" id="fo" style="display:grid;gap:10px"><h2>Objet en boutique</h2><input id="on" placeholder="Nom de la carte (titre Wikipédia)" required><select id="or"><option value="c">Commune</option><option value="r">Rare</option><option value="e">Épique</option><option value="l">Légendaire</option></select><input id="op" type="number" min="1" placeholder="Prix en coins" required><button>Ajouter</button><div class="err" id="e4"></div>' + objs + '</form></div>' +
@@ -322,6 +338,7 @@ async function opView(m) {
     '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option>' + u.pseudo + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="ca"><option value="">Aucune carte</option>' + opts + '</select><button>Valider</button><div class="err" id="e"></div></form>' +
     '<div class="box"><h2>Signalements (' + reports.length + ')</h2>' + reps + '</div>';
   app.querySelectorAll('.rt').forEach((el, i) => (el.textContent = reports[i].text));
+  $('#pv').onclick = () => { asP = true; localStorage.asp = '1'; start(); };
   $('#lo').onclick = logout; $('#th').onclick = flip;
   const act = (eid, fn, okm) => async (e) => {
     if (e) e.preventDefault(); const el = $('#' + eid);
@@ -338,7 +355,7 @@ async function opView(m) {
 }
 
 async function start() {
-  try { isOp ? await opView() : await refresh(); } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); }
+  try { isOp && !asP ? await opView() : await refresh(); } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); }
 }
 tok ? start() : authView();
 </script>
