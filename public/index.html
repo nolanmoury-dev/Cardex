@@ -77,6 +77,7 @@ main{padding:8px 8px calc(84px + env(safe-area-inset-bottom))}
 .auth{margin:6vh auto}
 }
 @media(max-width:600px){.grid{grid-template-columns:repeat(4,1fr);gap:6px}.card{border-width:2px;border-radius:8px}.card .ct{font-size:11px;padding:4px 2px 0;min-height:2.6em}.card .rn{font-size:9px;padding:0 2px 3px}.card .ac button{font-size:9px;padding:2px;min-height:28px}.card .n{font-size:10px}.tabs button{font-size:11px}}
+.pills{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:8px;-webkit-overflow-scrolling:touch}.pills::-webkit-scrollbar{display:none}.pill{flex:none;padding:5px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font-size:12px}.pill.on{background:var(--l);border-color:var(--l);color:#000}.rt{width:100%;border-collapse:collapse;font-size:12px}.rt th,.rt td{padding:4px 3px;text-align:center;border-top:1px solid var(--line)}.rt .pn{text-align:left;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rt .me{background:var(--cb);font-weight:700}details.rb{border-color:var(--l)}details.rb>summary{color:var(--l)}
 </style>
 </head>
 <body><main id="app"></main>
@@ -187,7 +188,8 @@ function colHTML() {
     Object.entries(CAT).map(([t, o]) => {
       const n = idsOf(t).filter((id) => S.cards[id]).length, tot = idsOf(t).length;
       if (!n && (o.hidden || (o.until && o.until < Date.now()))) return '';
-      return '<details data-d="' + t + '"' + (openT.has(t) ? ' open' : '') + '><summary>' + o.icon + ' ' + esc(o.name) + ' — ' + n + '/' + tot + '</summary><div class="grid" id="g-' + t + '"></div></details>';
+      const rb = (S.rb || {})[t] || 0;
+      return '<details data-d="' + t + '"' + (rb ? ' class="rb"' : '') + (openT.has(t) ? ' open' : '') + '><summary>' + o.icon + ' ' + esc(o.name) + ' — ' + n + '/' + tot + (rb ? ' · ♻️×' + rb : '') + '</summary>' + (n === tot && tot && t !== 'obj' ? '<button class="g" data-rb="' + t + '" style="margin:8px 0">♻️ Renaissance : la collection se vide, tu gagnes 1/5 de sa valeur</button>' : '') + '<div class="grid" id="g-' + t + '"></div></details>';
     }).join('');
 }
 const mf = { t: '', r: '', s: 'new' };
@@ -201,7 +203,7 @@ function jeuHTML() {
 }
 let rkN = 10;
 function rkHTML() {
-  return '<div class="box"><h2>🏆 Classement</h2><select id="rkn"><option value="5">Top 5</option><option value="10">Top 10</option><option value="0">Tout le classement</option></select><div id="rl">Chargement…</div><small>Trié par nombre de cartes différentes : légendaires, puis épiques, rares, communes. Égalité : départage aux coins.</small></div>';
+  return '<div class="pills">' + [[5, 'Top 5'], [10, 'Top 10'], [0, 'Tout']].map(([n, l]) => '<button class="pill' + (rkN === n ? ' on' : '') + '" data-n="' + n + '">' + l + '</button>').join('') + '</div><div class="box" style="padding:8px"><div id="rl">Chargement…</div></div><small>Classé par renaissances ♻️, puis cartes légendaires (L), épiques (E), rares (R), communes (C) ; égalité : coins.</small>';
 }
 function setHTML() {
   const th = document.documentElement.dataset.th;
@@ -229,6 +231,7 @@ function playerView() {
       tk(); timer = setInterval(tk, 1000);
     } else $('#cd').textContent = 'Stock plein : ouvre un sachet pour relancer le compteur.';
   } else if (tab === 'col') {
+    app.querySelectorAll('[data-rb]').forEach((b) => (b.onclick = () => { if (confirm('Toutes tes cartes de cette collection seront supprimées. Continuer ?')) run(async () => { const j = await api('rebirth', { t: b.dataset.rb }); setS(j.state); playerView(); msg('Renaissance ! +' + j.gain + ' 🪙', true); }); }));
     $('#so').value = sort; $('#so').onchange = (e) => { sort = e.target.value; playerView(); };
     $('#dup').onclick = () => run(async () => {
       if (!confirm('Vendre tous les doublons (sauf favoris) ?')) return;
@@ -262,10 +265,11 @@ function playerView() {
       gm.append(el);
     });
   } else if (tab === 'rk') {
-    const sn = $('#rkn'); sn.value = rkN; sn.onchange = () => { rkN = +sn.value; playerView(); };
+    app.querySelectorAll('.pill').forEach((b) => (b.onclick = () => { rkN = +b.dataset.n; playerView(); }));
     api('rank', { n: rkN }).then((j) => {
       const el = $('#rl'); if (!el) return;
-      el.innerHTML = j.rank.length ? '<table style="width:100%;border-collapse:collapse">' + j.rank.map((x, i) => '<tr style="border-top:1px solid var(--line)"><td>' + (i + 1) + '</td><td><b>' + esc(x.pseudo) + '</b></td><td>🟡' + x.l + '</td><td>🟣' + x.e + '</td><td>🟢' + x.r + '</td><td>⚪' + x.c + '</td><td>🪙' + x.coins + '</td></tr>').join('') + '</table>' : 'Aucun joueur pour le moment.';
+      const col = { l: 'l', e: 'e', r: 'r', c: 'c' };
+      el.innerHTML = j.rank.length ? '<table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th>♻️</th>' + [...'ler'].concat('c').map((k) => '<th style="color:var(--' + k + ')">' + k.toUpperCase() + '</th>').join('') + '<th>🪙</th></tr>' + j.rank.map((x, i) => '<tr' + (x.pseudo === S.pseudo ? ' class="me"' : '') + '><td>' + (i + 1) + '</td><td class="pn">' + esc(x.pseudo) + '</td><td>' + x.rb + '</td>' + [...'lerc'].map((k) => '<td style="color:var(--' + k + ')">' + x[k] + '</td>').join('') + '<td>' + x.coins + '</td></tr>').join('') + '</table>' : 'Aucun joueur pour le moment.';
     }).catch((e) => msg(e.message));
   } else if (tab === 'jeu') {
     wheel($('#rc'), 0, () => {}, true);

@@ -95,7 +95,7 @@ const shopOf = async (cat) => {
 const price = (sh) => Math.round((PRICE * (100 - sh.discount)) / 100);
 const view = (u, sh, cat, cu, mk) => ({
   market: mk || [], inbox: u.inbox || [],
-  pseudo: u.pseudo, renames: u.renames || 0, coins: u.coins, packs: u.packs, bought: u.bought || {},
+  pseudo: u.pseudo, renames: u.renames || 0, rb: u.rb || {}, coins: u.coins, packs: u.packs, bought: u.bought || {},
   next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), cards: u.cards, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
   shop: Object.fromEntries(Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s) }])),
@@ -369,13 +369,21 @@ const handler = async (req, res) => {
       await renameUser(u, nn, true);
       await redis.set('s:' + b.token, { p: nn }, { ex: 86400 * 30 });
       mk = (await redis.get('market')) || [];
+    } else if (b.action === 'rebirth') {
+      const t = String(b.t || ''), o = cat[t];
+      if (!o || t === 'obj') return fail('Collection inconnue');
+      const ids = [...R].flatMap((r) => o[r].map((n) => t + ':' + n));
+      if (!ids.length || ids.some((id) => !u.cards[id])) return fail('Collection incomplète');
+      const gain = Math.floor(ids.reduce((a, id) => a + val(u, id, cat, cu), 0) / 5);
+      for (const id of Object.keys(u.cards)) if (id.startsWith(t + ':')) rm(u, id, u.cards[id]);
+      (u.rb ||= {})[t] = (u.rb[t] || 0) + 1; u.coins += gain; extra = { gain };
     } else if (b.action === 'rank') {
       const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
       extra = { rank: list.filter(Boolean).map((v) => {
         const n = { l: 0, e: 0, r: 0, c: 0 };
         for (const id of Object.keys(v.cards || {})) { const r = rarOf(cat, id); if (n[r] != null && !id.startsWith('obj:')) n[r]++; }
-        return { pseudo: v.pseudo, ...n, coins: v.coins };
-      }).sort((a, b) => b.l - a.l || b.e - a.e || b.r - a.r || b.c - a.c || b.coins - a.coins).slice(0, [5, 10].includes(+b.n) ? +b.n : 10000) };
+        return { pseudo: v.pseudo, ...n, rb: Object.values(v.rb || {}).reduce((a, x) => a + x, 0), coins: v.coins };
+      }).sort((a, b) => b.rb - a.rb || b.l - a.l || b.e - a.e || b.r - a.r || b.c - a.c || b.coins - a.coins).slice(0, [5, 10].includes(+b.n) ? +b.n : 10000) };
     } else if (b.action === 'vapid') {
       extra = { key: (await vapid()).pub };
     } else if (b.action === 'subscribe') {
