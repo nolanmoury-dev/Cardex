@@ -200,7 +200,7 @@ const handler = async (req, res) => {
       if (b.action === 'addcol') {
         const name = String(b.name || '').trim().slice(0, 30);
         if (name.length < 2) return fail('Nom trop court');
-        const o = { key: 'x' + Date.now(), name, icon: String(b.icon || '').trim().slice(0, 4) || '⭐', color: '#0ea5e9', until: Date.now() + Math.max(1, int(b.days, 365) || 7) * DAY, c: [], r: [], e: [], l: [] };
+        const o = { key: 'x' + Date.now(), name, icon: String(b.icon || '').trim().slice(0, 4) || '⭐', color: /^#[0-9a-f]{6}$/i.test(b.color) ? b.color : '#0ea5e9', until: Date.now() + Math.max(1, int(b.days, 365) || 7) * DAY, c: [], r: [], e: [], l: [] };
         String(b.cards || '').split('\n').slice(0, 200).forEach((ln) => {
           const m = ln.trim().match(/^([crel]):(.+)$/i), r = m ? m[1].toLowerCase() : 'c', n = (m ? m[2] : ln).trim();
           if (n && !o[r].includes(n)) o[r].push(n);
