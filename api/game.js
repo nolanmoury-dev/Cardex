@@ -3,7 +3,35 @@ const T0 = require('./cards');
 
 let redis;
 const W = { c: 60, r: 25, e: 11, l: 4 }, BASE = { c: 2, r: 8, e: 25, l: 80 }, R = 'crel';
-const STEP = 10 * 60 * 1000, DAY = 864e5, MAXP = 10, PRICE = 100, PACK = 5;
+const DAY = 864e5, MAXP = 10, PRICE = 100, PACK = 5;
+const stepOf = (k) => Math.round((10 + (4 * k) / 9) * 60000); // 10 min pour le 1er sachet, 14 min pour le 10e (total 2 h)
+const pend = [];
+async function vapid() {
+  let v = await redis.get('vapid');
+  if (!v) {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const j = publicKey.export({ format: 'jwk' });
+    v = { pub: Buffer.concat([Buffer.from([4]), Buffer.from(j.x, 'base64url'), Buffer.from(j.y, 'base64url')]).toString('base64url'), priv: privateKey.export({ format: 'jwk' }).d };
+    await redis.set('vapid', v);
+  }
+  return v;
+}
+async function flush() {
+  const items = pend.splice(0);
+  if (!items.length) return;
+  try {
+    const wp = require('web-push'), v = await vapid();
+    wp.setVapidDetails('mailto:noreply@example.com', v.pub, v.priv);
+    await Promise.all(items.flatMap(([subs, text]) => subs.map((s) => wp.sendNotification(s, JSON.stringify({ title: 'Cardex', body: text })).catch(() => {}))));
+  } catch (e) { console.error('push', e.message); }
+}
+async function bcast(text, except) {
+  for (const p of await redis.smembers('users')) {
+    if (except && p === except) continue;
+    const v = await redis.get(key(p)); if (!v) continue;
+    note(v, text); await redis.set(key(v.pseudo), v);
+  }
+}
 const OP_ID = (process.env.OPERATOR_ID || 'operateur').toLowerCase();
 const OP_CODE = process.env.OPERATOR_CODE || '100823';
 const key = (p) => 'u:' + p.toLowerCase();
@@ -31,16 +59,20 @@ const val = (u, id, cat, cu) => {
 const add = (u, id, n) => { if (!u.cards[id]) u.since[id] = Date.now(); u.cards[id] = (u.cards[id] || 0) + n; };
 const rm = (u, id, n) => { u.cards[id] -= n; if (u.cards[id] <= 0) { delete u.cards[id]; delete u.since[id]; u.fav = u.fav.filter((x) => x !== id); } };
 
-function note(u, text) {
-  (u.notifs ||= []).push(text);
-  (u.inbox ||= []).unshift({ id: Date.now() + Math.random().toString(36).slice(2, 6), text, t: Date.now() });
-  u.inbox = u.inbox.slice(0, 30);
+function note(u, text, quiet) {
+  if (!quiet) {
+    (u.notifs ||= []).push(text);
+    (u.inbox ||= []).unshift({ id: Date.now() + Math.random().toString(36).slice(2, 6), text, t: Date.now() });
+    u.inbox = u.inbox.slice(0, 30);
+  }
+  if ((u.subs || []).length) pend.push([u.subs, text]);
 }
 function tick(u) {
   const now = Date.now();
   if (u.packs >= MAXP) { u.last = now; return; }
-  const n = Math.floor((now - u.last) / STEP);
-  if (n > 0) { u.packs = Math.min(MAXP, u.packs + n); u.last = u.packs >= MAXP ? now : u.last + n * STEP; }
+  let s;
+  while (u.packs < MAXP && now - u.last >= (s = stepOf(u.packs))) { u.last += s; u.packs++; }
+  if (u.packs >= MAXP) u.last = now;
 }
 const shopOf = async (cat) => {
   const s = (await redis.get('shop')) || {};
@@ -50,7 +82,7 @@ const price = (sh) => Math.round((PRICE * (100 - sh.discount)) / 100);
 const view = (u, sh, cat, cu, mk) => ({
   market: mk || [], inbox: u.inbox || [],
   pseudo: u.pseudo, coins: u.coins, packs: u.packs, bought: u.bought || {},
-  next: u.packs >= MAXP ? null : u.last + STEP, cards: u.cards, fav: u.fav, theme: u.theme || null,
+  next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), cards: u.cards, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
   shop: Object.fromEntries(Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s) }])),
   objs: cu.objs.filter((x) => !x.gone), themes: cat,
@@ -62,7 +94,7 @@ function draw(o, t) {
   return t + ':' + o[r][Math.floor(Math.random() * o[r].length)];
 }
 
-module.exports = async (req, res) => {
+const handler = async (req, res) => {
   const fail = (m, c = 400) => res.status(c).json({ error: m });
   const ok = (d) => res.status(200).json(d);
   if (req.method !== 'POST') return fail('POST uniquement', 405);
@@ -97,6 +129,16 @@ module.exports = async (req, res) => {
       return ok({ token });
     }
 
+    if (b.action === 'cronpacks') {
+      if (!process.env.CRON_SECRET || b.secret !== process.env.CRON_SECRET) return fail('Non autorisé', 401);
+      let n = 0;
+      for (const p of await redis.smembers('users')) {
+        const v = await redis.get(key(p)); if (!v || !(v.subs || []).length) continue;
+        const a = v.packs || 0; tick(v);
+        if (v.packs > a) { note(v, '📦 Un sachet est prêt !', true); await redis.set(key(v.pseudo), v); n++; }
+      }
+      return ok({ done: true, n });
+    }
     let s = b.token && (await redis.get('s:' + b.token));
     if (!s) return fail('Session expirée, reconnecte-toi', 401);
     const cu = await loadCu(), cat = full(cu);
@@ -173,6 +215,7 @@ module.exports = async (req, res) => {
         const st = parseInt(b.stock, 10);
         cu.objs.push({ name, r, price: pr, stock: st > 0 ? Math.min(st, 1e6) : null });
         await redis.set('custom', cu);
+        await bcast('🛍️ Nouvel objet en boutique : ' + name);
         return ok({ done: true });
       }
       if (b.action === 'delobj') {
@@ -299,6 +342,12 @@ module.exports = async (req, res) => {
       const m = sn ? Math.min(4, Math.max(0, (sc - 5) / 10)) : Math.min(4, Math.max(0, (sc - 3) / 6));
       const gain = Math.floor(g.bet * m);
       u.coins += gain; extra = { gain, score: sc };
+    } else if (b.action === 'vapid') {
+      extra = { key: (await vapid()).pub };
+    } else if (b.action === 'subscribe') {
+      const sb = b.sub;
+      if (!sb || !sb.endpoint || !sb.keys) return fail('Abonnement invalide');
+      u.subs = [...(u.subs || []).filter((x) => x.endpoint !== sb.endpoint), { endpoint: sb.endpoint, keys: sb.keys }].slice(-5);
     } else if (b.action === 'delnote') {
       u.inbox = b.id === 'all' ? [] : u.inbox.filter((x) => x.id !== b.id);
     } else if (b.action === 'list') {
@@ -309,6 +358,7 @@ module.exports = async (req, res) => {
       rm(u, b.card, 1);
       mk.push({ id: crypto.randomBytes(6).toString('hex'), seller: u.pseudo, card: b.card, price: pr, t: Date.now() });
       await redis.set('market', mk);
+      await bcast('🏷️ Nouvelle carte au Marché : ' + b.card.slice(b.card.indexOf(':') + 1) + ' (' + pr + ' 🪙)', u.pseudo);
     } else if (b.action === 'unlist') {
       const x = mk.find((y) => y.id === b.id && y.seller === u.pseudo);
       if (!x) return fail('Annonce introuvable');
@@ -337,4 +387,10 @@ module.exports = async (req, res) => {
     console.error(e);
     return fail('Erreur serveur : ' + e.message, 500);
   }
+};
+
+module.exports = (req, res) => {
+  const j = res.json.bind(res);
+  res.json = async (d) => { await flush(); return j(d); };
+  return handler(req, res);
 };
