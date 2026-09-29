@@ -33,6 +33,20 @@ async function bcast(text, except) {
   }
 }
 const OP_ID = (process.env.OPERATOR_ID || 'operateur').toLowerCase();
+const OP_NAME = 'Noln_mry';
+async function checkName(nn, u) {
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(nn)) return 'Pseudo : 3 à 20 lettres, chiffres ou _';
+  const l = nn.toLowerCase();
+  if (u && l === u.pseudo.toLowerCase()) return "C'est déjà ce pseudo";
+  if (l === OP_ID || l === OP_NAME.toLowerCase() || (await redis.get('u:' + l))) return 'Ce pseudo est déjà pris';
+}
+async function renameUser(u, nn, count) {
+  const old = u.pseudo;
+  await redis.del('u:' + old.toLowerCase()); await redis.srem('users', old); await redis.sadd('users', nn);
+  u.pseudo = nn; if (count) u.renames = (u.renames || 0) + 1;
+  const mk = (await redis.get('market')) || [];
+  if (mk.some((x) => x.seller === old)) await redis.set('market', mk.map((x) => (x.seller === old ? { ...x, seller: nn } : x)));
+}
 const OP_CODE = process.env.OPERATOR_CODE || '100823';
 const key = (p) => 'u:' + p.toLowerCase();
 const hash = (pw, salt) => crypto.scryptSync(pw, salt, 32).toString('hex');
@@ -59,15 +73,6 @@ const val = (u, id, cat, cu) => {
 const add = (u, id, n) => { if (!u.cards[id]) u.since[id] = Date.now(); u.cards[id] = (u.cards[id] || 0) + n; };
 const rm = (u, id, n) => { u.cards[id] -= n; if (u.cards[id] <= 0) { delete u.cards[id]; delete u.since[id]; u.fav = u.fav.filter((x) => x !== id); } };
 
-const cname = (id) => id.slice(id.indexOf(':') + 1);
-const counts = (ids) => ids.reduce((m, id) => ((m[id] = (m[id] || 0) + 1), m), {});
-const owns = (u, ids) => Object.entries(counts(ids)).every(([id, n]) => (u.cards[id] || 0) >= n);
-const cleanIds = (a, cat, max = 3) => [].concat(a || []).map(String).slice(0, max).filter((id) => rarOf(cat, id));
-const rankList = (users) => users
-  .filter((u) => u && u.pseudo.toLowerCase() !== OP_ID)
-  .map((u) => ({ pseudo: u.pseudo, reb: { ...REB0(), ...(u.reb || {}) }, coins: u.coins }))
-  .sort((a, b) => b.reb.l - a.reb.l || b.reb.e - a.reb.e || b.reb.r - a.reb.r || b.reb.c - a.reb.c || b.coins - a.coins);
-
 function note(u, text, quiet) {
   if (!quiet) {
     (u.notifs ||= []).push(text);
@@ -88,18 +93,12 @@ const shopOf = async (cat) => {
   return Object.fromEntries(Object.entries(cat).filter(([, o]) => live(o)).map(([t]) => [t, { discount: int(s[t] && s[t].discount, 90), blocked: !!(s[t] && s[t].blocked) }]));
 };
 const price = (sh) => Math.round((PRICE * (100 - sh.discount)) / 100);
-const REB0 = () => ({ c: 0, r: 0, e: 0, l: 0 });
-const view = (u, sh, cat, cu, mk, tr) => ({
-  market: mk || [], inbox: u.inbox || [], reb: { ...REB0(), ...(u.reb || {}) },
-  trades: (tr || []).filter((x) => x.to === u.pseudo || x.from === u.pseudo),
-  pseudo: u.pseudo, coins: u.coins, packs: u.packs, bought: u.bought || {},
+const view = (u, sh, cat, cu, mk) => ({
+  market: mk || [], inbox: u.inbox || [],
+  pseudo: u.pseudo, renames: u.renames || 0, coins: u.coins, packs: u.packs, bought: u.bought || {},
   next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), cards: u.cards, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
-  shop: Object.fromEntries([
-    ...Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s) }]),
-    // sachets déjà achetés d'une collection terminée : on garde de quoi les ouvrir
-    ...Object.keys(u.bought || {}).filter((t) => u.bought[t] > 0 && cat[t] && t !== 'obj' && !sh[t]).map((t) => [t, { discount: 0, blocked: true, ended: true, price: PRICE }]),
-  ]),
+  shop: Object.fromEntries(Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s) }])),
   objs: cu.objs.filter((x) => !x.gone), themes: cat,
 });
 function draw(o, t) {
@@ -133,7 +132,7 @@ const handler = async (req, res) => {
       if (!pw) return fail('Entre un mot de passe');
       let u = await redis.get(key(pseudo));
       if (b.action === 'register') {
-        if (u || pseudo.toLowerCase() === OP_ID) return fail('Ce pseudo est déjà pris');
+        if (u || pseudo.toLowerCase() === OP_ID || pseudo.toLowerCase() === OP_NAME.toLowerCase()) return fail('Ce pseudo est déjà pris');
         const salt = crypto.randomBytes(16).toString('hex');
         u = { pseudo, salt, hash: hash(pw, salt), coins: 200, packs: 1, bought: {}, last: Date.now(), cards: {}, since: {}, fav: [], notifs: [] };
         await redis.set(key(pseudo), u);
@@ -144,23 +143,18 @@ const handler = async (req, res) => {
       return ok({ token });
     }
 
-    if (b.action === 'cronpacks') {
-      if (!process.env.CRON_SECRET || b.secret !== process.env.CRON_SECRET) return fail('Non autorisé', 401);
-      let n = 0;
-      for (const p of await redis.smembers('users')) {
-        const v = await redis.get(key(p)); if (!v || !(v.subs || []).length) continue;
-        const a = v.packs || 0; tick(v);
-        if (v.packs > a) { note(v, '📦 Un sachet est prêt !', true); await redis.set(key(v.pseudo), v); n++; }
-      }
-      return ok({ done: true, n });
-    }
     let s = b.token && (await redis.get('s:' + b.token));
     if (!s) return fail('Session expirée, reconnecte-toi', 401);
     const cu = await loadCu(), cat = full(cu);
     if (s.op && b.as === 'player' && OP_ID) {
-      s = { p: OP_ID };
-      if (!(await redis.get(key(OP_ID)))) {
-        const salt = crypto.randomBytes(16).toString('hex'), nm = OP_ID[0].toUpperCase() + OP_ID.slice(1);
+      s = { p: OP_NAME };
+      const oldOp = await redis.get(key(OP_ID));
+      if (oldOp && key(OP_ID) !== key(OP_NAME) && !(await redis.get(key(OP_NAME)))) {
+        await redis.srem('users', oldOp.pseudo); await redis.del(key(OP_ID));
+        oldOp.pseudo = OP_NAME; await redis.set(key(OP_NAME), oldOp); await redis.sadd('users', OP_NAME);
+      }
+      if (!(await redis.get(key(OP_NAME)))) {
+        const salt = crypto.randomBytes(16).toString('hex'), nm = OP_NAME;
         await redis.set(key(nm), { pseudo: nm, salt, hash: hash(crypto.randomBytes(8).toString('hex'), salt), coins: 200, packs: 1, bought: {}, last: Date.now(), cards: {}, since: {}, fav: [], notifs: [] });
         await redis.sadd('users', nm);
       }
@@ -252,18 +246,21 @@ const handler = async (req, res) => {
         if (!n) return fail('Joueur introuvable');
         return ok({ done: true, n });
       }
+      if (b.action === 'rename') {
+        const u = await redis.get(key(String(b.pseudo || ''))), nn = String(b.name || '').trim();
+        if (!u) return fail('Joueur introuvable');
+        if (u.pseudo.toLowerCase() === OP_NAME.toLowerCase()) return fail("Le pseudo de l'opérateur ne change pas");
+        const er = await checkName(nn, u); if (er) return fail(er);
+        await renameUser(u, nn, false);
+        note(u, '✏️ Le staff a changé ton pseudo : ' + nn);
+        await redis.set(key(u.pseudo), u);
+        return ok({ done: true });
+      }
       if (b.action === 'deluser') {
         const u = await redis.get(key(String(b.pseudo || '')));
         if (!u) return fail('Joueur introuvable');
         await redis.del(key(u.pseudo)); await redis.srem('users', u.pseudo);
         await redis.set('market', ((await redis.get('market')) || []).filter((x) => x.seller !== u.pseudo));
-        const trs = (await redis.get('trades')) || [];
-        for (const x of trs.filter((y) => y.to === u.pseudo)) {
-          const v = await redis.get(key(x.from)); if (!v) continue;
-          x.give.forEach((id) => add(v, id, 1)); note(v, '↩️ ' + u.pseudo + ' a quitté le jeu : tes cartes te sont rendues');
-          await redis.set(key(v.pseudo), v);
-        }
-        await redis.set('trades', trs.filter((x) => x.to !== u.pseudo && x.from !== u.pseudo));
         return ok({ done: true });
       }
       if (b.action === 'delreport') {
@@ -279,7 +276,6 @@ const handler = async (req, res) => {
     tick(u);
     const sh = await shopOf(cat);
     let mk = (await redis.get('market')) || [];
-    let tr = (await redis.get('trades')) || [];
     let extra = {};
     const pack = () => {
       if (!sh[b.theme]) return 'Ce sachet n\'existe pas ou n\'est plus disponible';
@@ -293,13 +289,10 @@ const handler = async (req, res) => {
       u.coins -= p;
       u.bought[b.theme] = (u.bought[b.theme] || 0) + 1;
     } else if (b.action === 'open') {
-      if (!cat[b.theme] || b.theme === 'obj') return fail("Ce sachet n'existe pas");
-      // Un sachet déjà acheté s'ouvre toujours, même si la catégorie est bloquée ; seuls les sachets gratuits sont bloqués.
+      const e = pack(); if (e) return fail(e);
       if (u.bought[b.theme] > 0) u.bought[b.theme] -= 1;
-      else {
-        const e = pack(); if (e) return fail(e);
-        if (u.packs > 0) u.packs -= 1; else return fail('Aucun sachet disponible');
-      }
+      else if (u.packs > 0) u.packs -= 1;
+      else return fail('Aucun sachet disponible');
       const drawn = Array.from({ length: PACK }, () => draw(cat[b.theme], b.theme));
       drawn.forEach((id) => add(u, id, 1));
       extra = { drawn };
@@ -368,6 +361,21 @@ const handler = async (req, res) => {
       const m = sn ? Math.min(4, Math.max(0, (sc - 5) / 10)) : Math.min(4, Math.max(0, (sc - 3) / 6));
       const gain = Math.floor(g.bet * m);
       u.coins += gain; extra = { gain, score: sc };
+    } else if (b.action === 'rename') {
+      const nn = String(b.name || '').trim();
+      if (u.pseudo.toLowerCase() === OP_NAME.toLowerCase()) return fail("Le pseudo de l'opérateur ne change pas");
+      if ((u.renames || 0) >= 1) return fail('Ton changement gratuit est déjà utilisé : demande au staff (Réglages → Contacter un staff)');
+      const er = await checkName(nn, u); if (er) return fail(er);
+      await renameUser(u, nn, true);
+      await redis.set('s:' + b.token, { p: nn }, { ex: 86400 * 30 });
+      mk = (await redis.get('market')) || [];
+    } else if (b.action === 'rank') {
+      const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
+      extra = { rank: list.filter(Boolean).map((v) => {
+        const n = { l: 0, e: 0, r: 0, c: 0 };
+        for (const id of Object.keys(v.cards || {})) { const r = rarOf(cat, id); if (n[r] != null && !id.startsWith('obj:')) n[r]++; }
+        return { pseudo: v.pseudo, ...n, coins: v.coins };
+      }).sort((a, b) => b.l - a.l || b.e - a.e || b.r - a.r || b.c - a.c || b.coins - a.coins).slice(0, 10) };
     } else if (b.action === 'vapid') {
       extra = { key: (await vapid()).pub };
     } else if (b.action === 'subscribe') {
@@ -404,67 +412,11 @@ const handler = async (req, res) => {
         note(v, '💰 ' + u.pseudo + ' a acheté ta carte ' + x.card.slice(x.card.indexOf(':') + 1) + ' pour ' + x.price + ' coins');
         await redis.set(key(v.pseudo), v);
       }
-    } else if (b.action === 'rank') {
-      const names = await redis.smembers('users');
-      const all = rankList(names.length ? await redis.mget(...names.map(key)) : []);
-      extra = { top: all.slice(0, 10), me: all.findIndex((x) => x.pseudo === u.pseudo) + 1, total: all.length };
-    } else if (b.action === 'reborn') {
-      const t = cat[b.theme];
-      if (!t || b.theme === 'obj') return fail('Collection inconnue');
-      const rs = b.rar ? [String(b.rar)] : [...R].filter((r) => t[r].length);
-      if (!rs.length || rs.some((r) => !R.includes(r) || !t[r].length)) return fail('Rareté inconnue');
-      const ids = rs.flatMap((r) => t[r].map((n) => b.theme + ':' + n)), miss = ids.filter((id) => !u.cards[id]).length;
-      if (miss) return fail('Collection incomplète : il te manque ' + miss + ' carte' + (miss > 1 ? 's' : ''));
-      ids.forEach((id) => rm(u, id, 1));
-      u.reb = { ...REB0(), ...(u.reb || {}) };
-      rs.forEach((r) => u.reb[r]++);
-      extra = { reborn: rs };
-    } else if (b.action === 'gift') {
-      const to = await redis.get(key(String(b.to || '').trim()));
-      const ids = cleanIds(b.give, cat, 5);
-      if (!to) return fail('Joueur introuvable');
-      if (to.pseudo === u.pseudo) return fail('Tu ne peux pas te donner une carte à toi-même');
-      if (!ids.length) return fail('Choisis au moins une carte à donner');
-      if (!owns(u, ids)) return fail("Tu n'as pas toutes ces cartes");
-      ids.forEach((id) => { rm(u, id, 1); add(to, id, 1); });
-      note(to, '🎁 ' + u.pseudo + " t'a donné : " + ids.map(cname).join(', '));
-      await redis.set(key(to.pseudo), to);
-    } else if (b.action === 'offer') {
-      const to = await redis.get(key(String(b.to || '').trim()));
-      const give = cleanIds(b.give, cat), want = cleanIds(b.want, cat);
-      if (!to) return fail('Joueur introuvable');
-      if (to.pseudo === u.pseudo) return fail('Tu ne peux pas échanger avec toi-même');
-      if (!give.length || !want.length) return fail('Choisis au moins une carte à donner et une carte à recevoir');
-      if (!owns(u, give)) return fail("Tu n'as pas toutes les cartes que tu proposes");
-      if (tr.filter((x) => x.from === u.pseudo).length >= 10) return fail('10 propositions en attente maximum');
-      give.forEach((id) => rm(u, id, 1)); // cartes mises de côté jusqu'à la réponse
-      tr.push({ id: crypto.randomBytes(6).toString('hex'), from: u.pseudo, to: to.pseudo, give, want, t: Date.now() });
-      await redis.set('trades', tr);
-      note(to, '🔁 ' + u.pseudo + ' te propose ' + give.map(cname).join(', ') + ' contre ' + want.map(cname).join(', ') + ' (onglet Échanges)');
-      await redis.set(key(to.pseudo), to);
-    } else if (b.action === 'tradeok' || b.action === 'tradeno' || b.action === 'tradecancel') {
-      const x = tr.find((y) => y.id === b.id && (b.action === 'tradecancel' ? y.from === u.pseudo : y.to === u.pseudo));
-      if (!x) return fail('Proposition introuvable (déjà traitée ou annulée)');
-      const other = await redis.get(key(b.action === 'tradecancel' ? x.to : x.from));
-      if (b.action === 'tradeok') {
-        if (!other) return fail("L'autre joueur n'existe plus");
-        if (!owns(u, x.want)) return fail("Tu n'as pas toutes les cartes demandées");
-        x.want.forEach((id) => { rm(u, id, 1); add(other, id, 1); });
-        x.give.forEach((id) => add(u, id, 1));
-        note(other, '✅ ' + u.pseudo + ' a accepté ton échange : tu reçois ' + x.want.map(cname).join(', '));
-        await redis.set(key(other.pseudo), other);
-      } else if (b.action === 'tradeno') {
-        const s2 = other; // l'expéditeur récupère ses cartes
-        if (s2) { x.give.forEach((id) => add(s2, id, 1)); note(s2, '❌ ' + u.pseudo + ' a refusé ton échange : cartes rendues'); await redis.set(key(s2.pseudo), s2); }
-      } else x.give.forEach((id) => add(u, id, 1));
-      tr = tr.filter((y) => y !== x);
-      await redis.set('trades', tr);
-      if (b.action === 'tradecancel' && other) { note(other, '🚫 ' + u.pseudo + ' a annulé sa proposition d\'échange'); await redis.set(key(other.pseudo), other); }
     } else if (b.action !== 'me') return fail('Action inconnue');
 
     if (b.action === 'me') { extra = { notifs: u.notifs }; u.notifs = []; }
     await redis.set(key(u.pseudo), u);
-    return ok({ ...extra, state: view(u, sh, cat, cu, mk, tr) });
+    return ok({ ...extra, state: view(u, sh, cat, cu, mk) });
   } catch (e) {
     console.error(e);
     return fail('Erreur serveur : ' + e.message, 500);
