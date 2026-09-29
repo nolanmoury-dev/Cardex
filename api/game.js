@@ -375,7 +375,7 @@ const handler = async (req, res) => {
         const n = { l: 0, e: 0, r: 0, c: 0 };
         for (const id of Object.keys(v.cards || {})) { const r = rarOf(cat, id); if (n[r] != null && !id.startsWith('obj:')) n[r]++; }
         return { pseudo: v.pseudo, ...n, coins: v.coins };
-      }).sort((a, b) => b.l - a.l || b.e - a.e || b.r - a.r || b.c - a.c || b.coins - a.coins).slice(0, 10) };
+      }).sort((a, b) => b.l - a.l || b.e - a.e || b.r - a.r || b.c - a.c || b.coins - a.coins).slice(0, [5, 10].includes(+b.n) ? +b.n : 10000) };
     } else if (b.action === 'vapid') {
       extra = { key: (await vapid()).pub };
     } else if (b.action === 'subscribe') {

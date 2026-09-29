@@ -166,7 +166,7 @@ function authView(msg) {
 const packsOf = (t) => (S.bought[t] || 0) + S.packs;
 function head() {
   return '<div class="bar"><b>' + S.pseudo + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">📦 ' + S.packs + '/10</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button><button class="g" id="lo">Quitter</button></span></div><div class="tabs">' +
-    [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Top 10'], ['set', 'Réglages']].map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
+    [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Classement'], ['set', 'Réglages']].map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
 }
 function shopHTML() {
   const packs = Object.entries(S.shop).map(([t, sh]) => {
@@ -199,8 +199,9 @@ function jeuHTML() {
     '<div class="box"><h2>🎡 Roulette</h2><p>Mise de 10 à 500 coins. Rouge, noir, pair, impair : gain ×2,5. Douzaine (1-12, 13-24, 25-36) : ×3,7. Numéro exact (0 à 36) : ×43. Le 0 fait perdre tous les paris sauf celui sur le numéro 0. Bien plus généreux que Snake et Tetris.</p><div class="row"><input id="rb" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise roulette"></div><div class="row" style="margin-top:8px"><button data-rk="red">🔴 Rouge</button><button data-rk="black">⚫ Noir</button><button data-rk="even">Pair</button><button data-rk="odd">Impair</button></div><div class="row" style="margin-top:8px"><button data-rk="dozen" data-rv="0">1-12</button><button data-rk="dozen" data-rv="1">13-24</button><button data-rk="dozen" data-rv="2">25-36</button><input id="rn" type="number" min="0" max="36" placeholder="N°" style="width:80px" aria-label="Numéro"><button data-rk="num">Numéro</button></div><div style="text-align:center;margin-top:10px"><canvas id="rc" width="260" height="260" style="max-width:100%"></canvas></div><div id="rw" style="text-align:center;font-size:40px;min-height:80px"></div></div>' +
     '<div class="box"><b>Gains</b><p>🐍 Snake (pommes mangées) : gain = mise × (pommes − 5) ÷ 10, maximum ×4. Avec 100 coins : 15 pommes rendent 100, 45 pommes rendent 400.</p><p>🧱 Tetris (lignes) : gain = mise × (lignes − 3) ÷ 6, maximum ×4. Avec 100 coins : 9 lignes rendent 100, 27 lignes rendent 400. Moins de 5 pommes ou 3 lignes : tu perds ta mise.</p></div>';
 }
+let rkN = 10;
 function rkHTML() {
-  return '<div class="box"><h2>🏆 Classement</h2><div id="rl">Chargement…</div><small>Trié par nombre de cartes différentes : légendaires, puis épiques, rares, communes. Égalité : départage aux coins.</small></div>';
+  return '<div class="box"><h2>🏆 Classement</h2><select id="rkn"><option value="5">Top 5</option><option value="10">Top 10</option><option value="0">Tout le classement</option></select><div id="rl">Chargement…</div><small>Trié par nombre de cartes différentes : légendaires, puis épiques, rares, communes. Égalité : départage aux coins.</small></div>';
 }
 function setHTML() {
   const th = document.documentElement.dataset.th;
@@ -261,7 +262,8 @@ function playerView() {
       gm.append(el);
     });
   } else if (tab === 'rk') {
-    api('rank').then((j) => {
+    const sn = $('#rkn'); sn.value = rkN; sn.onchange = () => { rkN = +sn.value; playerView(); };
+    api('rank', { n: rkN }).then((j) => {
       const el = $('#rl'); if (!el) return;
       el.innerHTML = j.rank.length ? '<table style="width:100%;border-collapse:collapse">' + j.rank.map((x, i) => '<tr style="border-top:1px solid var(--line)"><td>' + (i + 1) + '</td><td><b>' + esc(x.pseudo) + '</b></td><td>🟡' + x.l + '</td><td>🟣' + x.e + '</td><td>🟢' + x.r + '</td><td>⚪' + x.c + '</td><td>🪙' + x.coins + '</td></tr>').join('') + '</table>' : 'Aucun joueur pour le moment.';
     }).catch((e) => msg(e.message));
