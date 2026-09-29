@@ -65,8 +65,8 @@ canvas{touch-action:none}
 @media(max-width:600px){
 main{padding:8px 8px calc(84px + env(safe-area-inset-bottom))}
 .bar{padding:6px 0}.bar b{font-size:18px}
-.tabs{position:fixed;bottom:0;left:0;right:0;margin:0;background:var(--panel);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom));display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;z-index:4}
-.tabs button{padding:8px 2px;font-size:13px}
+.tabs{position:fixed;bottom:0;left:0;right:0;margin:0;background:var(--panel);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom));display:grid;grid-auto-flow:column;grid-auto-columns:minmax(max-content,1fr);overflow-x:auto;gap:4px;z-index:4}
+.tabs button{padding:8px 10px;font-size:13px;white-space:nowrap}
 .grid{grid-template-columns:repeat(2,1fr);gap:10px}
 .grid2{grid-template-columns:1fr}
 .box{padding:12px}
@@ -164,15 +164,16 @@ function authView(msg) {
 
 // --- Joueur
 const packsOf = (t) => (S.bought[t] || 0) + S.packs;
+const openN = (t, sh) => (S.bought[t] || 0) + (sh.blocked ? 0 : S.packs); // les sachets gratuits suivent le blocage, pas les sachets achetés
 function head() {
   return '<div class="bar"><b>' + S.pseudo + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">📦 ' + S.packs + '/10</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button><button class="g" id="lo">Quitter</button></span></div><div class="tabs">' +
-    [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['set', 'Réglages']].map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
+    [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['tr', 'Échanges'], ['rk', 'Classement'], ['jeu', 'Jeux'], ['set', 'Réglages']].map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
 }
 function shopHTML() {
   const packs = Object.entries(S.shop).map(([t, sh]) => {
     const o = CAT[t];
-    const pr = sh.blocked ? '<b class="err">Indisponible pour le moment</b>' : sh.discount ? '<s>100</s> <b>' + sh.price + ' coins</b> <span class="pill">-' + sh.discount + '%</span>' : '<b>' + sh.price + ' coins</b>';
-    return '<div class="box"><div class="pk" style="--pc:' + o.color + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button></div></div>';
+    const pr = sh.blocked ? '<b class="err">Indisponible pour le moment</b>' + (S.bought[t] ? ' <small>Tes ' + S.bought[t] + ' sachet(s) déjà acheté(s) restent ouvrables.</small>' : '') : sh.discount ? '<s>100</s> <b>' + sh.price + ' coins</b> <span class="pill">-' + sh.discount + '%</span>' : '<b>' + sh.price + ' coins</b>';
+    return '<div class="box"><div class="pk" style="--pc:' + o.color + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (openN(t, sh) < 1 ? ' disabled' : '') + '>Ouvrir (' + openN(t, sh) + ')</button></div></div>';
   }).join('');
   const objs = S.objs.length ? '<h2>Objets</h2><div class="grid2">' + S.objs.map((x) => '<div class="box"><b style="color:var(--' + x.r + ')">' + esc(x.name) + '</b> — ' + RN[x.r] + '<p>' + x.price + ' coins' + (x.stock != null ? (x.stock > 0 ? ' · Reste ' + x.stock : ' · Épuisé') : '') + '</p><button data-ob="' + esc('obj:' + x.name) + '"' + (S.coins < x.price || (x.stock != null && x.stock <= 0) ? ' disabled' : '') + '>Acheter</button></div>').join('') + '</div>' : '';
   return '<div class="box"><p>Un sachet gratuit toutes les 10 à 14 minutes (10 maximum, 2 h pour tout remplir). Sachets gratuits : <b>' + S.packs + '/10</b>. <span id="cd"></span></p></div><div class="grid2">' + packs + '</div>' + objs;
@@ -187,12 +188,33 @@ function colHTML() {
     Object.entries(CAT).map(([t, o]) => {
       const n = idsOf(t).filter((id) => S.cards[id]).length, tot = idsOf(t).length;
       if (!n && (o.hidden || (o.until && o.until < Date.now()))) return '';
-      return '<details data-d="' + t + '"' + (openT.has(t) ? ' open' : '') + '><summary>' + o.icon + ' ' + esc(o.name) + ' — ' + n + '/' + tot + '</summary><div class="grid" id="g-' + t + '"></div></details>';
+      const rs = [...'crel'].filter((r) => CAT[t][r].length), done = rs.filter((r) => CAT[t][r].every((nm) => S.cards[t + ':' + nm]));
+      const rb = !o.hidden && done.length ? '<div class="row" style="margin:8px 0">' + done.map((r) => '<button class="g" data-rb="' + t + '" data-rr="' + r + '">🔄 Renaître : ' + RN[r] + 's</button>').join('') + (done.length === rs.length ? '<button data-rb="' + t + '">🔄 Renaissance complète</button>' : '') + '</div>' : '';
+      return '<details data-d="' + t + '"' + (openT.has(t) ? ' open' : '') + '><summary>' + o.icon + ' ' + esc(o.name) + ' — ' + n + '/' + tot + '</summary>' + rb + '<div class="grid" id="g-' + t + '"></div></details>';
     }).join('');
 }
 const mf = { t: '', r: '', s: 'new' };
 function mkHTML() {
   return '<div class="box"><p>Achète les cartes des autres joueurs, ou mets tes cartes en vente depuis ta collection (bouton 🏷️) au prix que tu choisis.</p><div class="row"><select id="mft"><option value="">Toutes collections</option>' + Object.entries(CAT).map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="mfr"><option value="">Toutes raretés</option>' + [...'crel'].map((r) => '<option value="' + r + '">' + RN[r] + '</option>').join('') + '</select><select id="mfs"><option value="new">Plus récentes</option><option value="asc">Prix croissant</option><option value="desc">Prix décroissant</option></select></div></div><div class="grid" id="gm"></div><p id="mn"></p>';
+}
+const tf = { to: '', give: '', want: '' };
+const cn = (id) => id.slice(id.indexOf(':') + 1);
+function trHTML() {
+  const opt = (id, x) => '<option value="' + esc(id) + '">' + esc(cn(id)) + x + '</option>';
+  const giveO = Object.keys(S.cards).sort().map((id) => opt(id, ' — ' + RN[RAR[id] || 'c'] + ' ×' + S.cards[id])).join('');
+  const wantO = Object.entries(CAT).filter(([, o]) => !o.hidden).map(([t, o]) => '<optgroup label="' + esc(o.icon + ' ' + o.name) + '">' + idsOf(t).map((id) => opt(id, ' — ' + RN[RAR[id]])).join('') + '</optgroup>').join('');
+  const names = (a) => a.map((id) => esc(cn(id))).join(', '), has = (a) => a.every((id) => (S.cards[id] || 0) >= a.filter((x) => x === id).length);
+  const inc = S.trades.filter((x) => x.to === S.pseudo), out = S.trades.filter((x) => x.from === S.pseudo);
+  const li = (x, inn) => '<div class="box"><p>' + (inn ? '<b>' + esc(x.from) + '</b> te propose <b>' + names(x.give) + '</b> contre <b>' + names(x.want) + '</b>' : 'Tu proposes <b>' + names(x.give) + '</b> à <b>' + esc(x.to) + '</b> contre <b>' + names(x.want) + '</b>') + '</p><div class="row">' +
+    (inn ? '<button data-ta="' + x.id + '"' + (has(x.want) ? '' : ' disabled title="Il te manque une carte demandée"') + '>Accepter</button><button class="g" data-tn="' + x.id + '">Refuser</button>' : '<button class="g" data-tc="' + x.id + '">Annuler</button>') + '</div></div>';
+  return '<div class="box"><h2>🔁 Proposer un échange</h2><p>Écris le pseudo du joueur, choisis la carte que tu donnes et celle que tu veux. Ta carte est mise de côté jusqu\'à sa réponse (elle t\'est rendue s\'il refuse ou si tu annules). Pour offrir une carte sans rien demander, utilise « Donner ».</p>' +
+    '<div style="display:grid;gap:8px;max-width:460px"><input id="tto" placeholder="Pseudo du joueur" autocapitalize="off" autocomplete="off"><label><small>Je donne</small><select id="tgv" style="width:100%">' + (giveO || '<option value="">Tu n\'as aucune carte</option>') + '</select></label><label><small>Je veux (pour un échange)</small><select id="twt" style="width:100%">' + wantO + '</select></label><div class="row"><button id="tof">Proposer l\'échange</button><button class="g" id="tgf">Donner la carte</button></div></div></div>' +
+    '<h2>Propositions reçues (' + inc.length + ')</h2>' + (inc.map((x) => li(x, true)).join('') || '<p><small>Aucune proposition reçue.</small></p>') +
+    '<h2>Propositions envoyées (' + out.length + ')</h2>' + (out.map((x) => li(x, false)).join('') || '<p><small>Aucune proposition en attente.</small></p>');
+}
+function rkHTML() {
+  const b = S.reb;
+  return '<div class="box"><h2>🏆 Classement</h2><p>Quand tu as toutes les cartes d\'une collection (ou d\'une rareté d\'une collection), le bouton 🔄 apparaît dans l\'onglet Collection : la renaissance consomme un exemplaire de chaque carte concernée et te rapporte un point de renaissance. Le top 10 se classe par renaissances légendaires, puis épiques, rares, communes, puis par coins en cas d\'égalité.</p><p>Tes renaissances : <b>' + b.l + '</b> légendaires · <b>' + b.e + '</b> épiques · <b>' + b.r + '</b> rares · <b>' + b.c + '</b> communes</p></div><div class="box" id="rk">Chargement…</div>';
 }
 function jeuHTML() {
   return '<div class="box"><h2>Jeux d\'argent</h2><p>Mise entre 10 et 500 coins. Repère : un sachet coûte 100 coins. Sur téléphone, glisse le doigt sur le jeu (Tetris : touche = tourner, glisser vers le bas = chute).</p><div class="row"><input id="bet" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button data-g="snake">🐍 Snake</button><button data-g="tetris">🧱 Tetris</button></div></div>' +
@@ -208,7 +230,7 @@ function setHTML() {
 }
 function playerView() {
   clearInterval(timer);
-  app.innerHTML = head() + { shop: shopHTML, col: colHTML, mk: mkHTML, jeu: jeuHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
+  app.innerHTML = head() + { shop: shopHTML, col: colHTML, mk: mkHTML, tr: trHTML, rk: rkHTML, jeu: jeuHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
   $('#lo').onclick = logout; $('#th').onclick = flip;
   if (isOp) $('#ob').onclick = () => { asP = false; localStorage.asp = '0'; start(); };
   $('#bl').onclick = inbox;
@@ -230,6 +252,10 @@ function playerView() {
       const j = await api('sell', { mode: 'dupes' }); setS(j.state); playerView(); msg(j.cnt + ' carte(s) vendue(s) : +' + j.gain + ' 🪙', true);
     });
     app.querySelectorAll('details').forEach((d) => (d.ontoggle = () => (d.open ? openT.add(d.dataset.d) : openT.delete(d.dataset.d))));
+    app.querySelectorAll('[data-rb]').forEach((b) => (b.onclick = () => run(async () => {
+      if (!confirm('Renaître consomme 1 exemplaire de chaque carte concernée et ajoute une renaissance à ton classement. Continuer ?')) return;
+      setS((await api('reborn', { theme: b.dataset.rb, rar: b.dataset.rr })).state); playerView(); msg('Renaissance validée 🔄', true);
+    })));
     for (const [t, o] of Object.entries(CAT)) {
       const g = $('#g-' + t); if (!g) continue;
       idsOf(t).forEach((id) => {
@@ -256,6 +282,18 @@ function playerView() {
       el.querySelector('[data-mb]').onclick = () => run(async () => { setS((await api(mine ? 'unlist' : 'buymk', { id: x.id })).state); playerView(); });
       gm.append(el);
     });
+  } else if (tab === 'tr') {
+    ['to', 'give', 'want'].forEach((k) => { const e = $({ to: '#tto', give: '#tgv', want: '#twt' }[k]); if (tf[k]) e.value = tf[k]; e.oninput = e.onchange = () => (tf[k] = e.value); });
+    const gv = () => $('#tgv').value;
+    $('#tof').onclick = () => run(async () => { setS((await api('offer', { to: $('#tto').value, give: [gv()], want: [$('#twt').value] })).state); tf.give = ''; playerView(); msg('Proposition envoyée', true); });
+    $('#tgf').onclick = () => run(async () => { if (!confirm('Donner « ' + cn(gv()) + ' » à ' + $('#tto').value.trim() + ' sans rien recevoir ?')) return; setS((await api('gift', { to: $('#tto').value, give: [gv()] })).state); tf.give = ''; playerView(); msg('Carte donnée', true); });
+    [['ta', 'tradeok', 'Échange accepté'], ['tn', 'tradeno', 'Échange refusé'], ['tc', 'tradecancel', 'Proposition annulée']].forEach(([a, act, m]) => app.querySelectorAll('[data-' + a + ']').forEach((b) => (b.onclick = () => run(async () => { setS((await api(act, { id: b.dataset[a] })).state); playerView(); msg(m, true); }))));
+  } else if (tab === 'rk') {
+    api('rank').then((j) => {
+      const el = $('#rk'); if (!el) return;
+      const rows = j.top.map((x, i) => '<tr' + (x.pseudo === S.pseudo ? ' style="font-weight:700"' : '') + '><td>' + (i + 1) + '</td><td>' + esc(x.pseudo) + '</td><td>' + x.reb.l + '</td><td>' + x.reb.e + '</td><td>' + x.reb.r + '</td><td>' + x.reb.c + '</td><td>' + x.coins + '</td></tr>').join('');
+      el.innerHTML = '<table style="width:100%;border-collapse:collapse;text-align:center"><thead><tr><th>#</th><th style="text-align:left">Joueur</th><th title="Légendaires">Lég.</th><th title="Épiques">Épi.</th><th title="Rares">Rar.</th><th title="Communes">Com.</th><th>🪙</th></tr></thead><tbody>' + (rows || '<tr><td colspan="7">Personne au classement pour l\'instant.</td></tr>') + '</tbody></table><p><small>Ta place : ' + (j.me ? j.me + ' sur ' + j.total : '—') + '</small></p>';
+    }).catch((e) => msg(e.message));
   } else if (tab === 'jeu') {
     wheel($('#rc'), 0, () => {}, true);
     const bt = app.querySelectorAll('[data-rk]');
