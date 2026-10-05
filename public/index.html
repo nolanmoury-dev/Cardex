@@ -385,8 +385,7 @@ function inbox() {
   ov.querySelector('#nx').onclick = () => ov.remove();
 }
 
-// --- Rappel : écran d'accueil + notifications (popup de temps en temps, jusqu'à ce que ce soit fait)
-const NUDGE_EVERY = 2 * 864e5; // délai entre deux rappels (2 jours)
+// --- Rappel : écran d'accueil + notifications (popup à chaque ouverture de l'app, jusqu'à ce que ce soit fait)
 const UA = navigator.userAgent, IOS = /iPad|iPhone|iPod/.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1), AND = /Android/.test(UA), MOB = IOS || AND;
 const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const pushCap = () => 'serviceWorker' in navigator && 'PushManager' in window && typeof Notification !== 'undefined';
@@ -413,11 +412,9 @@ async function enablePush() {
   await api('subscribe', { sub: sub.toJSON() });
   pushOn = true; localStorage.pushOk = '1';
 }
-function nudge(force) {
+function nudge() {
   if (!tok || (isOp && !asP) || document.querySelector('.ov')) return;
   if (!(MOB && !standalone()) && pushOn) return;
-  if (!force && Date.now() - (+localStorage.nudge || 0) < NUDGE_EVERY) return;
-  localStorage.nudge = Date.now();
   const ov = overlay('');
   const render = () => {
     const needInst = MOB && !standalone(), denied = pushCap() && Notification.permission === 'denied';
@@ -433,7 +430,7 @@ function nudge(force) {
         : '<p style="margin:6px 0 0">Reçois les messages du staff, les nouvelles cartes au Marché et les offres d\'échange, même app fermée.' + (MOB || denied ? '' : ' Ton navigateur va te demander l\'autorisation : clique sur <b>Autoriser</b>.') + '</p>' +
           (denied ? '<p style="margin:6px 0 0;color:#f0883e">Elles sont bloquées. ' + (MOB ? 'Va dans Réglages du téléphone → Notifications → Cardex (ou ton navigateur) pour les autoriser.' : 'Clique sur le cadenas 🔒 à côté de l\'adresse → Notifications → Autoriser, puis recharge la page.') + '</p>' : '<p style="margin:8px 0 0"><button id="nn">🔔 Activer les notifications</button></p>'));
     const done = !needInst && pushOn;
-    ov.innerHTML = '<div class="box" style="max-width:480px;margin:5vh auto"><h2>' + (done ? '🎉 Tout est prêt !' : '📲 Ne rate rien sur Cardex') + '</h2><p>' + (done ? 'Tu es installé et les notifications sont activées. Ce message ne reviendra plus.' : 'Deux petites choses pour profiter à fond du jeu. Ce rappel reviendra de temps en temps jusqu\'à ce que ce soit fait.') + '</p>' + inst + notif + '<div id="ne" class="err" style="margin-top:8px"></div><div class="row" style="margin-top:10px"><button class="g" id="nx2">' + (done ? 'Fermer' : 'Plus tard') + '</button></div></div>';
+    ov.innerHTML = '<div class="box" style="max-width:480px;margin:5vh auto"><h2>' + (done ? '🎉 Tout est prêt !' : '📲 Ne rate rien sur Cardex') + '</h2><p>' + (done ? 'Tu es installé et les notifications sont activées. Ce message ne reviendra plus.' : 'Deux petites choses pour profiter à fond du jeu. Ce rappel reviendra à chaque ouverture de l\'app jusqu\'à ce que ce soit fait.') + '</p>' + inst + notif + '<div id="ne" class="err" style="margin-top:8px"></div><div class="row" style="margin-top:10px"><button class="g" id="nx2">' + (done ? 'Fermer' : 'Plus tard') + '</button></div></div>';
     ov.querySelector('#nx2').onclick = () => ov.remove();
     const ni = ov.querySelector('#ni'); if (ni) ni.onclick = async () => { try { instEv.prompt(); await instEv.userChoice; } catch {} instEv = null; render(); };
     const nn = ov.querySelector('#nn'); if (nn) nn.onclick = async () => { try { await enablePush(); render(); if (tab === 'set') playerView(); } catch (e) { ov.querySelector('#ne').textContent = e.message; } };
