@@ -198,7 +198,7 @@ const run = async (fn) => { try { await fn(); } catch (e) { msg(e.message); } };
 const mf = { t: '', r: '', s: 'new' };
 let mkSub = 'v';
 function mkHTML() {
-  return '<div class="pills">' + [['v', '🏷️ Ventes'], ['t', '🔁 Échange']].map(([k, l]) => '<button class="pill' + (mkSub === k ? ' on' : '') + '" data-ms="' + k + '">' + l + '</button>').join('') + '</div>' + (mkSub === 't' ? tradeHTML() : mkSales());
+  return '<div class="pills">' + [['v', '🏷️ Ventes'], ['t', '🔁 Échange'], ['g', '🎁 Offre']].map(([k, l]) => '<button class="pill' + (mkSub === k ? ' on' : '') + '" data-ms="' + k + '">' + l + '</button>').join('') + '</div>' + (mkSub === 't' ? tradeHTML() : mkSub === 'g' ? giftHTML() : mkSales());
 }
 function tradeHTML() {
   const mine = Object.keys(S.cards).sort();
@@ -246,6 +246,58 @@ function tradeInit() {
     const c = row.querySelector('[data-c]'); if (c) c.onclick = () => go('tradecounter', { ask: +row.querySelector('input').value });
     $('#tl').append(row);
   });
+}
+function giftHTML() {
+  const mine = Object.keys(S.cards);
+  return '<div class="box"><h2>🎁 Faire un cadeau</h2><p>Offre une carte ou des coins à un joueur, avec un petit message si tu veux. Il reçoit une notification.</p><div style="display:grid;gap:8px;max-width:420px">' +
+    '<select id="gp"><option value="">Choisis un joueur</option></select>' +
+    '<div class="pills" style="margin:0"><button class="pill on" data-gk="card">🃏 Carte</button><button class="pill" data-gk="coins">🪙 Argent</button></div>' +
+    '<div id="gcard" style="display:grid;gap:8px"><select id="ggc"><option value="">Je donne… (collection)</option>' + Object.entries(CAT).filter(([t]) => t !== 'obj' || mine.some((id) => id.startsWith('obj:'))).map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="gg"><option value="">Carte offerte</option></select><small id="gl"></small><small id="gi"></small></div>' +
+    '<div id="gcoins" style="display:none"><input id="ga" type="number" min="1" max="' + S.coins + '" placeholder="Montant (tu as ' + S.coins + ' 🪙)" style="width:100%"></div>' +
+    '<input id="gm" maxlength="200" placeholder="Message (facultatif)"><button id="go">🎁 Offrir</button></div></div>';
+}
+function giftInit() {
+  let kind = 'card', theirs = null, gl = [], gid = null;
+  const gp = $('#gp'), ggc = $('#ggc'), gg = $('#gg');
+  const mark = (id) => (!S.cards[id] ? '❌ ' : theirs ? (theirs[id] ? '✅ ' : '🤝 ') : '✅ '); // 🤝 tu l'as et lui non, ✅ vous l'avez tous les deux, ❌ tu ne l'as pas
+  const legend = () => { $('#gl').innerHTML = theirs ? '🤝 = tu l\'as et ' + esc(gp.value) + ' ne l\'a pas · ✅ = vous l\'avez tous les deux · ❌ = tu ne l\'as pas' : '✅ = tu l\'as · ❌ = tu ne l\'as pas (choisis un joueur pour voir ce qu\'il a)'; };
+  const info = () => {
+    const e = $('#gi'); if (!gid) { e.textContent = ''; return; }
+    const n = S.cards[gid] || 0;
+    e.textContent = 'Tu en as ×' + n + (theirs ? ' · ' + gp.value + ' en a ×' + (theirs[gid] || 0) : '') + (n > 1 ? ' · doublon : tu peux en donner ' + (n - 1) + ' sans perdre la carte' : n === 1 ? ' · c\'est ton dernier exemplaire' : '');
+  };
+  const fill = () => { const t = ggc.value; gl = t ? idsOf(t) : []; gid = null; gg.innerHTML = '<option value="">Carte offerte</option>' + gl.map((id, i) => '<option value="' + i + '">' + mark(id) + esc(id.slice(id.indexOf(':') + 1)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] > 1 ? ' ×' + S.cards[id] : '') + '</option>').join(''); info(); };
+  ggc.onchange = fill;
+  gg.onchange = () => { gid = gl[gg.value] || null; info(); };
+  gp.onchange = async () => {
+    theirs = null;
+    if (gp.value) { try { theirs = (await api('peek', { pseudo: gp.value })).peek.cards || {}; } catch (e) { msg(e.message); gp.value = ''; } }
+    legend(); fill();
+  };
+  api('players').then((j) => { if ($('#gp')) gp.insertAdjacentHTML('beforeend', j.players.map((n) => '<option>' + esc(n) + '</option>').join('')); }).catch(() => {});
+  app.querySelectorAll('[data-gk]').forEach((b) => (b.onclick = () => {
+    kind = b.dataset.gk;
+    app.querySelectorAll('[data-gk]').forEach((x) => x.classList.toggle('on', x === b));
+    $('#gcard').style.display = kind === 'card' ? 'grid' : 'none'; $('#gcoins').style.display = kind === 'coins' ? 'block' : 'none';
+  }));
+  $('#go').onclick = () => {
+    if (!gp.value) return msg('Choisis un joueur');
+    const text = $('#gm').value.trim(), body = { to: gp.value, kind, text };
+    let what;
+    if (kind === 'coins') {
+      const c = Math.floor(+$('#ga').value);
+      if (!(c >= 1)) return msg('Entre un montant');
+      if (c > S.coins) return msg('Pas assez de coins (tu as ' + S.coins + ' 🪙)');
+      body.amount = c; what = c + ' 🪙';
+    } else {
+      if (!gid) return msg('Choisis la carte à offrir');
+      if (!S.cards[gid]) return msg('Tu n\'as pas cette carte (❌)');
+      body.card = gid; what = 'la carte ' + gid.slice(gid.indexOf(':') + 1);
+    }
+    if (!confirm('Offrir ' + what + ' à ' + gp.value + ' ? Ce cadeau est définitif.')) return;
+    run(async () => { setS((await api('gift', body)).state); playerView(); msg('Cadeau envoyé à ' + body.to + ' 🎁', true); });
+  };
+  legend();
 }
 function mkSales() {
   return '<div class="box"><p>Achète les cartes des autres joueurs, ou mets tes cartes en vente depuis ta collection (bouton 🏷️) au prix que tu choisis.</p><div class="row"><select id="mft"><option value="">Toutes collections</option>' + Object.entries(CAT).map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="mfr"><option value="">Toutes raretés</option>' + [...'crel'].map((r) => '<option value="' + r + '">' + RN[r] + '</option>').join('') + '</select><select id="mfs"><option value="new">Plus récentes</option><option value="asc">Prix croissant</option><option value="desc">Prix décroissant</option></select></div></div><div class="grid" id="gm"></div><p id="mn"></p>';
@@ -321,7 +373,7 @@ function playerView() {
     }
   } else if (tab === 'mk') {
     app.querySelectorAll('[data-ms]').forEach((b) => (b.onclick = () => { mkSub = b.dataset.ms; playerView(); }));
-    if (mkSub === 't') tradeInit(); else mkInit();
+    if (mkSub === 't') tradeInit(); else if (mkSub === 'g') giftInit(); else mkInit();
   } else if (tab === 'rk') {
     app.querySelectorAll('.pill').forEach((b) => (b.onclick = () => { rkN = +b.dataset.n; playerView(); }));
     api('rank', { n: rkN }).then((j) => {

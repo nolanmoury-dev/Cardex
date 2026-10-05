@@ -559,6 +559,26 @@ const handler = async (req, res) => {
       const v = await redis.get(key(String(b.pseudo || '')));
       if (!v) return fail('Joueur introuvable');
       extra = { peek: { pseudo: v.pseudo, cards: v.cards || {} } };
+    } else if (b.action === 'gift') {
+      const v = await redis.get(key(String(b.to || '')));
+      if (!v || v.pseudo === u.pseudo) return fail('Joueur introuvable');
+      v.since ||= {}; v.fav ||= []; v.cards ||= {};
+      const txt = String(b.text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      let what;
+      if (b.kind === 'coins') {
+        const c = int(b.amount);
+        if (c < 1) return fail('Montant invalide');
+        if (c > u.coins) return fail('Pas assez de coins');
+        u.coins -= c; v.coins += c; what = c + ' 🪙';
+      } else {
+        const id = String(b.card || '');
+        if (!rarOf(cat, id)) return fail('Carte inconnue');
+        if (!u.cards[id]) return fail('Carte non possédée');
+        rm(u, id, 1); add(v, id, 1); what = 'la carte ' + cn(id);
+      }
+      note(v, '🎁 ' + u.pseudo + " t'a offert " + what + (txt ? ' — « ' + txt + ' »' : ''));
+      await redis.set(key(v.pseudo), v);
+      extra = { gifted: what, to: v.pseudo };
     } else if (b.action === 'tradeoffer') {
       const gv = b.give, w = String(b.want || '');
       if (!u.cards[gv]) return fail('Carte non possédée');
