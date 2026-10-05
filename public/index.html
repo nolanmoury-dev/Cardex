@@ -207,20 +207,22 @@ function tradeHTML() {
 function tradeInit() {
   const mine = Object.keys(S.cards).sort(), tc = $('#tc'), tw = $('#tw'), tp = $('#tp');
   let wl = [], wantId = null;
-  tc.onchange = () => { wl = tc.value ? idsOf(tc.value) : []; wantId = null; tw.innerHTML = '<option value="">Carte voulue</option>' + wl.map((id, i) => '<option value="' + i + '">' + esc(id.slice(id.indexOf(':') + 1)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] ? ' ✓' : '') + '</option>').join(''); };
+  let theirs = null; // cartes du joueur ciblé (null = offre ouverte)
+  const mark = (id) => ((theirs ? theirs[id] : S.cards[id]) ? '✅ ' : '❌ '); // ciblé : ✅ s'il l'a ; offre ouverte : ✅ si je l'ai
+  const fill = () => { wl = tc.value ? idsOf(tc.value) : []; wantId = null; tw.innerHTML = '<option value="">Carte voulue</option>' + wl.map((id, i) => '<option value="' + i + '">' + mark(id) + esc(id.slice(id.indexOf(':') + 1)) + ' (' + RN[RAR[id] || 'c'] + ')</option>').join(''); };
+  tc.onchange = fill;
   tw.onchange = () => { wantId = wl[tw.value] || null; };
   api('players').then((j) => { if ($('#tp')) tp.insertAdjacentHTML('beforeend', j.players.map((n) => '<option>' + esc(n) + '</option>').join('')); }).catch(() => {});
   tp.onchange = async () => {
-    wantId = null; $('#tco').style.display = tp.value ? 'none' : 'grid';
-    const box = $('#tpk'); box.innerHTML = ''; if (!tp.value) return;
-    try {
-      const j = await api('peek', { pseudo: tp.value }), ids = Object.keys(j.peek.cards).sort();
-      if (!ids.length) { box.innerHTML = '<small>Ce joueur n\'a aucune carte.</small>'; return; }
-      box.innerHTML = '<small>Touche la carte que tu veux. ×2 et plus = doublons, qu\'il peut donner plus facilement.</small><div class="grid" id="tpg"></div>';
-      ids.forEach((id) => { const el = cardEl(id, j.peek.cards[id]); el.onclick = () => { wantId = id; box.querySelectorAll('.card').forEach((c) => (c.style.outline = '')); el.style.outline = '3px solid var(--l)'; }; $('#tpg').append(el); });
-    } catch (e) { msg(e.message); }
+    const box = $('#tpk'); theirs = null; box.innerHTML = '';
+    if (tp.value) {
+      try { theirs = (await api('peek', { pseudo: tp.value })).peek.cards || {}; } catch (e) { msg(e.message); tp.value = ''; }
+    }
+    box.innerHTML = theirs ? '<small>✅ = ' + esc(tp.value) + ' a la carte (il peut te la donner) · ❌ = il ne l\'a pas</small>' : '<small>✅ = tu as déjà la carte · ❌ = tu ne l\'as pas</small>';
+    fill();
   };
-  $('#to').onclick = () => { const g = mine[$('#tg').value]; if (!g || !wantId) return msg('Choisis ta carte et la carte voulue'); run(async () => { setS((await api('tradeoffer', { give: g, want: wantId, to: tp.value || undefined })).state); playerView(); msg('Offre envoyée', true); }); };
+  tp.onchange();
+  $('#to').onclick = () => { const g = mine[$('#tg').value]; if (!g || !wantId) return msg('Choisis ta carte et la carte voulue'); if (theirs && !theirs[wantId]) return msg(tp.value + " n'a pas cette carte (❌)"); run(async () => { setS((await api('tradeoffer', { give: g, want: wantId, to: tp.value || undefined })).state); playerView(); msg('Offre envoyée', true); }); };
   const L = S.market.filter((x) => x.want).sort((a, b) => b.t - a.t);
   $('#tn').textContent = L.length ? '' : "Aucune offre d'échange pour le moment.";
   L.forEach((x) => {
