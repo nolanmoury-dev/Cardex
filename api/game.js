@@ -205,7 +205,7 @@ async function runBots() {
     let u = await redis.get(key(B.name));
     if (!u) {
       const salt = crypto.randomBytes(16).toString('hex');
-      u = { pseudo: B.name, salt, hash: hash(crypto.randomBytes(8).toString('hex'), salt), coins: 300, packs: 3, bought: {}, last: now, cards: {}, since: {}, fav: [], notifs: [], bot: B.lvl };
+      u = { pseudo: B.name, salt, hash: hash(crypto.randomBytes(8).toString('hex'), salt), coins: 200, packs: 1, bought: {}, last: now, cards: {}, since: {}, fav: [], notifs: [], bot: B.lvl };
       await redis.set(key(B.name), u); await redis.sadd('users', B.name);
     } else if (!u.bot) continue;
     u.since ||= {}; u.fav ||= []; u.bought ||= {};
