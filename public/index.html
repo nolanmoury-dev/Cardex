@@ -265,7 +265,7 @@ function rkHTML() {
 }
 function setHTML() {
   const th = document.documentElement.dataset.th;
-  return '<div class="box"><h2>🔔 Notifications</h2><p>Messages du staff, nouveaux objets et nouvelles cartes au Marché, même app fermée. <b>Sur iPhone</b> : ajoute d\'abord le site à l\'écran d\'accueil (Partager → « Sur l\'écran d\'accueil »), ouvre-le depuis l\'icône, puis appuie ici.</p><button id="pn2">Activer</button></div>' +
+  return (pushOn ? '' : '<div class="box"><h2>🔔 Notifications</h2><p>Messages du staff, nouveaux objets et nouvelles cartes au Marché, même app fermée. <b>Sur iPhone</b> : ajoute d\'abord le site à l\'écran d\'accueil (Partager → « Sur l\'écran d\'accueil »), ouvre-le depuis l\'icône, puis appuie ici.</p><button id="pn2">Activer</button></div>') +
     '<div class="box"><h2>Apparence</h2><select id="tsel"><option value="dark"' + (th === 'dark' ? ' selected' : '') + '>Sombre</option><option value="light"' + (th === 'light' ? ' selected' : '') + '>Clair</option></select></div>' +
     '<form class="box" id="frn" style="display:grid;gap:10px;max-width:400px"><h2>Pseudo</h2>' + (S.renames ? '<p>Tu as utilisé ton changement gratuit. Pour changer à nouveau, fais une demande au staff (« Contacter un staff » ci-dessous).</p>' : '<p>Tu as un changement de pseudo gratuit. Ensuite, il faudra le demander au staff.</p><input id="rn2" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button>') + '</form>' +
     '<form class="box" id="fpw" style="display:grid;gap:10px;max-width:400px"><h2>Mot de passe</h2><input id="po" type="password" placeholder="Ancien mot de passe" autocomplete="current-password" required><input id="pn" type="password" placeholder="Nouveau mot de passe" autocomplete="new-password" required><button>Changer</button></form>' +
@@ -338,14 +338,7 @@ function playerView() {
     }));
     app.querySelectorAll('[data-g]').forEach((b) => (b.onclick = () => run(async () => { const j = await api('bet', { game: b.dataset.g, amount: $('#bet').value }); setS(j.state); play(b.dataset.g, j.gid, +$('#bet').value); })));
   } else {
-    $('#pn2').onclick = () => run(async () => {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error("Notifications indisponibles ici (sur iPhone, ouvre le site depuis l'icône de l'écran d'accueil)");
-      if ((await Notification.requestPermission()) !== 'granted') throw new Error('Notifications refusées dans les réglages du navigateur');
-      const reg = await navigator.serviceWorker.ready, k = (await api('vapid')).key;
-      const raw = atob((k + '='.repeat((4 - (k.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
-      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Uint8Array.from(raw, (c) => c.charCodeAt(0)) });
-      await api('subscribe', { sub: sub.toJSON() }); msg('Notifications activées', true);
-    });
+    if ($('#pn2')) $('#pn2').onclick = () => run(async () => { await enablePush(); playerView(); msg('Notifications activées', true); });
     $('#tsel').onchange = (e) => run(async () => { setTheme(e.target.value); await api('settings', { theme: e.target.value }); });
     $('#frn').onsubmit = (e) => { e.preventDefault(); if (!$('#rn2') || !confirm('Un seul changement gratuit. Continuer ?')) return; run(async () => { setS((await api('rename', { name: $('#rn2').value })).state); playerView(); msg('Pseudo changé', true); }); };
     $('#fpw').onsubmit = (e) => { e.preventDefault(); run(async () => { await api('settings', { old: $('#po').value, pw: $('#pn').value }); msg('Mot de passe changé', true); $('#fpw').reset(); }); };
@@ -385,6 +378,62 @@ function inbox() {
   });
   ov.querySelector('#nc').onclick = async () => { setS((await api('delnote', { id: 'all' })).state); updHead(); inbox(); };
   ov.querySelector('#nx').onclick = () => ov.remove();
+}
+
+// --- Rappel : écran d'accueil + notifications (popup de temps en temps, jusqu'à ce que ce soit fait)
+const NUDGE_EVERY = 2 * 864e5; // délai entre deux rappels (2 jours)
+const UA = navigator.userAgent, IOS = /iPad|iPhone|iPod/.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1), AND = /Android/.test(UA), MOB = IOS || AND;
+const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const pushCap = () => 'serviceWorker' in navigator && 'PushManager' in window && typeof Notification !== 'undefined';
+let pushOn = localStorage.pushOk === '1', instEv = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); instEv = e; });
+window.addEventListener('appinstalled', () => { instEv = null; });
+async function checkPush() {
+  let ok = false;
+  try {
+    if (pushCap() && Notification.permission === 'granted') {
+      const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(() => r(null), 4000))]);
+      const sub = reg && (await reg.pushManager.getSubscription());
+      if (sub) { ok = true; api('subscribe', { sub: sub.toJSON() }).catch(() => {}); }
+    }
+  } catch {}
+  pushOn = ok; if (ok) localStorage.pushOk = '1'; else localStorage.removeItem('pushOk');
+}
+async function enablePush() {
+  if (!pushCap()) throw new Error(IOS ? "Sur iPhone, ouvre d'abord le site depuis l'icône de l'écran d'accueil" : "Notifications indisponibles sur ce navigateur");
+  if ((await Notification.requestPermission()) !== 'granted') throw new Error(MOB ? "Notifications refusées : autorise-les dans les Réglages du téléphone (Notifications → Cardex ou ton navigateur)" : "Notifications refusées : clique sur le cadenas 🔒 à côté de l'adresse → Notifications → Autoriser, puis recharge la page");
+  const reg = await navigator.serviceWorker.ready, k = (await api('vapid')).key;
+  const raw = atob((k + '='.repeat((4 - (k.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
+  const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Uint8Array.from(raw, (c) => c.charCodeAt(0)) });
+  await api('subscribe', { sub: sub.toJSON() });
+  pushOn = true; localStorage.pushOk = '1';
+}
+function nudge(force) {
+  if (!tok || (isOp && !asP) || document.querySelector('.ov')) return;
+  if (!(MOB && !standalone()) && pushOn) return;
+  if (!force && Date.now() - (+localStorage.nudge || 0) < NUDGE_EVERY) return;
+  localStorage.nudge = Date.now();
+  const ov = overlay('');
+  const render = () => {
+    const needInst = MOB && !standalone(), denied = pushCap() && Notification.permission === 'denied';
+    const st = (ok, t, body) => '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0"><b>' + (ok ? '✅ ' : '') + t + '</b>' + (ok ? '' : body) + '</div>';
+    let inst = '';
+    if (MOB) inst = st(!needInst, 'Ajouter Cardex à l\'écran d\'accueil', IOS
+      ? '<ol style="margin:6px 0 0;padding-left:20px"><li>Ouvre le site dans <b>Safari</b>.</li><li>Appuie sur <b>Partager</b> (le carré avec la flèche ⬆️ en bas de l\'écran).</li><li>Choisis <b>« Sur l\'écran d\'accueil »</b> puis <b>Ajouter</b>.</li><li>Ferme Safari et ouvre Cardex avec sa nouvelle icône (il faudra te reconnecter une fois).</li></ol>'
+      : '<p style="margin:6px 0 0">' + (instEv ? '<button id="ni">📲 Installer l\'app</button>' : 'Dans Chrome, appuie sur <b>⋮</b> (menu en haut à droite) puis <b>« Installer l\'application »</b> (ou « Ajouter à l\'écran d\'accueil »).') + '</p>');
+    else if (instEv) inst = st(false, 'Installer Cardex sur l\'ordinateur (facultatif)', '<p style="margin:6px 0 0"><button class="g" id="ni">💻 Installer</button></p>');
+    const wait = IOS && needInst;
+    const notif = st(pushOn, 'Activer les notifications',
+      wait ? '<p style="margin:6px 0 0">À faire juste après : ouvre Cardex depuis l\'icône de l\'écran d\'accueil, ce message reviendra et tu pourras appuyer sur « Activer ». Sans ça, iPhone ne permet pas les notifications.</p>'
+        : '<p style="margin:6px 0 0">Reçois les messages du staff, les nouvelles cartes au Marché et les offres d\'échange, même app fermée.' + (MOB || denied ? '' : ' Ton navigateur va te demander l\'autorisation : clique sur <b>Autoriser</b>.') + '</p>' +
+          (denied ? '<p style="margin:6px 0 0;color:#f0883e">Elles sont bloquées. ' + (MOB ? 'Va dans Réglages du téléphone → Notifications → Cardex (ou ton navigateur) pour les autoriser.' : 'Clique sur le cadenas 🔒 à côté de l\'adresse → Notifications → Autoriser, puis recharge la page.') + '</p>' : '<p style="margin:8px 0 0"><button id="nn">🔔 Activer les notifications</button></p>'));
+    const done = !needInst && pushOn;
+    ov.innerHTML = '<div class="box" style="max-width:480px;margin:5vh auto"><h2>' + (done ? '🎉 Tout est prêt !' : '📲 Ne rate rien sur Cardex') + '</h2><p>' + (done ? 'Tu es installé et les notifications sont activées. Ce message ne reviendra plus.' : 'Deux petites choses pour profiter à fond du jeu. Ce rappel reviendra de temps en temps jusqu\'à ce que ce soit fait.') + '</p>' + inst + notif + '<div id="ne" class="err" style="margin-top:8px"></div><div class="row" style="margin-top:10px"><button class="g" id="nx2">' + (done ? 'Fermer' : 'Plus tard') + '</button></div></div>';
+    ov.querySelector('#nx2').onclick = () => ov.remove();
+    const ni = ov.querySelector('#ni'); if (ni) ni.onclick = async () => { try { instEv.prompt(); await instEv.userChoice; } catch {} instEv = null; render(); };
+    const nn = ov.querySelector('#nn'); if (nn) nn.onclick = async () => { try { await enablePush(); render(); if (tab === 'set') playerView(); } catch (e) { ov.querySelector('#ne').textContent = e.message; } };
+  };
+  render();
 }
 async function refresh() { const j = await api('me'); setS(j.state); playerView(); if (j.notifs && j.notifs.length) notify(j.notifs); }
 
@@ -549,7 +598,7 @@ async function poll() {
 setInterval(poll, 5000);
 document.addEventListener('visibilitychange', poll);
 async function start() {
-  try { isOp && !asP ? await opView() : await refresh(); } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); }
+  try { if (isOp && !asP) await opView(); else { await refresh(); checkPush().then(() => { if (pushOn && tab === 'set') playerView(); setTimeout(nudge, 800); }); } } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); }
 }
 tok ? start() : authView();
 </script>
