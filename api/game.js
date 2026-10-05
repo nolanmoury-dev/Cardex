@@ -34,6 +34,7 @@ async function bcast(text, except) {
 }
 const OP_ID = (process.env.OPERATOR_ID || 'operateur').toLowerCase();
 const OP_NAME = 'Noln_mry';
+const cn = (c) => c.slice(c.indexOf(':') + 1);
 async function checkName(nn, u) {
   if (!/^[A-Za-z0-9_]{3,20}$/.test(nn)) return 'Pseudo : 3 à 20 lettres, chiffres ou _';
   const l = nn.toLowerCase();
@@ -45,7 +46,7 @@ async function renameUser(u, nn, count) {
   await redis.del('u:' + old.toLowerCase()); await redis.srem('users', old); await redis.sadd('users', nn);
   u.pseudo = nn; if (count) u.renames = (u.renames || 0) + 1;
   const mk = (await redis.get('market')) || [];
-  if (mk.some((x) => x.seller === old)) await redis.set('market', mk.map((x) => (x.seller === old ? { ...x, seller: nn } : x)));
+  if (mk.some((x) => x.seller === old || x.to === old)) await redis.set('market', mk.map((x) => ({ ...x, seller: x.seller === old ? nn : x.seller, ...(x.to === old ? { to: nn } : {}) })));
 }
 const OP_CODE = process.env.OPERATOR_CODE || '100823';
 const key = (p) => 'u:' + p.toLowerCase();
@@ -94,7 +95,7 @@ const shopOf = async (cat) => {
 };
 const price = (sh) => Math.round((PRICE * (100 - sh.discount)) / 100);
 const view = (u, sh, cat, cu, mk) => ({
-  market: mk || [], inbox: u.inbox || [],
+  market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo), inbox: u.inbox || [],
   pseudo: u.pseudo, renames: u.renames || 0, rb: u.rb || {}, coins: u.coins, packs: u.packs, bought: u.bought || {},
   next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), cards: u.cards, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
@@ -130,6 +131,7 @@ const handler = async (req, res) => {
       }
       if (!/^[A-Za-z0-9_]{3,20}$/.test(pseudo)) return fail('Pseudo : 3 à 20 lettres, chiffres ou _');
       if (!pw) return fail('Entre un mot de passe');
+      if (b.action === 'register' && (await redis.get('maint'))) return fail('🔧 Maintenance : les inscriptions reviennent bientôt');
       let u = await redis.get(key(pseudo));
       if (b.action === 'register') {
         if (u || pseudo.toLowerCase() === OP_ID || pseudo.toLowerCase() === OP_NAME.toLowerCase()) return fail('Ce pseudo est déjà pris');
@@ -165,7 +167,7 @@ const handler = async (req, res) => {
         const names = (await redis.smembers('users')).sort();
         const list = names.length ? await redis.mget(...names.map(key)) : [];
         const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards }; });
-        return ok({ users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], themes: cat });
+        return ok({ maint: !!(await redis.get('maint')), users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], themes: cat });
       }
       if (b.action === 'shop') {
         if (!cat[b.theme] || b.theme === 'obj') return fail('Thème inconnu');
@@ -246,6 +248,7 @@ const handler = async (req, res) => {
         if (!n) return fail('Joueur introuvable');
         return ok({ done: true, n });
       }
+      if (b.action === 'maint') { await redis.set('maint', !!b.on); return ok({ done: true }); }
       if (b.action === 'rename') {
         const u = await redis.get(key(String(b.pseudo || ''))), nn = String(b.name || '').trim();
         if (!u) return fail('Joueur introuvable');
@@ -274,6 +277,8 @@ const handler = async (req, res) => {
     if (!u) return fail('Session expirée, reconnecte-toi', 401);
     u.bought ||= {}; u.since ||= {}; u.fav ||= []; u.notifs ||= []; u.inbox ||= [];
     tick(u);
+    const maintOn = !!(await redis.get('maint')) && u.pseudo !== OP_NAME;
+    if (maintOn && b.action !== 'me') return fail('🔧 Maintenance : une mise à jour arrive bientôt');
     const sh = await shopOf(cat);
     let mk = (await redis.get('market')) || [];
     let extra = {};
@@ -401,24 +406,63 @@ const handler = async (req, res) => {
       mk.push({ id: crypto.randomBytes(6).toString('hex'), seller: u.pseudo, card: b.card, price: pr, t: Date.now() });
       await redis.set('market', mk);
       await bcast('🏷️ Nouvelle carte au Marché : ' + b.card.slice(b.card.indexOf(':') + 1) + ' (' + pr + ' 🪙)', u.pseudo);
+    } else if (b.action === 'players') {
+      extra = { players: (await redis.smembers('users')).filter((n) => n !== u.pseudo).sort() };
+    } else if (b.action === 'peek') {
+      const v = await redis.get(key(String(b.pseudo || '')));
+      if (!v) return fail('Joueur introuvable');
+      extra = { peek: { pseudo: v.pseudo, cards: v.cards || {} } };
     } else if (b.action === 'tradeoffer') {
       const gv = b.give, w = String(b.want || '');
       if (!u.cards[gv]) return fail('Carte non possédée');
       if (!rarOf(cat, w) || w.startsWith('obj:') || gv === w) return fail('Carte demandée invalide');
       if (mk.filter((x) => x.seller === u.pseudo).length >= 20) return fail('20 annonces maximum');
+      let to = null, tv = null;
+      if (b.to) {
+        tv = await redis.get(key(String(b.to)));
+        if (!tv || tv.pseudo === u.pseudo) return fail('Joueur introuvable');
+        if (!tv.cards[w]) return fail("Ce joueur n'a pas cette carte");
+        to = tv.pseudo;
+      }
       rm(u, gv, 1);
-      mk.push({ id: crypto.randomBytes(6).toString('hex'), seller: u.pseudo, card: gv, want: w, price: 0, t: Date.now() });
+      mk.push({ id: crypto.randomBytes(6).toString('hex'), seller: u.pseudo, card: gv, want: w, price: 0, to, t: Date.now() });
       await redis.set('market', mk);
-      await bcast('🔁 Nouvel échange : ' + gv.slice(gv.indexOf(':') + 1) + ' contre ' + w.slice(w.indexOf(':') + 1), u.pseudo);
+      if (tv) { note(tv, '🔁 ' + u.pseudo + ' te propose : ' + cn(gv) + ' contre ' + cn(w)); await redis.set(key(tv.pseudo), tv); }
+      else await bcast('🔁 Nouvel échange : ' + cn(gv) + ' contre ' + cn(w), u.pseudo);
     } else if (b.action === 'tradeaccept') {
       const x = mk.find((y) => y.id === b.id && y.want);
       if (!x) return fail('Offre déjà acceptée ou retirée');
       if (x.seller === u.pseudo) return fail("C'est ta propre offre");
+      if (x.to && x.to !== u.pseudo) return fail("Cette offre ne t'est pas destinée");
+      if (x.ask) return fail('Contre-offre en attente de la réponse du proposeur');
       if (!u.cards[x.want]) return fail("Tu n'as pas la carte demandée");
       mk = mk.filter((y) => y !== x); await redis.set('market', mk);
       rm(u, x.want, 1); add(u, x.card, 1);
       const v = await redis.get(key(x.seller));
-      if (v) { add(v, x.want, 1); note(v, '🔁 ' + u.pseudo + ' a accepté ton échange : tu reçois ' + x.want.slice(x.want.indexOf(':') + 1)); await redis.set(key(v.pseudo), v); }
+      if (v) { add(v, x.want, 1); note(v, '🔁 ' + u.pseudo + ' a accepté ton échange : tu reçois ' + cn(x.want)); await redis.set(key(v.pseudo), v); }
+    } else if (b.action === 'tradecounter') {
+      const x = mk.find((y) => y.id === b.id && y.want && y.to === u.pseudo), ask = int(b.ask, 1e6);
+      if (!x) return fail('Offre introuvable');
+      if (x.ask) return fail('Contre-offre déjà envoyée');
+      if (ask < 1) return fail('Montant invalide');
+      x.ask = ask; await redis.set('market', mk);
+      const v = await redis.get(key(x.seller));
+      if (v) { note(v, '💬 ' + u.pseudo + ' demande +' + ask + ' 🪙 en plus pour ' + cn(x.card) + ' contre ' + cn(x.want)); await redis.set(key(v.pseudo), v); }
+    } else if (b.action === 'tradeconfirm') {
+      const x = mk.find((y) => y.id === b.id && y.want && y.seller === u.pseudo && y.ask);
+      if (!x) return fail('Contre-offre introuvable');
+      if (u.coins < x.ask) return fail('Pas assez de coins');
+      const v = await redis.get(key(x.to));
+      if (!v || !v.cards[x.want]) return fail("Ce joueur n'a plus la carte demandée : retire l'offre");
+      mk = mk.filter((y) => y !== x); await redis.set('market', mk);
+      u.coins -= x.ask; rm(v, x.want, 1); add(u, x.want, 1); add(v, x.card, 1); v.coins += x.ask;
+      note(v, '✅ ' + u.pseudo + ' a accepté ta contre-offre (+' + x.ask + ' 🪙) : tu reçois ' + cn(x.card)); await redis.set(key(v.pseudo), v);
+    } else if (b.action === 'tradedecline') {
+      const x = mk.find((y) => y.id === b.id && y.want && y.to === u.pseudo);
+      if (!x) return fail('Offre introuvable');
+      mk = mk.filter((y) => y !== x); await redis.set('market', mk);
+      const v = await redis.get(key(x.seller));
+      if (v) { add(v, x.card, 1); note(v, '❌ ' + u.pseudo + ' a refusé ton échange : ta carte t\'est rendue'); await redis.set(key(v.pseudo), v); }
     } else if (b.action === 'unlist') {
       const x = mk.find((y) => y.id === b.id && y.seller === u.pseudo);
       if (!x) return fail('Annonce introuvable');
@@ -443,7 +487,7 @@ const handler = async (req, res) => {
 
     if (b.action === 'me') { extra = { notifs: u.notifs }; u.notifs = []; }
     await redis.set(key(u.pseudo), u);
-    return ok({ ...extra, state: view(u, sh, cat, cu, mk) });
+    return ok({ ...extra, state: { ...view(u, sh, cat, cu, mk), maint: maintOn } });
   } catch (e) {
     console.error(e);
     return fail('Erreur serveur : ' + e.message, 500);

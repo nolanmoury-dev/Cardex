@@ -78,7 +78,7 @@ main{padding:8px 8px calc(84px + env(safe-area-inset-bottom))}
 }
 @media(max-width:600px){.grid{grid-template-columns:repeat(4,1fr);gap:6px}.card{border-width:2px;border-radius:8px}.card .ct{font-size:11px;padding:4px 2px 0;min-height:2.6em}.card .rn{font-size:9px;padding:0 2px 3px}.card .ac button{font-size:9px;padding:2px;min-height:28px}.card .n{font-size:10px}.tabs button{font-size:11px}}
 .pills{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:8px;-webkit-overflow-scrolling:touch}.pills::-webkit-scrollbar{display:none}.pill{flex:none;padding:5px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font-size:12px}.pill.on{background:var(--l);border-color:var(--l);color:#000}.rt{width:100%;border-collapse:collapse;font-size:12px}.rt th,.rt td{padding:4px 3px;text-align:center;border-top:1px solid var(--line)}.rt .pn{text-align:left;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rt .me{background:var(--cb);font-weight:700}details.rb{border-color:var(--l)}details.rb>summary{color:var(--l)}
-.lg{width:28px;height:28px;object-fit:contain;border-radius:6px}.tr{display:flex;align-items:center;gap:8px}.tr .card{width:78px}.tr small{display:block;text-align:center}
+.lg{width:28px;height:28px;object-fit:contain;border-radius:6px}.tr{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.mt .ac,.mt [data-rb],.mt #dup{display:none!important}.tr .card{width:78px}.tr small{display:block;text-align:center}
 </style>
 </head>
 <body><main id="app"></main>
@@ -168,7 +168,7 @@ function authView(msg) {
 const packsOf = (t) => (S.bought[t] || 0) + S.packs;
 function head() {
   return '<div class="bar"><b style="display:flex;align-items:center;gap:6px"><img class="lg" src="/icon-192.png" alt="">' + S.pseudo + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">📦 ' + S.packs + '/10</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button><button class="g" id="lo">Quitter</button></span></div><div class="tabs">' +
-    [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Classement'], ['set', 'Réglages']].map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
+    (S.maint ? [['col', 'Collection']] : [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Classement'], ['set', 'Réglages']]).map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
 }
 function shopHTML() {
   const packs = Object.entries(S.shop).map(([t, sh]) => {
@@ -193,6 +193,8 @@ function colHTML() {
       return '<details data-d="' + t + '"' + (rb ? ' class="rb"' : '') + (openT.has(t) ? ' open' : '') + '><summary>' + o.icon + ' ' + esc(o.name) + ' — ' + n + '/' + tot + (rb ? ' · ♻️×' + rb : '') + '</summary>' + (n === tot && tot && t !== 'obj' ? '<button class="g" data-rb="' + t + '" style="margin:8px 0">♻️ Renaissance : la collection se vide, tu gagnes 1/5 de sa valeur</button>' : '') + '<div class="grid" id="g-' + t + '"></div></details>';
     }).join('');
 }
+const msg = (t, good) => { const e = $('#e'); if (!e) return; e.style.color = good ? '#3fb950' : ''; e.textContent = t; };
+const run = async (fn) => { try { await fn(); } catch (e) { msg(e.message); } };
 const mf = { t: '', r: '', s: 'new' };
 let mkSub = 'v';
 function mkHTML() {
@@ -200,21 +202,40 @@ function mkHTML() {
 }
 function tradeHTML() {
   const mine = Object.keys(S.cards).sort();
-  return '<div class="box"><h2>Proposer un échange</h2><p>Ta carte est mise de côté jusqu\'à ce qu\'un joueur accepte (ou que tu retires l\'offre).</p><div style="display:grid;gap:8px;max-width:420px"><select id="tg"><option value="">Je donne…</option>' + mine.map((id, i) => '<option value="' + i + '">' + esc(id.slice(id.indexOf(':') + 1)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] > 1 ? ' ×' + S.cards[id] : '') + '</option>').join('') + '</select><select id="tc"><option value="">Je veux… (collection)</option>' + Object.entries(CAT).filter(([t]) => t !== 'obj').map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="tw"><option value="">Carte voulue</option></select><button id="to">Proposer</button></div></div><div id="tl"></div><p id="tn"></p>';
+  return '<div class="box"><h2>Proposer un échange</h2><p>Ta carte est mise de côté jusqu\'à la réponse (ou jusqu\'à ce que tu retires l\'offre).</p><div style="display:grid;gap:8px;max-width:420px"><select id="tp"><option value="">Offre ouverte (tout le monde)</option></select><div id="tpk"></div><div id="tco" style="display:grid;gap:8px"><select id="tc"><option value="">Je veux… (collection)</option>' + Object.entries(CAT).filter(([t]) => t !== 'obj').map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="tw"><option value="">Carte voulue</option></select></div><select id="tg"><option value="">Je donne…</option>' + mine.map((id, i) => '<option value="' + i + '">' + esc(id.slice(id.indexOf(':') + 1)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] > 1 ? ' ×' + S.cards[id] : '') + '</option>').join('') + '</select><button id="to">Proposer</button></div></div><div id="tl"></div><p id="tn"></p>';
 }
 function tradeInit() {
-  const mine = Object.keys(S.cards).sort(), tc = $('#tc'), tw = $('#tw');
-  let wl = [];
-  tc.onchange = () => { wl = tc.value ? idsOf(tc.value) : []; tw.innerHTML = '<option value="">Carte voulue</option>' + wl.map((id, i) => '<option value="' + i + '">' + esc(id.slice(id.indexOf(':') + 1)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] ? ' ✓' : '') + '</option>').join(''); };
-  $('#to').onclick = () => { const g = mine[$('#tg').value], w = wl[tw.value]; if (!g || !w) return msg('Choisis la carte donnée et la carte voulue'); run(async () => { setS((await api('tradeoffer', { give: g, want: w })).state); playerView(); }); };
+  const mine = Object.keys(S.cards).sort(), tc = $('#tc'), tw = $('#tw'), tp = $('#tp');
+  let wl = [], wantId = null;
+  tc.onchange = () => { wl = tc.value ? idsOf(tc.value) : []; wantId = null; tw.innerHTML = '<option value="">Carte voulue</option>' + wl.map((id, i) => '<option value="' + i + '">' + esc(id.slice(id.indexOf(':') + 1)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] ? ' ✓' : '') + '</option>').join(''); };
+  tw.onchange = () => { wantId = wl[tw.value] || null; };
+  api('players').then((j) => { if ($('#tp')) tp.insertAdjacentHTML('beforeend', j.players.map((n) => '<option>' + esc(n) + '</option>').join('')); }).catch(() => {});
+  tp.onchange = async () => {
+    wantId = null; $('#tco').style.display = tp.value ? 'none' : 'grid';
+    const box = $('#tpk'); box.innerHTML = ''; if (!tp.value) return;
+    try {
+      const j = await api('peek', { pseudo: tp.value }), ids = Object.keys(j.peek.cards).sort();
+      if (!ids.length) { box.innerHTML = '<small>Ce joueur n\'a aucune carte.</small>'; return; }
+      box.innerHTML = '<small>Touche la carte que tu veux. ×2 et plus = doublons, qu\'il peut donner plus facilement.</small><div class="grid" id="tpg"></div>';
+      ids.forEach((id) => { const el = cardEl(id, j.peek.cards[id]); el.onclick = () => { wantId = id; box.querySelectorAll('.card').forEach((c) => (c.style.outline = '')); el.style.outline = '3px solid var(--l)'; }; $('#tpg').append(el); });
+    } catch (e) { msg(e.message); }
+  };
+  $('#to').onclick = () => { const g = mine[$('#tg').value]; if (!g || !wantId) return msg('Choisis ta carte et la carte voulue'); run(async () => { setS((await api('tradeoffer', { give: g, want: wantId, to: tp.value || undefined })).state); playerView(); msg('Offre envoyée', true); }); };
   const L = S.market.filter((x) => x.want).sort((a, b) => b.t - a.t);
   $('#tn').textContent = L.length ? '' : "Aucune offre d'échange pour le moment.";
   L.forEach((x) => {
-    const own = x.seller === S.pseudo, have = !!S.cards[x.want], row = document.createElement('div');
+    const own = x.seller === S.pseudo, me = x.to === S.pseudo, have = !!S.cards[x.want], row = document.createElement('div');
+    const tag = x.to ? (own ? '→ ' + esc(x.to) : 'pour toi') : 'offre ouverte';
+    let btn;
+    if (own) btn = (x.ask ? '<small>💬 +' + x.ask + '🪙 demandés</small><button data-k' + (S.coins < x.ask ? ' disabled' : '') + '>Accepter (+' + x.ask + '🪙)</button>' : '') + '<button class="g" data-r>Retirer</button>';
+    else if (me && x.ask) btn = '<small>En attente de sa réponse (+' + x.ask + '🪙)</small>';
+    else btn = '<button data-a' + (have ? '' : ' disabled') + '>' + (have ? 'Accepter' : "Tu ne l'as pas") + '</button>' + (me ? '<button class="g" data-d>Refuser</button><input type="number" min="1" placeholder="+ 🪙" style="width:70px"><button class="g" data-c>Contre-offre</button>' : '');
     row.className = 'box tr';
-    row.innerHTML = '<div><small>Donne</small><div class="cg"></div></div><span>⇄</span><div><small>Veut</small><div class="cw"></div></div><div style="margin-left:auto;display:grid;gap:4px;text-align:center"><small>' + esc(x.seller) + '</small><button' + (own ? ' class="g"' : have ? '' : ' disabled') + ' data-tb>' + (own ? 'Retirer' : have ? 'Échanger' : "Tu ne l'as pas") + '</button></div>';
+    row.innerHTML = '<div><small>Donne</small><div class="cg"></div></div><span>⇄</span><div><small>Veut</small><div class="cw"></div></div><div style="margin-left:auto;display:grid;gap:4px;text-align:center"><small>' + esc(x.seller) + ' · ' + tag + '</small>' + btn + '</div>';
     row.querySelector('.cg').append(cardEl(x.card, 1)); row.querySelector('.cw').append(cardEl(x.want, 1));
-    row.querySelector('[data-tb]').onclick = () => run(async () => { setS((await api(own ? 'unlist' : 'tradeaccept', { id: x.id })).state); playerView(); });
+    const go = (a, e) => run(async () => { setS((await api(a, { id: x.id, ...e })).state); playerView(); });
+    [['[data-a]', 'tradeaccept'], ['[data-d]', 'tradedecline'], ['[data-k]', 'tradeconfirm'], ['[data-r]', 'unlist']].forEach(([s, a]) => { const e = row.querySelector(s); if (e) e.onclick = () => go(a); });
+    const c = row.querySelector('[data-c]'); if (c) c.onclick = () => go('tradecounter', { ask: +row.querySelector('input').value });
     $('#tl').append(row);
   });
 }
@@ -252,13 +273,13 @@ function setHTML() {
 }
 function playerView() {
   clearInterval(timer);
-  app.innerHTML = head() + { shop: shopHTML, col: colHTML, mk: mkHTML, jeu: jeuHTML, rk: rkHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
+  if (S.maint) tab = 'col';
+  app.classList.toggle('mt', !!S.maint);
+  app.innerHTML = head() + (S.maint ? '<div class="box" style="border-color:var(--l)"><h2>🔧 Maintenance</h2><p>Nous sommes en maintenance, une mise à jour arrive bientôt. Tu peux seulement regarder tes cartes.</p></div>' : '') + { shop: shopHTML, col: colHTML, mk: mkHTML, jeu: jeuHTML, rk: rkHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
   $('#lo').onclick = logout; $('#th').onclick = flip;
   if (isOp) $('#ob').onclick = () => { asP = false; localStorage.asp = '0'; start(); };
   $('#bl').onclick = inbox;
   app.querySelectorAll('[data-t]').forEach((b) => (b.onclick = () => { tab = b.dataset.t; playerView(); }));
-  const msg = (t, good) => { const e = $('#e'); e.style.color = good ? '#3fb950' : ''; e.textContent = t; };
-  const run = async (fn) => { try { await fn(); } catch (e) { msg(e.message); } };
   if (tab === 'shop') {
     app.querySelectorAll('[data-b]').forEach((b) => (b.onclick = () => run(async () => { setS((await api('buy', { theme: b.dataset.b })).state); playerView(); })));
     app.querySelectorAll('[data-ob]').forEach((b) => (b.onclick = () => run(async () => { setS((await api('buyobj', { id: b.dataset.ob })).state); playerView(); msg('Objet ajouté à ta collection', true); })));
@@ -486,6 +507,7 @@ async function opView(m) {
     '<div class="box"><h2>Joueurs (' + users.length + ')</h2>' + list + '</div>' +
     '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + ' — 🪙 ' + u.coins + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="ca" multiple size="6" aria-label="Cartes"></select><small id="ch"></small><button>Valider</button><div class="err" id="e"></div></form>' +
     '<form class="box" id="fm" style="display:grid;gap:10px"><h2>Envoyer une notification</h2><select id="mt"><option value="*">Tous les joueurs</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="mx" maxlength="200" placeholder="Message" required><button>Envoyer</button><div class="err" id="e5"></div></form>' +
+    '<div class="box"><h2>🔧 Maintenance</h2><p>' + (j.maint ? 'ACTIVE : les joueurs voient « maintenance » et peuvent seulement regarder leurs cartes.' : 'Désactivée.') + '</p><button id="mt" class="' + (j.maint ? '' : 'g') + '">' + (j.maint ? 'Désactiver la maintenance' : 'Activer la maintenance (tout verrouiller)') + '</button><div class="err" id="e7"></div></div>' +
     '<form class="box" id="fr" style="display:grid;gap:10px"><h2>Changer le pseudo d\'un joueur</h2><select id="ru" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="rnn" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button><div class="err" id="e6"></div></form>' +
     '<div class="box"><h2>Signalements (' + reports.length + ')</h2>' + reps + '</div>';
   app.querySelectorAll('.rt').forEach((el, i) => (el.textContent = reports[i].text));
@@ -509,6 +531,7 @@ async function opView(m) {
   $('#fo').onsubmit = act('e4', () => api('addobj', { name: $('#on').value, rarity: $('#or').value, price: $('#op').value, stock: $('#os').value }), 'Objet ajouté à la boutique');
   $('#f').onsubmit = act('e', () => api('give', { pseudo: $('#u').value, mode: $('#m').value, coins: $('#co').value, packs: $('#pk').value, cards: [...$('#ca').selectedOptions].map((o) => o.value) }), 'Fait');
   $('#fm').onsubmit = act('e5', () => api('msg', { pseudo: $('#mt').value, text: $('#mx').value }), 'Notification envoyée');
+  $('#mt').onclick = act('e7', () => api('maint', { on: !j.maint }), j.maint ? 'Maintenance désactivée' : 'Maintenance activée');
   $('#fr').onsubmit = act('e6', () => api('rename', { pseudo: $('#ru').value, name: $('#rnn').value }), 'Pseudo changé');
   app.querySelectorAll('[data-du]').forEach((b) => (b.onclick = (e) => { if (confirm('Supprimer définitivement le compte ' + b.dataset.du + ' ?')) act('e', () => api('deluser', { pseudo: b.dataset.du }), 'Compte supprimé')(e); }));
   if (m) { const [i, t] = m.split('|'), el = $('#' + i); el.style.color = '#3fb950'; el.textContent = t; }
@@ -517,7 +540,9 @@ async function opView(m) {
 async function poll() {
   if (!tok || document.hidden || (isOp && !asP)) return;
   try {
-    const j = await api('me'); setS(j.state); updHead();
+    const was = !!S.maint, j = await api('me'); setS(j.state);
+    if (was !== !!S.maint) return playerView();
+    updHead();
     if (j.notifs && j.notifs.length) { notify(j.notifs); if (!document.querySelector('.ov') && tab !== 'jeu' && tab !== 'set') playerView(); }
   } catch {}
 }
