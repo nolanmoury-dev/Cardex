@@ -562,7 +562,7 @@ const handler = async (req, res) => {
     } else if (b.action === 'gift') {
       const v = await redis.get(key(String(b.to || '')));
       if (!v || v.pseudo === u.pseudo) return fail('Joueur introuvable');
-      v.since ||= {}; v.fav ||= []; v.cards ||= {};
+      v.since ||= {}; v.fav ||= []; v.cards ||= {}; v.bought ||= {};
       const txt = String(b.text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
       let what;
       if (b.kind === 'coins') {
@@ -570,11 +570,28 @@ const handler = async (req, res) => {
         if (c < 1) return fail('Montant invalide');
         if (c > u.coins) return fail('Pas assez de coins');
         u.coins -= c; v.coins += c; what = c + ' 🪙';
+      } else if (b.kind === 'pack') {
+        const t = String(b.theme || 'free');
+        if (t === 'free') {
+          if (u.packs < 1) return fail("Tu n'as aucun sachet gratuit");
+          tick(v); u.packs -= 1; v.packs += 1; what = 'un sachet gratuit';
+        } else {
+          if (t === 'obj' || !sh[t]) return fail("Ce sachet n'existe pas");
+          if (!(u.bought[t] > 0)) return fail("Tu n'as pas de sachet " + cat[t].name);
+          u.bought[t] -= 1; v.bought[t] = (v.bought[t] || 0) + 1; what = 'un sachet ' + cat[t].name;
+        }
       } else {
-        const id = String(b.card || '');
-        if (!rarOf(cat, id)) return fail('Carte inconnue');
-        if (!u.cards[id]) return fail('Carte non possédée');
-        rm(u, id, 1); add(v, id, 1); what = 'la carte ' + cn(id);
+        const ids = [].concat(b.cards || (b.card ? [b.card] : [])).map(String), cnt = {};
+        if (!ids.length) return fail('Choisis au moins une carte');
+        if (ids.length > 10) return fail('10 cartes maximum par lot');
+        for (const id of ids) {
+          if (!rarOf(cat, id)) return fail('Carte inconnue');
+          cnt[id] = (cnt[id] || 0) + 1;
+          if (cnt[id] > (u.cards[id] || 0)) return fail('Tu ne possèdes pas assez de ' + cn(id));
+        }
+        for (const [id, n] of Object.entries(cnt)) { rm(u, id, n); add(v, id, n); }
+        const names = Object.entries(cnt).map(([id, n]) => cn(id) + (n > 1 ? ' ×' + n : ''));
+        what = ids.length === 1 ? 'la carte ' + names[0] : 'un lot de ' + ids.length + ' cartes (' + names.join(', ') + ')';
       }
       note(v, '🎁 ' + u.pseudo + " t'a offert " + what + (txt ? ' — « ' + txt + ' »' : ''));
       await redis.set(key(v.pseudo), v);

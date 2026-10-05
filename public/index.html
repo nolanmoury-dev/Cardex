@@ -249,26 +249,43 @@ function tradeInit() {
 }
 function giftHTML() {
   const mine = Object.keys(S.cards);
-  return '<div class="box"><h2>🎁 Faire un cadeau</h2><p>Offre une carte ou des coins à un joueur, avec un petit message si tu veux. Il reçoit une notification.</p><div style="display:grid;gap:8px;max-width:420px">' +
+  return '<div class="box"><h2>🎁 Faire un cadeau</h2><p>Offre des cartes (jusqu\'à 10), un sachet ou des coins à un joueur, avec un petit message si tu veux. Il reçoit une notification.</p><div style="display:grid;gap:8px;max-width:420px">' +
     '<select id="gp"><option value="">Choisis un joueur</option></select>' +
-    '<div class="pills" style="margin:0"><button class="pill on" data-gk="card">🃏 Carte</button><button class="pill" data-gk="coins">🪙 Argent</button></div>' +
-    '<div id="gcard" style="display:grid;gap:8px"><select id="ggc"><option value="">Je donne… (collection)</option>' + Object.entries(CAT).filter(([t]) => t !== 'obj' || mine.some((id) => id.startsWith('obj:'))).map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="gg"><option value="">Carte offerte</option></select><small id="gl"></small><small id="gi"></small></div>' +
+    '<div class="pills" style="margin:0"><button class="pill on" data-gk="cards">🎴 Cartes</button><button class="pill" data-gk="pack">📦 Sachet</button><button class="pill" data-gk="coins">🪙 Argent</button></div>' +
+    '<div id="gcard" style="display:grid;gap:8px"><select id="ggc"><option value="">Collection…</option>' + Object.entries(CAT).filter(([t]) => t !== 'obj' || mine.some((id) => id.startsWith('obj:'))).map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="gg"><option value="">Carte à ajouter</option></select><small id="gl"></small><small id="gi"></small><button class="g" id="gadd">➕ Ajouter au lot</button><div id="glot"></div></div>' +
+    '<div id="gpack" style="display:none;gap:8px"><select id="gt"></select><small id="gtl">✅ = tu en as · ❌ = tu n\'en as pas</small></div>' +
     '<div id="gcoins" style="display:none"><input id="ga" type="number" min="1" max="' + S.coins + '" placeholder="Montant (tu as ' + S.coins + ' 🪙)" style="width:100%"></div>' +
     '<input id="gm" maxlength="200" placeholder="Message (facultatif)"><button id="go">🎁 Offrir</button></div></div>';
 }
 function giftInit() {
-  let kind = 'card', theirs = null, gl = [], gid = null;
-  const gp = $('#gp'), ggc = $('#ggc'), gg = $('#gg');
+  let kind = 'cards', theirs = null, gl = [], gid = null, lot = [];
+  const gp = $('#gp'), ggc = $('#ggc'), gg = $('#gg'), nm = (id) => id.slice(id.indexOf(':') + 1);
+  const inLot = (id) => lot.filter((x) => x === id).length;
   const mark = (id) => (!S.cards[id] ? '❌ ' : theirs ? (theirs[id] ? '✅ ' : '🤝 ') : '✅ '); // 🤝 tu l'as et lui non, ✅ vous l'avez tous les deux, ❌ tu ne l'as pas
   const legend = () => { $('#gl').innerHTML = theirs ? '🤝 = tu l\'as et ' + esc(gp.value) + ' ne l\'a pas · ✅ = vous l\'avez tous les deux · ❌ = tu ne l\'as pas' : '✅ = tu l\'as · ❌ = tu ne l\'as pas (choisis un joueur pour voir ce qu\'il a)'; };
   const info = () => {
     const e = $('#gi'); if (!gid) { e.textContent = ''; return; }
     const n = S.cards[gid] || 0;
-    e.textContent = 'Tu en as ×' + n + (theirs ? ' · ' + gp.value + ' en a ×' + (theirs[gid] || 0) : '') + (n > 1 ? ' · doublon : tu peux en donner ' + (n - 1) + ' sans perdre la carte' : n === 1 ? ' · c\'est ton dernier exemplaire' : '');
+    e.textContent = 'Tu en as ×' + n + (theirs ? ' · ' + gp.value + ' en a ×' + (theirs[gid] || 0) : '') + (inLot(gid) ? ' · dans le lot : ×' + inLot(gid) : '') + (n > 1 ? ' · doublon : ' + (n - 1) + ' à donner sans perdre la carte' : n === 1 ? ' · dernier exemplaire' : '');
   };
-  const fill = () => { const t = ggc.value; gl = t ? idsOf(t) : []; gid = null; gg.innerHTML = '<option value="">Carte offerte</option>' + gl.map((id, i) => '<option value="' + i + '">' + mark(id) + esc(id.slice(id.indexOf(':') + 1)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] > 1 ? ' ×' + S.cards[id] : '') + '</option>').join(''); info(); };
+  const fill = () => { const t = ggc.value; gl = t ? idsOf(t) : []; gid = null; gg.innerHTML = '<option value="">Carte à ajouter</option>' + gl.map((id, i) => '<option value="' + i + '">' + mark(id) + esc(nm(id)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] > 1 ? ' ×' + S.cards[id] : '') + '</option>').join(''); info(); };
+  const fillPack = () => {
+    const have = (n) => (n > 0 ? '✅ ' : '❌ ');
+    $('#gt').innerHTML = '<option value="free">' + have(S.packs) + '📦 Sachet gratuit (×' + S.packs + ')</option>' + Object.keys(S.shop || {}).filter((t) => t !== 'obj' && CAT[t]).map((t) => '<option value="' + t + '">' + have((S.bought || {})[t] || 0) + CAT[t].icon + ' ' + esc(CAT[t].name) + ' (×' + ((S.bought || {})[t] || 0) + ')</option>').join('');
+  };
+  const renderLot = () => {
+    const box = $('#glot'), u = [...new Set(lot)];
+    box.innerHTML = lot.length ? '<small><b>Lot : ' + lot.length + '/10</b></small><div class="row" style="flex-wrap:wrap;gap:6px;margin-top:4px">' + u.map((id) => '<button class="g" data-lr="' + esc(id) + '">' + esc(nm(id)) + (inLot(id) > 1 ? ' ×' + inLot(id) : '') + ' ✕</button>').join('') + '</div>' : '<small>Lot vide : ajoute jusqu\'à 10 cartes (de collections différentes si tu veux).</small>';
+    box.querySelectorAll('[data-lr]').forEach((b) => (b.onclick = () => { lot.splice(lot.indexOf(b.dataset.lr), 1); renderLot(); info(); }));
+  };
   ggc.onchange = fill;
   gg.onchange = () => { gid = gl[gg.value] || null; info(); };
+  $('#gadd').onclick = () => {
+    if (!gid) return msg('Choisis une carte à ajouter');
+    if (lot.length >= 10) return msg('10 cartes maximum par lot');
+    if (inLot(gid) >= (S.cards[gid] || 0)) return msg(S.cards[gid] ? 'Tu n\'en as que ×' + S.cards[gid] : 'Tu n\'as pas cette carte (❌)');
+    lot.push(gid); renderLot(); info(); msg('');
+  };
   gp.onchange = async () => {
     theirs = null;
     if (gp.value) { try { theirs = (await api('peek', { pseudo: gp.value })).peek.cards || {}; } catch (e) { msg(e.message); gp.value = ''; } }
@@ -278,7 +295,7 @@ function giftInit() {
   app.querySelectorAll('[data-gk]').forEach((b) => (b.onclick = () => {
     kind = b.dataset.gk;
     app.querySelectorAll('[data-gk]').forEach((x) => x.classList.toggle('on', x === b));
-    $('#gcard').style.display = kind === 'card' ? 'grid' : 'none'; $('#gcoins').style.display = kind === 'coins' ? 'block' : 'none';
+    $('#gcard').style.display = kind === 'cards' ? 'grid' : 'none'; $('#gpack').style.display = kind === 'pack' ? 'grid' : 'none'; $('#gcoins').style.display = kind === 'coins' ? 'block' : 'none';
   }));
   $('#go').onclick = () => {
     if (!gp.value) return msg('Choisis un joueur');
@@ -289,15 +306,19 @@ function giftInit() {
       if (!(c >= 1)) return msg('Entre un montant');
       if (c > S.coins) return msg('Pas assez de coins (tu as ' + S.coins + ' 🪙)');
       body.amount = c; what = c + ' 🪙';
+    } else if (kind === 'pack') {
+      const t = $('#gt').value, n = t === 'free' ? S.packs : (S.bought || {})[t] || 0;
+      if (!n) return msg('Tu n\'as pas ce sachet (❌)');
+      body.theme = t; what = t === 'free' ? 'un sachet gratuit' : 'un sachet ' + CAT[t].name;
     } else {
-      if (!gid) return msg('Choisis la carte à offrir');
-      if (!S.cards[gid]) return msg('Tu n\'as pas cette carte (❌)');
-      body.card = gid; what = 'la carte ' + gid.slice(gid.indexOf(':') + 1);
+      if (!lot.length && gid && S.cards[gid]) lot.push(gid); // une seule carte choisie : pas besoin de « Ajouter »
+      if (!lot.length) return msg('Ajoute au moins une carte au lot');
+      body.cards = lot.slice(); what = lot.length === 1 ? 'la carte ' + nm(lot[0]) : 'un lot de ' + lot.length + ' cartes';
     }
     if (!confirm('Offrir ' + what + ' à ' + gp.value + ' ? Ce cadeau est définitif.')) return;
     run(async () => { setS((await api('gift', body)).state); playerView(); msg('Cadeau envoyé à ' + body.to + ' 🎁', true); });
   };
-  legend();
+  legend(); fillPack(); renderLot();
 }
 function mkSales() {
   return '<div class="box"><p>Achète les cartes des autres joueurs, ou mets tes cartes en vente depuis ta collection (bouton 🏷️) au prix que tu choisis.</p><div class="row"><select id="mft"><option value="">Toutes collections</option>' + Object.entries(CAT).map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="mfr"><option value="">Toutes raretés</option>' + [...'crel'].map((r) => '<option value="' + r + '">' + RN[r] + '</option>').join('') + '</select><select id="mfs"><option value="new">Plus récentes</option><option value="asc">Prix croissant</option><option value="desc">Prix décroissant</option></select></div></div><div class="grid" id="gm"></div><p id="mn"></p>';
