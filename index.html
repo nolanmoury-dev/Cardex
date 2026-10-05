@@ -213,7 +213,7 @@ function tradeInit() {
   tc.onchange = fill;
   tw.onchange = () => { wantId = wl[tw.value] || null; };
   let gl = [], giveId = null;
-  const gmark = (id) => (!S.cards[id] ? '❌ ' : theirs ? (theirs[id] ? '✅ ' : '🎯 ') : '✅ '); // ciblé : 🎯 tu l'as et lui non, ✅ vous l'avez tous les deux ; offre ouverte : ✅ si tu l'as
+  const gmark = (id) => (!S.cards[id] ? '❌ ' : theirs ? (theirs[id] ? '✅ ' : '🤝 ') : '✅ '); // ciblé : 🤝 tu l'as et lui non, ✅ vous l'avez tous les deux ; offre ouverte : ✅ si tu l'as
   const fillG = () => { const t = $('#tgc').value; gl = t ? idsOf(t) : []; giveId = null; $('#tg').innerHTML = '<option value="">Carte donnée</option>' + gl.map((id, i) => '<option value="' + i + '">' + gmark(id) + esc(id.slice(id.indexOf(':') + 1)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] > 1 ? ' ×' + S.cards[id] : '') + '</option>').join(''); };
   $('#tgc').onchange = fillG;
   $('#tg').onchange = () => { giveId = gl[$('#tg').value] || null; };
@@ -225,7 +225,7 @@ function tradeInit() {
     }
     box.innerHTML = theirs ? '<small>🎯 = ' + esc(tp.value) + ' l\'a et pas toi · ✅ = vous l\'avez tous les deux · ❌ = il ne l\'a pas</small>' : '<small>✅ = tu as déjà la carte · ❌ = tu ne l\'as pas</small>';
     fill(); fillG();
-    $('#tgl').innerHTML = theirs ? '🎯 = tu l\'as et ' + esc(tp.value) + ' ne l\'a pas · ✅ = vous l\'avez tous les deux · ❌ = tu ne l\'as pas' : '✅ = tu l\'as (tu peux la donner) · ❌ = tu ne l\'as pas';
+    $('#tgl').innerHTML = theirs ? '🤝 = tu l\'as et ' + esc(tp.value) + ' ne l\'a pas · ✅ = vous l\'avez tous les deux · ❌ = tu ne l\'as pas' : '✅ = tu l\'as (tu peux la donner) · ❌ = tu ne l\'as pas';
   };
   tp.onchange();
   $('#to').onclick = () => { const g = giveId; if (!g || !wantId) return msg('Choisis ta carte et la carte voulue'); if (!S.cards[g]) return msg("Tu n'as pas la carte que tu veux donner (❌)"); if (theirs && !theirs[wantId]) return msg(tp.value + " n'a pas cette carte (❌)"); run(async () => { setS((await api('tradeoffer', { give: g, want: wantId, to: tp.value || undefined })).state); playerView(); msg('Offre envoyée', true); }); };
