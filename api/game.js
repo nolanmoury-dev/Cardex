@@ -401,6 +401,24 @@ const handler = async (req, res) => {
       mk.push({ id: crypto.randomBytes(6).toString('hex'), seller: u.pseudo, card: b.card, price: pr, t: Date.now() });
       await redis.set('market', mk);
       await bcast('🏷️ Nouvelle carte au Marché : ' + b.card.slice(b.card.indexOf(':') + 1) + ' (' + pr + ' 🪙)', u.pseudo);
+    } else if (b.action === 'tradeoffer') {
+      const gv = b.give, w = String(b.want || '');
+      if (!u.cards[gv]) return fail('Carte non possédée');
+      if (!rarOf(cat, w) || w.startsWith('obj:') || gv === w) return fail('Carte demandée invalide');
+      if (mk.filter((x) => x.seller === u.pseudo).length >= 20) return fail('20 annonces maximum');
+      rm(u, gv, 1);
+      mk.push({ id: crypto.randomBytes(6).toString('hex'), seller: u.pseudo, card: gv, want: w, price: 0, t: Date.now() });
+      await redis.set('market', mk);
+      await bcast('🔁 Nouvel échange : ' + gv.slice(gv.indexOf(':') + 1) + ' contre ' + w.slice(w.indexOf(':') + 1), u.pseudo);
+    } else if (b.action === 'tradeaccept') {
+      const x = mk.find((y) => y.id === b.id && y.want);
+      if (!x) return fail('Offre déjà acceptée ou retirée');
+      if (x.seller === u.pseudo) return fail("C'est ta propre offre");
+      if (!u.cards[x.want]) return fail("Tu n'as pas la carte demandée");
+      mk = mk.filter((y) => y !== x); await redis.set('market', mk);
+      rm(u, x.want, 1); add(u, x.card, 1);
+      const v = await redis.get(key(x.seller));
+      if (v) { add(v, x.want, 1); note(v, '🔁 ' + u.pseudo + ' a accepté ton échange : tu reçois ' + x.want.slice(x.want.indexOf(':') + 1)); await redis.set(key(v.pseudo), v); }
     } else if (b.action === 'unlist') {
       const x = mk.find((y) => y.id === b.id && y.seller === u.pseudo);
       if (!x) return fail('Annonce introuvable');
@@ -409,6 +427,7 @@ const handler = async (req, res) => {
     } else if (b.action === 'buymk') {
       const x = mk.find((y) => y.id === b.id);
       if (!x) return fail('Annonce déjà vendue ou retirée');
+      if (x.want) return fail("C'est une offre d'échange");
       if (x.seller === u.pseudo) return fail("C'est ta propre annonce");
       if (u.coins < x.price) return fail('Pas assez de coins');
       mk = mk.filter((y) => y !== x);

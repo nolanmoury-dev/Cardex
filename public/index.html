@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#10141c">
-<title>Cardex</title><link rel="manifest" href="/manifest.json"><link rel="apple-touch-icon" href="/icon.png">
+<title>Cardex</title><link rel="manifest" href="/manifest.json"><link rel="apple-touch-icon" href="/icon.png"><link rel="icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -78,6 +78,7 @@ main{padding:8px 8px calc(84px + env(safe-area-inset-bottom))}
 }
 @media(max-width:600px){.grid{grid-template-columns:repeat(4,1fr);gap:6px}.card{border-width:2px;border-radius:8px}.card .ct{font-size:11px;padding:4px 2px 0;min-height:2.6em}.card .rn{font-size:9px;padding:0 2px 3px}.card .ac button{font-size:9px;padding:2px;min-height:28px}.card .n{font-size:10px}.tabs button{font-size:11px}}
 .pills{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:8px;-webkit-overflow-scrolling:touch}.pills::-webkit-scrollbar{display:none}.pill{flex:none;padding:5px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font-size:12px}.pill.on{background:var(--l);border-color:var(--l);color:#000}.rt{width:100%;border-collapse:collapse;font-size:12px}.rt th,.rt td{padding:4px 3px;text-align:center;border-top:1px solid var(--line)}.rt .pn{text-align:left;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rt .me{background:var(--cb);font-weight:700}details.rb{border-color:var(--l)}details.rb>summary{color:var(--l)}
+.lg{width:28px;height:28px;object-fit:contain;border-radius:6px}.tr{display:flex;align-items:center;gap:8px}.tr .card{width:78px}.tr small{display:block;text-align:center}
 </style>
 </head>
 <body><main id="app"></main>
@@ -148,7 +149,7 @@ function meter(p) {
 }
 
 function authView(msg) {
-  app.innerHTML = '<form class="auth" id="f"><h1>Cardex</h1><input id="p" placeholder="Pseudo" autocomplete="username" required><input id="w" type="password" placeholder="Mot de passe" autocomplete="current-password" required><div id="sm"></div><div class="err" id="e"></div><button data-a="login">Se connecter</button><button type="button" class="g" data-a="register">Créer un compte</button><button type="button" class="g" id="th">🌓 Thème</button></form>';
+  app.innerHTML = '<form class="auth" id="f"><img src="/icon-192.png" alt="Cardex" style="width:110px;margin:0 auto"><h1>Cardex</h1><input id="p" placeholder="Pseudo" autocomplete="username" required><input id="w" type="password" placeholder="Mot de passe" autocomplete="current-password" required><div id="sm"></div><div class="err" id="e"></div><button data-a="login">Se connecter</button><button type="button" class="g" data-a="register">Créer un compte</button><button type="button" class="g" id="th">🌓 Thème</button></form>';
   $('#e').textContent = msg || '';
   $('#th').onclick = flip;
   $('#w').oninput = (e) => meter(e.target.value);
@@ -166,7 +167,7 @@ function authView(msg) {
 // --- Joueur
 const packsOf = (t) => (S.bought[t] || 0) + S.packs;
 function head() {
-  return '<div class="bar"><b>' + S.pseudo + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">📦 ' + S.packs + '/10</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button><button class="g" id="lo">Quitter</button></span></div><div class="tabs">' +
+  return '<div class="bar"><b style="display:flex;align-items:center;gap:6px"><img class="lg" src="/icon-192.png" alt="">' + S.pseudo + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">📦 ' + S.packs + '/10</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button><button class="g" id="lo">Quitter</button></span></div><div class="tabs">' +
     [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Classement'], ['set', 'Réglages']].map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
 }
 function shopHTML() {
@@ -193,8 +194,44 @@ function colHTML() {
     }).join('');
 }
 const mf = { t: '', r: '', s: 'new' };
+let mkSub = 'v';
 function mkHTML() {
+  return '<div class="pills">' + [['v', '🏷️ Ventes'], ['t', '🔁 Échange']].map(([k, l]) => '<button class="pill' + (mkSub === k ? ' on' : '') + '" data-ms="' + k + '">' + l + '</button>').join('') + '</div>' + (mkSub === 't' ? tradeHTML() : mkSales());
+}
+function tradeHTML() {
+  const mine = Object.keys(S.cards).sort();
+  return '<div class="box"><h2>Proposer un échange</h2><p>Ta carte est mise de côté jusqu\'à ce qu\'un joueur accepte (ou que tu retires l\'offre).</p><div style="display:grid;gap:8px;max-width:420px"><select id="tg"><option value="">Je donne…</option>' + mine.map((id, i) => '<option value="' + i + '">' + esc(id.slice(id.indexOf(':') + 1)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] > 1 ? ' ×' + S.cards[id] : '') + '</option>').join('') + '</select><select id="tc"><option value="">Je veux… (collection)</option>' + Object.entries(CAT).filter(([t]) => t !== 'obj').map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="tw"><option value="">Carte voulue</option></select><button id="to">Proposer</button></div></div><div id="tl"></div><p id="tn"></p>';
+}
+function tradeInit() {
+  const mine = Object.keys(S.cards).sort(), tc = $('#tc'), tw = $('#tw');
+  let wl = [];
+  tc.onchange = () => { wl = tc.value ? idsOf(tc.value) : []; tw.innerHTML = '<option value="">Carte voulue</option>' + wl.map((id, i) => '<option value="' + i + '">' + esc(id.slice(id.indexOf(':') + 1)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] ? ' ✓' : '') + '</option>').join(''); };
+  $('#to').onclick = () => { const g = mine[$('#tg').value], w = wl[tw.value]; if (!g || !w) return msg('Choisis la carte donnée et la carte voulue'); run(async () => { setS((await api('tradeoffer', { give: g, want: w })).state); playerView(); }); };
+  const L = S.market.filter((x) => x.want).sort((a, b) => b.t - a.t);
+  $('#tn').textContent = L.length ? '' : "Aucune offre d'échange pour le moment.";
+  L.forEach((x) => {
+    const own = x.seller === S.pseudo, have = !!S.cards[x.want], row = document.createElement('div');
+    row.className = 'box tr';
+    row.innerHTML = '<div><small>Donne</small><div class="cg"></div></div><span>⇄</span><div><small>Veut</small><div class="cw"></div></div><div style="margin-left:auto;display:grid;gap:4px;text-align:center"><small>' + esc(x.seller) + '</small><button' + (own ? ' class="g"' : have ? '' : ' disabled') + ' data-tb>' + (own ? 'Retirer' : have ? 'Échanger' : "Tu ne l'as pas") + '</button></div>';
+    row.querySelector('.cg').append(cardEl(x.card, 1)); row.querySelector('.cw').append(cardEl(x.want, 1));
+    row.querySelector('[data-tb]').onclick = () => run(async () => { setS((await api(own ? 'unlist' : 'tradeaccept', { id: x.id })).state); playerView(); });
+    $('#tl').append(row);
+  });
+}
+function mkSales() {
   return '<div class="box"><p>Achète les cartes des autres joueurs, ou mets tes cartes en vente depuis ta collection (bouton 🏷️) au prix que tu choisis.</p><div class="row"><select id="mft"><option value="">Toutes collections</option>' + Object.entries(CAT).map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="mfr"><option value="">Toutes raretés</option>' + [...'crel'].map((r) => '<option value="' + r + '">' + RN[r] + '</option>').join('') + '</select><select id="mfs"><option value="new">Plus récentes</option><option value="asc">Prix croissant</option><option value="desc">Prix décroissant</option></select></div></div><div class="grid" id="gm"></div><p id="mn"></p>';
+}
+function mkInit() {
+    const gm = $('#gm');
+    ['t', 'r', 's'].forEach((k) => { const e = $('#mf' + k); e.value = mf[k]; e.onchange = () => { mf[k] = e.value; playerView(); }; });
+    const L = S.market.filter((x) => !x.want && (!mf.t || x.card.startsWith(mf.t + ':')) && (!mf.r || RAR[x.card] === mf.r));
+    $('#mn').textContent = L.length ? '' : 'Aucune annonce pour ces filtres.';
+    L.sort((a, b) => (mf.s === 'asc' ? a.price - b.price : mf.s === 'desc' ? b.price - a.price : b.t - a.t)).forEach((x) => {
+      const el = cardEl(x.card, 1), mine = x.seller === S.pseudo;
+      el.insertAdjacentHTML('beforeend', '<div class="ac" style="flex-direction:column"><small style="text-align:center">' + esc(x.seller) + '</small><button' + (mine ? ' class="g"' : S.coins < x.price ? ' disabled' : '') + ' data-mb>' + (mine ? 'Retirer' : 'Acheter · ' + x.price + '🪙') + '</button></div>');
+      el.querySelector('[data-mb]').onclick = () => run(async () => { setS((await api(mine ? 'unlist' : 'buymk', { id: x.id })).state); playerView(); });
+      gm.append(el);
+    });
 }
 function jeuHTML() {
   return '<div class="box"><h2>Jeux d\'argent</h2><p>Mise entre 10 et 500 coins. Repère : un sachet coûte 100 coins. Sur téléphone, glisse le doigt sur le jeu (Tetris : touche = tourner, glisser vers le bas = chute).</p><div class="row"><input id="bet" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button data-g="snake">🐍 Snake</button><button data-g="tetris">🧱 Tetris</button></div></div>' +
@@ -254,16 +291,8 @@ function playerView() {
       });
     }
   } else if (tab === 'mk') {
-    const gm = $('#gm');
-    ['t', 'r', 's'].forEach((k) => { const e = $('#mf' + k); e.value = mf[k]; e.onchange = () => { mf[k] = e.value; playerView(); }; });
-    const L = S.market.filter((x) => (!mf.t || x.card.startsWith(mf.t + ':')) && (!mf.r || RAR[x.card] === mf.r));
-    $('#mn').textContent = L.length ? '' : 'Aucune annonce pour ces filtres.';
-    L.sort((a, b) => (mf.s === 'asc' ? a.price - b.price : mf.s === 'desc' ? b.price - a.price : b.t - a.t)).forEach((x) => {
-      const el = cardEl(x.card, 1), mine = x.seller === S.pseudo;
-      el.insertAdjacentHTML('beforeend', '<div class="ac" style="flex-direction:column"><small style="text-align:center">' + esc(x.seller) + '</small><button' + (mine ? ' class="g"' : S.coins < x.price ? ' disabled' : '') + ' data-mb>' + (mine ? 'Retirer' : 'Acheter · ' + x.price + '🪙') + '</button></div>');
-      el.querySelector('[data-mb]').onclick = () => run(async () => { setS((await api(mine ? 'unlist' : 'buymk', { id: x.id })).state); playerView(); });
-      gm.append(el);
-    });
+    app.querySelectorAll('[data-ms]').forEach((b) => (b.onclick = () => { mkSub = b.dataset.ms; playerView(); }));
+    if (mkSub === 't') tradeInit(); else mkInit();
   } else if (tab === 'rk') {
     app.querySelectorAll('.pill').forEach((b) => (b.onclick = () => { rkN = +b.dataset.n; playerView(); }));
     api('rank', { n: rkN }).then((j) => {
