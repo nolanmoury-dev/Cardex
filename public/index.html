@@ -202,7 +202,7 @@ function mkHTML() {
 }
 function tradeHTML() {
   const mine = Object.keys(S.cards).sort();
-  return '<div class="box"><h2>Proposer un échange</h2><p>Ta carte est mise de côté jusqu\'à la réponse (ou jusqu\'à ce que tu retires l\'offre).</p><div style="display:grid;gap:8px;max-width:420px"><select id="tp"><option value="">Offre ouverte (tout le monde)</option></select><div id="tpk"></div><div id="tco" style="display:grid;gap:8px"><select id="tc"><option value="">Je veux… (collection)</option>' + Object.entries(CAT).filter(([t]) => t !== 'obj').map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="tw"><option value="">Carte voulue</option></select></div><select id="tgc"><option value="">Je donne… (collection)</option>' + Object.entries(CAT).filter(([t]) => t !== 'obj' || mine.some((id) => id.startsWith('obj:'))).map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="tg"><option value="">Carte donnée</option></select><small>✅ = tu l\'as (tu peux la donner) · ❌ = tu ne l\'as pas</small><button id="to">Proposer</button></div></div><div id="tl"></div><p id="tn"></p>';
+  return '<div class="box"><h2>Proposer un échange</h2><p>Ta carte est mise de côté jusqu\'à la réponse (ou jusqu\'à ce que tu retires l\'offre).</p><div style="display:grid;gap:8px;max-width:420px"><select id="tp"><option value="">Offre ouverte (tout le monde)</option></select><div id="tpk"></div><div id="tco" style="display:grid;gap:8px"><select id="tc"><option value="">Je veux… (collection)</option>' + Object.entries(CAT).filter(([t]) => t !== 'obj').map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="tw"><option value="">Carte voulue</option></select></div><select id="tgc"><option value="">Je donne… (collection)</option>' + Object.entries(CAT).filter(([t]) => t !== 'obj' || mine.some((id) => id.startsWith('obj:'))).map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="tg"><option value="">Carte donnée</option></select><small id="tgl">✅ = tu l\'as (tu peux la donner) · ❌ = tu ne l\'as pas</small><button id="to">Proposer</button></div></div><div id="tl"></div><p id="tn"></p>';
 }
 function tradeInit() {
   const tc = $('#tc'), tw = $('#tw'), tp = $('#tp');
@@ -213,7 +213,9 @@ function tradeInit() {
   tc.onchange = fill;
   tw.onchange = () => { wantId = wl[tw.value] || null; };
   let gl = [], giveId = null;
-  $('#tgc').onchange = () => { const t = $('#tgc').value; gl = t ? idsOf(t) : []; giveId = null; $('#tg').innerHTML = '<option value="">Carte donnée</option>' + gl.map((id, i) => '<option value="' + i + '">' + (S.cards[id] ? '✅ ' : '❌ ') + esc(id.slice(id.indexOf(':') + 1)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] > 1 ? ' ×' + S.cards[id] : '') + '</option>').join(''); };
+  const gmark = (id) => (!S.cards[id] ? '❌ ' : theirs ? (theirs[id] ? '✅ ' : '🤝 ') : '✅ '); // ciblé : 🤝 tu l'as et lui non, ✅ vous l'avez tous les deux ; offre ouverte : ✅ si tu l'as
+  const fillG = () => { const t = $('#tgc').value; gl = t ? idsOf(t) : []; giveId = null; $('#tg').innerHTML = '<option value="">Carte donnée</option>' + gl.map((id, i) => '<option value="' + i + '">' + gmark(id) + esc(id.slice(id.indexOf(':') + 1)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] > 1 ? ' ×' + S.cards[id] : '') + '</option>').join(''); };
+  $('#tgc').onchange = fillG;
   $('#tg').onchange = () => { giveId = gl[$('#tg').value] || null; };
   api('players').then((j) => { if ($('#tp')) tp.insertAdjacentHTML('beforeend', j.players.map((n) => '<option>' + esc(n) + '</option>').join('')); }).catch(() => {});
   tp.onchange = async () => {
@@ -222,7 +224,8 @@ function tradeInit() {
       try { theirs = (await api('peek', { pseudo: tp.value })).peek.cards || {}; } catch (e) { msg(e.message); tp.value = ''; }
     }
     box.innerHTML = theirs ? '<small>🎯 = ' + esc(tp.value) + ' l\'a et pas toi · ✅ = vous l\'avez tous les deux · ❌ = il ne l\'a pas</small>' : '<small>✅ = tu as déjà la carte · ❌ = tu ne l\'as pas</small>';
-    fill();
+    fill(); fillG();
+    $('#tgl').innerHTML = theirs ? '🤝 = tu l\'as et ' + esc(tp.value) + ' ne l\'a pas · ✅ = vous l\'avez tous les deux · ❌ = tu ne l\'as pas' : '✅ = tu l\'as (tu peux la donner) · ❌ = tu ne l\'as pas';
   };
   tp.onchange();
   $('#to').onclick = () => { const g = giveId; if (!g || !wantId) return msg('Choisis ta carte et la carte voulue'); if (!S.cards[g]) return msg("Tu n'as pas la carte que tu veux donner (❌)"); if (theirs && !theirs[wantId]) return msg(tp.value + " n'a pas cette carte (❌)"); run(async () => { setS((await api('tradeoffer', { give: g, want: wantId, to: tp.value || undefined })).state); playerView(); msg('Offre envoyée', true); }); };

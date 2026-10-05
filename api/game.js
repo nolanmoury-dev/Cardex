@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const T0 = require('./cards');
+const T0 = require('../lib/cards');
 
 let redis;
 const W = { c: 60, r: 25, e: 11, l: 4 }, BASE = { c: 2, r: 8, e: 25, l: 80 }, R = 'crel';
@@ -231,10 +231,32 @@ async function runBots() {
   if (mk) await redis.set('market', mk);
 }
 
+// --- Notification quotidienne : "Viens ouvrir tes packs gratuits" vers 12h30 (heure de Paris), via Vercel Cron (GET /api/game?cron=1).
+// Le cron est en UTC : on le déclenche à 10h30 ET 11h30 UTC (été / hiver) ; le code ne notifie qu'une fois par jour et seulement entre 12h et 14h à Paris.
+const DAILY_MSG = 'Viens ouvrir tes packs gratuits ! 🎁';
+async function dailyPush() {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(new Date());
+  const g = (t) => parts.find((p) => p.type === t).value, day = g('year') + '-' + g('month') + '-' + g('day'), mins = +g('hour') * 60 + +g('minute');
+  if (mins < 720 || mins >= 840) return { sent: 0, skipped: 'hors de la fenêtre 12h-14h (Paris)' };
+  if (await redis.get('maint')) return { sent: 0, skipped: 'maintenance' };
+  if ((await redis.get('daily:last')) === day) return { sent: 0, skipped: 'déjà envoyée aujourd\'hui' };
+  await redis.set('daily:last', day);
+  const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
+  let n = 0;
+  for (const v of list) if (v && (v.subs || []).length) { note(v, DAILY_MSG, true); n++; } // quiet : notification push seulement, pas dans la boîte de réception
+  await flush();
+  return { sent: n };
+}
+
 const handler = async (req, res) => {
   const fail = (m, c = 400) => res.status(c).json({ error: m });
   const ok = (d) => res.status(200).json(d);
-  if (req.method !== 'POST') return fail('POST uniquement', 405);
+  const cron = req.method === 'GET' && new URL(req.url, 'http://x').searchParams.get('cron') === '1';
+  if (req.method !== 'POST' && !cron) return fail('POST uniquement', 405);
+  if (cron && process.env.CRON_SECRET) {
+    const sent = (req.headers.authorization || '').replace(/^Bearer /, '') || new URL(req.url, 'http://x').searchParams.get('key');
+    if (sent !== process.env.CRON_SECRET) return fail('Non autorisé', 401);
+  }
   const b = req.body || {};
   try {
     if (!redis) {
@@ -242,6 +264,7 @@ const handler = async (req, res) => {
       if (!url || !token) return fail('Base de données non reliée : dans Vercel, ajoute Upstash Redis au projet (Storage > Connect Project), puis fais Redeploy', 500);
       redis = new (require('@upstash/redis').Redis)({ url, token });
     }
+    if (cron) return ok(await dailyPush());
     await ensureBots().catch((e) => console.error('ensureBots', e.message));
     await runBots().catch((e) => console.error('bots', e.message));
 
