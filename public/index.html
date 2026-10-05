@@ -208,7 +208,7 @@ function tradeInit() {
   const tc = $('#tc'), tw = $('#tw'), tp = $('#tp');
   let wl = [], wantId = null;
   let theirs = null; // cartes du joueur ciblé (null = offre ouverte)
-  const mark = (id) => ((theirs ? theirs[id] : S.cards[id]) ? '✅ ' : '❌ '); // ciblé : ✅ s'il l'a ; offre ouverte : ✅ si je l'ai
+  const mark = (id) => (theirs ? (theirs[id] ? (S.cards[id] ? '✅ ' : '🎯 ') : '❌ ') : S.cards[id] ? '✅ ' : '❌ '); // ciblé : 🎯 il l'a et pas moi, ✅ il l'a et moi aussi, ❌ il ne l'a pas ; offre ouverte : ✅ si je l'ai
   const fill = () => { wl = tc.value ? idsOf(tc.value) : []; wantId = null; tw.innerHTML = '<option value="">Carte voulue</option>' + wl.map((id, i) => '<option value="' + i + '">' + mark(id) + esc(id.slice(id.indexOf(':') + 1)) + ' (' + RN[RAR[id] || 'c'] + ')</option>').join(''); };
   tc.onchange = fill;
   tw.onchange = () => { wantId = wl[tw.value] || null; };
@@ -221,7 +221,7 @@ function tradeInit() {
     if (tp.value) {
       try { theirs = (await api('peek', { pseudo: tp.value })).peek.cards || {}; } catch (e) { msg(e.message); tp.value = ''; }
     }
-    box.innerHTML = theirs ? '<small>✅ = ' + esc(tp.value) + ' a la carte (il peut te la donner) · ❌ = il ne l\'a pas</small>' : '<small>✅ = tu as déjà la carte · ❌ = tu ne l\'as pas</small>';
+    box.innerHTML = theirs ? '<small>🎯 = ' + esc(tp.value) + ' l\'a et pas toi · ✅ = vous l\'avez tous les deux · ❌ = il ne l\'a pas</small>' : '<small>✅ = tu as déjà la carte · ❌ = tu ne l\'as pas</small>';
     fill();
   };
   tp.onchange();
