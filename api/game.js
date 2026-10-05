@@ -189,6 +189,20 @@ async function botTurn(u, cat, cu, sh, mk) {
   }
   return mk;
 }
+let botsOk = false;
+async function ensureBots() {
+  if (botsOk) return;
+  const now = Date.now();
+  for (const B of BOTS) {
+    const u = await redis.get(key(B.name));
+    if (!u) {
+      const salt = crypto.randomBytes(16).toString('hex');
+      await redis.set(key(B.name), { pseudo: B.name, salt, hash: hash(crypto.randomBytes(8).toString('hex'), salt), coins: 200, packs: 1, bought: {}, last: now, cards: {}, since: {}, fav: [], notifs: [], bot: B.lvl });
+    } else if (!u.bot) { console.error('bots: le pseudo ' + B.name + ' est pris par un vrai joueur'); continue; }
+    await redis.sadd('users', B.name);
+  }
+  botsOk = true;
+}
 let botChk = 0;
 async function runBots() {
   const now = Date.now();
@@ -228,6 +242,7 @@ const handler = async (req, res) => {
       if (!url || !token) return fail('Base de données non reliée : dans Vercel, ajoute Upstash Redis au projet (Storage > Connect Project), puis fais Redeploy', 500);
       redis = new (require('@upstash/redis').Redis)({ url, token });
     }
+    await ensureBots().catch((e) => console.error('ensureBots', e.message));
     await runBots().catch((e) => console.error('bots', e.message));
 
     if (b.action === 'register' || b.action === 'login') {
