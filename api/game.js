@@ -139,16 +139,19 @@ const shopOf = async (cat) => {
 const LVMAX = 5, LINES = Object.keys(T0).filter((t) => Object.values(T0).some((o) => o.base === t));
 const lvOf = (cat, t) => (cat[t] && cat[t].lv) || 1, baseOf = (cat, t) => (cat[t] && cat[t].base) || t;
 const lineLv = (u, b) => Math.min(LVMAX, 1 + [b, ...Array.from({ length: LVMAX - 1 }, (_, i) => b + (i + 2))].reduce((a, k) => a + (((u && u.rb) || {})[k] || 0), 0));
+// Un niveau supérieur d'une ligne reste invisible (marché, échanges, cadeaux, recherche…) tant que le joueur ne l'a pas débloqué : comme s'il n'existait pas. On garde ce qu'il possède déjà.
+const known = (u, cat, t) => { const o = cat[t]; return !o || !o.base || o.lv <= lineLv(u, o.base) || Object.keys(u.cards || {}).some((id) => id.startsWith(t + ':')) || ((u.bought || {})[t] || 0) > 0; };
+const knownId = (u, cat, id) => known(u, cat, String(id).slice(0, String(id).indexOf(':')));
 const price = (sh, t, cat) => Math.round((PRICE * 2 ** (lvOf(cat, t) - 1) * (100 - sh.discount)) / 100);
 // boutique d'un joueur : un seul sachet par ligne (celui de son niveau) ; les anciens ne restent que s'il en reste d'achetés
 const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t); return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
 const view = (u, sh, cat, cu, mk) => ({
-  market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo), inbox: u.inbox || [],
+  market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => x.seller === u.pseudo || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))), inbox: u.inbox || [],
   dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, coins: u.coins, packs: u.packs, bought: u.bought || {},
   next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), cards: u.cards, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
   shop: Object.fromEntries(Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s, t, cat), full: PRICE * 2 ** (lvOf(cat, t) - 1), lvl: lvOf(cat, t) }])), lv: Object.fromEntries(LINES.map((b) => [b, lineLv(u, b)])),
-  objs: cu.objs.filter((x) => !x.gone), themes: cat,
+  objs: cu.objs.filter((x) => !x.gone), themes: Object.fromEntries(Object.entries(cat).filter(([t]) => known(u, cat, t))),
 });
 // Plus le niveau du sachet est haut, plus les légendaires (et un peu les épiques) sont rares ; la différence revient aux communes.
 const LEG = [4, 2.5, 1.5, 0.9, 0.5], EPI = [11, 10, 9, 8, 7];
@@ -677,7 +680,7 @@ const handler = async (req, res) => {
     } else if (b.action === 'peek') {
       const v = await redis.get(key(String(b.pseudo || '')));
       if (!v) return fail('Joueur introuvable');
-      extra = { peek: { pseudo: v.pseudo, cards: v.cards || {} } };
+      extra = { peek: { pseudo: v.pseudo, cards: Object.fromEntries(Object.entries(v.cards || {}).filter(([id]) => knownId(u, cat, id))) } };
     } else if (b.action === 'gift') {
       const v = await redis.get(key(String(b.to || '')));
       if (!v || v.pseudo === u.pseudo) return fail('Joueur introuvable');
@@ -735,7 +738,7 @@ const handler = async (req, res) => {
     } else if (b.action === 'tradeoffer') {
       const gv = b.give, w = String(b.want || '');
       if (!u.cards[gv]) return fail('Carte non possédée');
-      if (!rarOf(cat, w) || w.startsWith('obj:') || gv === w) return fail('Carte demandée invalide');
+      if (!rarOf(cat, w) || w.startsWith('obj:') || gv === w || !knownId(u, cat, w)) return fail('Carte demandée invalide');
       if (mk.filter((x) => x.seller === u.pseudo).length >= 20) return fail('20 annonces maximum');
       let to = null, tv = null;
       if (b.to) {
@@ -751,7 +754,7 @@ const handler = async (req, res) => {
       else await bcast('🔁 Nouvel échange : ' + cn(gv) + ' contre ' + cn(w), u.pseudo);
     } else if (b.action === 'tradeaccept') {
       const x = mk.find((y) => y.id === b.id && y.want);
-      if (!x) return fail('Offre déjà acceptée ou retirée');
+      if (!x || !knownId(u, cat, x.card)) return fail('Offre déjà acceptée ou retirée');
       if (x.seller === u.pseudo) return fail("C'est ta propre offre");
       if (x.to && x.to !== u.pseudo) return fail("Cette offre ne t'est pas destinée");
       if (x.ask) return fail('Contre-offre en attente de la réponse du proposeur');
@@ -790,7 +793,7 @@ const handler = async (req, res) => {
       await redis.set('market', mk);
     } else if (b.action === 'buymk') {
       const x = mk.find((y) => y.id === b.id);
-      if (!x) return fail('Annonce déjà vendue ou retirée');
+      if (!x || !knownId(u, cat, x.card)) return fail('Annonce déjà vendue ou retirée');
       if (x.want) return fail("C'est une offre d'échange");
       if (x.seller === u.pseudo) return fail("C'est ta propre annonce");
       if (u.coins < x.price) return fail('Pas assez de coins');
