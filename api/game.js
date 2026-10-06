@@ -3,6 +3,8 @@ const T0 = require('../lib/cards');
 
 let redis;
 const W = { c: 60, r: 25, e: 11, l: 4 }, BASE = { c: 2, r: 8, e: 25, l: 80 }, R = 'crel';
+const RL_MAX = 10, RL_WAIT = 30000, parisDay = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+const rlInfo = (u) => { const r = u.rl && u.rl.d === parisDay() ? u.rl : { n: 0, t: 0 }; return { left: Math.max(0, RL_MAX - r.n), next: r.t + RL_WAIT }; };
 const DAY = 864e5, MAXP = 10, PRICE = 100, PACK = 5;
 const stepOf = (k) => Math.round((10 + (4 * k) / 9) * 60000); // 10 min pour le 1er sachet, 14 min pour le 10e (total 2 h)
 const pend = [];
@@ -135,15 +137,19 @@ const price = (sh, t, cat) => Math.round((PRICE * 2 ** (lvOf(cat, t) - 1) * (100
 const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t); return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
 const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo), inbox: u.inbox || [],
-  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, renames: u.renames || 0, rb: u.rb || {}, coins: u.coins, packs: u.packs, bought: u.bought || {},
+  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, rl: rlInfo(u), renames: u.renames || 0, rb: u.rb || {}, coins: u.coins, packs: u.packs, bought: u.bought || {},
   next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), cards: u.cards, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
   shop: Object.fromEntries(Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s, t, cat), full: PRICE * 2 ** (lvOf(cat, t) - 1), lvl: lvOf(cat, t) }])), lv: Object.fromEntries(LINES.map((b) => [b, lineLv(u, b)])),
   objs: cu.objs.filter((x) => !x.gone), themes: cat,
 });
-function draw(o, t) {
+// Plus le niveau du sachet est haut, plus les légendaires (et un peu les épiques) sont rares ; la différence revient aux communes.
+const LEG = [4, 2.5, 1.5, 0.9, 0.5], EPI = [11, 10, 9, 8, 7];
+function draw(o, t, lv = 1) {
+  const w = { ...W, l: LEG[lv - 1] ?? LEG[0], e: EPI[lv - 1] ?? EPI[0] };
+  w.c = 100 - w.r - w.e - w.l;
   let x = Math.random() * 100, r = 'c';
-  for (const k of R) { if ((x -= W[k]) < 0) { r = k; break; } }
+  for (const k of R) { if ((x -= w[k]) < 0) { r = k; break; } }
   if (!o[r].length) r = 'c';
   return t + ':' + o[r][Math.floor(Math.random() * o[r].length)];
 }
@@ -497,7 +503,7 @@ const handler = async (req, res) => {
       if (u.bought[b.theme] > 0) u.bought[b.theme] -= 1;
       else if (u.packs > 0) u.packs -= 1;
       else return fail('Aucun sachet disponible');
-      const drawn = Array.from({ length: PACK }, () => draw(cat[b.theme], b.theme));
+      const drawn = Array.from({ length: PACK }, () => draw(cat[b.theme], b.theme, lvOf(cat, b.theme)));
       drawn.forEach((id) => add(u, id, 1));
       extra = { drawn };
     } else if (b.action === 'buyobj') {
@@ -549,13 +555,17 @@ const handler = async (req, res) => {
       const RED = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36], red = RED.includes(n);
       if (a < 10) return fail('Mise minimale : 10 coins (maximale : 500)');
       if (u.coins < a) return fail('Pas assez de coins');
+      const ri = rlInfo(u);
+      if (ri.left <= 0) return fail('Limite atteinte : 10 tours de roulette par jour. Reviens demain !');
+      if (Date.now() < ri.next) return fail('Patiente ' + Math.ceil((ri.next - Date.now()) / 1000) + ' s avant le prochain tour');
       let win, mult;
       if (k === 'red') { win = red; mult = 2.5; } else if (k === 'black') { win = n > 0 && !red; mult = 2.5; }
       else if (k === 'even') { win = n > 0 && n % 2 === 0; mult = 2.5; } else if (k === 'odd') { win = n % 2 === 1; mult = 2.5; }
       else if (k === 'dozen' && v <= 2) { win = n > 0 && Math.floor((n - 1) / 12) === v; mult = 3.7; }
       else if (k === 'num') { win = n === v; mult = 43; } else return fail('Pari inconnu');
       const gain = win ? Math.floor(a * mult) : 0;
-      u.coins += gain - a; extra = { n, red, win, gain, bet: a };
+      u.coins += gain - a; u.rl = { d: parisDay(), n: (RL_MAX - ri.left) + 1, t: Date.now() };
+      extra = { n, red, win, gain, bet: a };
     } else if (b.action === 'betend') {
       const g = await redis.get('g:' + b.gid);
       if (!g || g.p !== u.pseudo) return fail('Partie introuvable');
