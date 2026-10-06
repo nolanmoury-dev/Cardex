@@ -141,6 +141,16 @@ main{padding:8px 8px calc(84px + env(safe-area-inset-bottom))}
 #rbs .u{left:12px;right:12px;bottom:12px;background:#161b22;border:1px solid #30363d;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;opacity:0;transform:translateY(40px);z-index:3;animation:rbFu .5s 6.4s ease-out forwards}
 #rbs .u button{white-space:nowrap}
 @media(prefers-reduced-motion:reduce){#rbo,#rbs{animation:none}}
+/* Livre des renaissances + encart maintenance */
+.bkw{margin:12px 0}.bkw h2{margin:0 0 4px}.gld{color:var(--l)}
+.bkk{position:relative;margin:8px 0;padding:12px 12px 12px 30px;border-radius:10px;background:linear-gradient(135deg,#1d2536,#10151f);border:1px solid #4a3f1c;box-shadow:inset 0 0 0 2px #0006}
+.bkk::before{content:"";position:absolute;left:9px;top:10px;bottom:10px;width:8px;background:radial-gradient(circle at 4px 50%,#d6dbe6 0 3.5px,#0000 4px) 0 0/8px 44px repeat-y}
+.bkp{display:block;text-align:right;color:#8b95a8;margin-bottom:4px}
+.bkg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.bkq{aspect-ratio:5/7;border-radius:6px;border:1px dashed #ffffff26;background:#ffffff0a}
+.bkc{aspect-ratio:5/7;border-radius:6px;border:2px solid #f5c518;background:linear-gradient(160deg,#3d3210,#16110a);box-shadow:0 0 12px #f5c51840;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;text-align:center;color:#f5c518;overflow:hidden}
+.bkc .bke{font-size:30px;line-height:1}.bkc b{font-size:12px}.bkc small{display:block;color:#e8d9a0;font-size:10px}
+.mbx ul{margin:4px 0 8px;padding-left:20px}.mbx li{margin:2px 0}
 </style>
 </head>
 <body><main id="app"></main>
@@ -230,8 +240,8 @@ function authView(msg) {
 // --- Joueur
 const packsOf = (t) => (S.bought[t] || 0) + S.packs;
 function head() {
-  return '<div class="bar"><b style="display:flex;align-items:center;gap:6px"><img class="lg" src="/icon-192.png" alt="">' + S.pseudo + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">📦 ' + S.packs + '/10</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button><button class="g" id="lo">Quitter</button></span></div><div class="tabs">' +
-    (S.maint ? [['col', 'Collection']] : [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Social' + (dmUnread() ? ' 💬' + dmUnread() : '')], ['set', 'Réglages']]).map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
+  return '<div class="bar"><b style="display:flex;align-items:center;gap:6px"><img class="lg" src="/icon-192.png" alt="">' + S.pseudo + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">📦 ' + S.packs + '/10</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button></span></div><div class="tabs">' +
+    (S.maint ? [['col', 'Collection'], ['set', 'Réglages']] : [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Social' + (dmUnread() ? ' 💬' + dmUnread() : '')], ['set', 'Réglages']]).map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
 }
 function shopHTML() {
   const packs = Object.entries(S.shop).map(([t, sh]) => {
@@ -247,13 +257,34 @@ function idsOf(t) {
   if (sort === 'fav') ids.sort((a, b) => S.fav.includes(b) - S.fav.includes(a));
   return ids;
 }
+function maintBox() {
+  const mi = S.maintinfo || {}, ms = mi.msgs || [];
+  return '<div class="box mbx" style="border-color:var(--l)"><h2>🔧 Maintenance</h2><p>Nous sommes en maintenance : une mise à jour arrive bientôt. En attendant, tu peux regarder tes cartes (onglet Collection) et utiliser les Réglages. Tes cartes, tes pièces et ton compte ne sont pas touchés, et tout revient dès la fin de la mise à jour.</p>'
+    + (ms.length ? '<p><b>Au programme :</b></p><ul>' + ms.map((m) => '<li>' + esc(m) + '</li>').join('') + '</ul>' : '')
+    + (mi.msg ? '<p>💬 <b>Message du staff :</b> ' + esc(mi.msg) + '</p>' : '')
+    + '<button id="mct">💬 Contacter le staff</button></div>';
+}
+function rbBook() {
+  const L = Object.entries(CAT).filter(([t]) => ((S.rb || {})[t] || 0) > 0);
+  if (!L.length) return '';
+  return '<div class="bkw"><h2>♻️ Renaissances</h2>' + L.map(([t, o]) => {
+    const n = S.rb[t], pages = Math.ceil(n / 9);
+    let h = '';
+    for (let p = 0; p < pages; p++) {
+      h += '<div class="bkk">' + (pages > 1 ? '<small class="bkp">Page ' + (p + 1) + '/' + pages + '</small>' : '') + '<div class="bkg">';
+      for (let i = p * 9 + 1; i <= p * 9 + 9; i++) h += i <= n ? '<div class="bkc"><span class="bke">' + o.icon + '</span><b>♻️ n°' + i + '</b><small>' + esc(o.name) + '</small></div>' : '<div class="bkq"></div>';
+      h += '</div></div>';
+    }
+    return '<details data-d="rb:' + t + '"' + (openT.has('rb:' + t) ? ' open' : '') + '><summary>' + o.icon + ' ' + esc(o.name) + ' <b class="gld">×' + n + '</b></summary>' + h + '</details>';
+  }).join('') + '</div>';
+}
 function colHTML() {
-  return '<div class="row" style="margin-bottom:12px"><select id="so"><option value="def">Tri : normal</option><option value="rar">Tri : rareté</option><option value="fav">Tri : favoris</option></select><button class="g" id="dup">Vendre tous les doublons</button></div><small>Les favoris ⭐ et le 1er exemplaire de chaque carte ne sont jamais vendus en masse. Les cartes prennent +1 % de valeur par jour (max ×2).</small>' +
+  return '<div class="row" style="margin-bottom:12px"><select id="so"><option value="def">Tri : normal</option><option value="rar">Tri : rareté</option><option value="fav">Tri : favoris</option></select><button class="g" id="dup">Vendre tous les doublons</button></div><small>Les favoris ⭐ et le 1er exemplaire de chaque carte ne sont jamais vendus en masse. Les cartes prennent +1 % de valeur par jour (max ×2).</small>' + rbBook() +
     Object.entries(CAT).map(([t, o]) => {
       const n = idsOf(t).filter((id) => S.cards[id]).length, tot = idsOf(t).length;
       if (!n && (o.hidden || (o.until && o.until < Date.now()) || (o.base && o.lv > ((S.lv || {})[o.base] || 1)))) return '';
       const rb = (S.rb || {})[t] || 0;
-      return '<details data-d="' + t + '"' + (rb ? ' class="rb"' : '') + (openT.has(t) ? ' open' : '') + '><summary>' + o.icon + ' ' + esc(o.name) + ' — ' + n + '/' + tot + (rb ? ' · ♻️×' + rb : '') + '</summary>' + (n === tot && tot && t !== 'obj' ? '<button class="g" data-rb="' + t + '" style="margin:8px 0">♻️ Renaissance : la collection se vide, tu gagnes 1/5 de sa valeur' + (((S.lv || {})[o.base || t] || 9) < 5 ? ' · débloque le sachet ' + ((S.lvn || {})[o.base || t] || 'suivant') + ' (nouvelles cartes, prix ×2)' : '') + '</button>' : '') + '<div class="grid" id="g-' + t + '"></div></details>';
+      return '<details data-d="' + t + '"' + (openT.has(t) ? ' open' : '') + '><summary>' + o.icon + ' ' + esc(o.name) + ' — ' + n + '/' + tot + '</summary>' + (n === tot && tot && t !== 'obj' ? '<button class="g" data-rb="' + t + '" style="margin:8px 0">♻️ Renaissance : la collection se vide, tu gagnes 1/5 de sa valeur' + (((S.lv || {})[o.base || t] || 9) < 5 ? ' · débloque le sachet ' + ((S.lvn || {})[o.base || t] || 'suivant') + ' (nouvelles cartes, prix ×2)' : '') + '</button>' : '') + '<div class="grid" id="g-' + t + '"></div></details>';
     }).join('');
 }
 const msg = (t, good) => { const e = $('#e'); if (!e) return; e.style.color = good ? '#3fb950' : ''; e.textContent = t; };
@@ -461,11 +492,12 @@ function dmInit() {
 }
 function setHTML() {
   const th = document.documentElement.dataset.th;
-  return (pushOn ? '' : '<div class="box"><h2>🔔 Notifications</h2><p>Messages du staff, nouveaux objets et nouvelles cartes au Marché, même app fermée. <b>Sur iPhone</b> : ajoute d\'abord le site à l\'écran d\'accueil (Partager → « Sur l\'écran d\'accueil »), ouvre-le depuis l\'icône, puis appuie ici.</p><button id="pn2">Activer</button></div>') +
+  return (pushOn || S.maint ? '' : '<div class="box"><h2>🔔 Notifications</h2><p>Messages du staff, nouveaux objets et nouvelles cartes au Marché, même app fermée. <b>Sur iPhone</b> : ajoute d\'abord le site à l\'écran d\'accueil (Partager → « Sur l\'écran d\'accueil »), ouvre-le depuis l\'icône, puis appuie ici.</p><button id="pn2">Activer</button></div>') +
     '<div class="box"><h2>Apparence</h2><select id="tsel"><option value="dark"' + (th === 'dark' ? ' selected' : '') + '>Sombre</option><option value="light"' + (th === 'light' ? ' selected' : '') + '>Clair</option></select></div>' +
-    '<form class="box" id="frn" style="display:grid;gap:10px;max-width:400px"><h2>Pseudo</h2>' + (S.renames ? '<p>Tu as utilisé ton changement gratuit. Pour changer à nouveau, fais une demande au staff (« Contacter un staff » ci-dessous).</p>' : '<p>Tu as un changement de pseudo gratuit. Ensuite, il faudra le demander au staff.</p><input id="rn2" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button>') + '</form>' +
+    (S.maint ? '' : '<form class="box" id="frn" style="display:grid;gap:10px;max-width:400px"><h2>Pseudo</h2>' + (S.renames ? '<p>Tu as utilisé ton changement gratuit. Pour changer à nouveau, fais une demande au staff (« Contacter un staff » ci-dessous).</p>' : '<p>Tu as un changement de pseudo gratuit. Ensuite, il faudra le demander au staff.</p><input id="rn2" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button>') + '</form>') +
     '<form class="box" id="fpw" style="display:grid;gap:10px;max-width:400px"><h2>Mot de passe</h2><input id="po" type="password" placeholder="Ancien mot de passe" autocomplete="current-password" required><input id="pn" type="password" placeholder="Nouveau mot de passe" autocomplete="new-password" required><button>Changer</button></form>' +
-    '<form class="box" id="frp" style="display:grid;gap:10px"><h2>Contacter un staff</h2><textarea id="rt" rows="4" maxlength="500" placeholder="Signale un problème, un bug ou un joueur" required></textarea><button>Envoyer le signalement</button></form>';
+    '<form class="box" id="frp" style="display:grid;gap:10px"><h2>Contacter un staff</h2><textarea id="rt" rows="4" maxlength="500" placeholder="Signale un problème, un bug ou un joueur" required></textarea><button>Envoyer le signalement</button></form>' +
+    '<div class="box"><h2>Compte</h2><p>Tu seras déconnecté de ton compte sur cet appareil.</p><button class="g" id="lo">Quitter</button></div>';
 }
 function rebirthFlow(t) {
   const o = CAT[t], tot = idsOf(t).length, base = o.base || t, lv = (S.lv || {})[base] || 9;
@@ -512,10 +544,11 @@ function rebirthFlow(t) {
 }
 function playerView() {
   clearInterval(timer);
-  if (S.maint) tab = 'col';
+  if (S.maint && tab !== 'col' && tab !== 'set') tab = 'col';
   app.classList.toggle('mt', !!S.maint);
-  app.innerHTML = head() + (S.maint ? '<div class="box" style="border-color:var(--l)"><h2>🔧 Maintenance</h2><p>Nous sommes en maintenance, une mise à jour arrive bientôt. Tu peux seulement regarder tes cartes.</p></div>' : '') + { shop: shopHTML, col: colHTML, mk: mkHTML, jeu: jeuHTML, rk: rkHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
-  $('#lo').onclick = logout; $('#th').onclick = flip;
+  app.innerHTML = head() + (S.maint ? maintBox() : '') + { shop: shopHTML, col: colHTML, mk: mkHTML, jeu: jeuHTML, rk: rkHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
+  $('#th').onclick = flip; if ($('#lo')) $('#lo').onclick = logout;
+  if ($('#mct')) $('#mct').onclick = () => { tab = 'set'; playerView(); setTimeout(() => { const r = $('#rt'); if (r) { r.scrollIntoView({ block: 'center' }); r.focus(); } }, 0); };
   if (isOp) $('#ob').onclick = () => { asP = false; localStorage.asp = '0'; start(); };
   $('#bl').onclick = inbox;
   app.querySelectorAll('[data-t]').forEach((b) => (b.onclick = () => { tab = b.dataset.t; playerView(); }));
@@ -639,7 +672,7 @@ function playerView() {
   } else {
     if ($('#pn2')) $('#pn2').onclick = () => run(async () => { await enablePush(); playerView(); msg('Notifications activées', true); });
     $('#tsel').onchange = (e) => run(async () => { setTheme(e.target.value); await api('settings', { theme: e.target.value }); });
-    $('#frn').onsubmit = (e) => { e.preventDefault(); if (!$('#rn2') || !confirm('Un seul changement gratuit. Continuer ?')) return; run(async () => { setS((await api('rename', { name: $('#rn2').value })).state); playerView(); msg('Pseudo changé', true); }); };
+    if ($('#frn')) $('#frn').onsubmit = (e) => { e.preventDefault(); if (!$('#rn2') || !confirm('Un seul changement gratuit. Continuer ?')) return; run(async () => { setS((await api('rename', { name: $('#rn2').value })).state); playerView(); msg('Pseudo changé', true); }); };
     $('#fpw').onsubmit = (e) => { e.preventDefault(); run(async () => { await api('settings', { old: $('#po').value, pw: $('#pn').value }); msg('Mot de passe changé', true); $('#fpw').reset(); }); };
     $('#frp').onsubmit = (e) => { e.preventDefault(); run(async () => { await api('report', { text: $('#rt').value }); msg('Signalement envoyé au staff', true); $('#frp').reset(); }); };
   }
@@ -852,7 +885,7 @@ async function opView(m) {
     '<div class="box"><h2>Joueurs (' + users.length + ')</h2>' + list + '</div>' +
     '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + ' — 🪙 ' + u.coins + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="ca" multiple size="6" aria-label="Cartes"></select><small id="ch"></small><button>Valider</button><div class="err" id="e"></div></form>' +
     '<form class="box" id="fm" style="display:grid;gap:10px"><h2>Envoyer une notification</h2><select id="mt"><option value="*">Tous les joueurs</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="mx" maxlength="200" placeholder="Message" required><button>Envoyer</button><div class="err" id="e5"></div></form>' +
-    '<div class="box"><h2>🔧 Maintenance</h2><p>' + (j.maint ? 'ACTIVE : les joueurs voient « maintenance » et peuvent seulement regarder leurs cartes.' : 'Désactivée.') + '</p><button id="mnt" class="' + (j.maint ? '' : 'g') + '">' + (j.maint ? 'Désactiver la maintenance' : 'Activer la maintenance (tout verrouiller)') + '</button><div class="err" id="e7"></div></div>' +
+    '<div class="box"><h2>🔧 Maintenance</h2><p>' + (j.maint ? 'ACTIVE : les joueurs voient « maintenance », peuvent seulement regarder leurs cartes, aller dans Réglages et te contacter.' : 'Désactivée.') + '</p><p><small>Explication montrée aux joueurs (facultatif, plusieurs choix possibles) :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible">' + j.maintPresets.map((p) => '<button type="button" class="pill mp' + ((j.maintinfo.presets || []).includes(p.k) ? ' on' : '') + '" data-mp="' + p.k + '">' + p.label + '</button>').join('') + '</div><textarea id="mmsg" rows="2" maxlength="300" placeholder="Message du staff (facultatif)" style="margin:8px 0"></textarea><div class="row"><button id="mnt" class="' + (j.maint ? '' : 'g') + '">' + (j.maint ? 'Désactiver la maintenance' : 'Activer la maintenance (tout verrouiller)') + '</button>' + (j.maint ? '<button class="g" id="mnu">Mettre à jour le message</button>' : '') + '</div><div class="err" id="e7"></div></div>' +
     '<form class="box" id="fr" style="display:grid;gap:10px"><h2>Changer le pseudo d\'un joueur</h2><select id="ru" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="rnn" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button><div class="err" id="e6"></div></form>' +
     '<div class="box"><h2>Signalements (' + reports.length + ')</h2>' + reps + '</div>';
   app.querySelectorAll('.rt').forEach((el, i) => (el.textContent = reports[i].text));
@@ -876,7 +909,11 @@ async function opView(m) {
   $('#fo').onsubmit = act('e4', () => api('addobj', { name: $('#on').value, rarity: $('#or').value, price: $('#op').value, stock: $('#os').value }), 'Objet ajouté à la boutique');
   $('#f').onsubmit = act('e', () => api('give', { pseudo: $('#u').value, mode: $('#m').value, coins: $('#co').value, packs: $('#pk').value, cards: [...$('#ca').selectedOptions].map((o) => o.value) }), 'Fait');
   $('#fm').onsubmit = act('e5', () => api('msg', { pseudo: $('#mt').value, text: $('#mx').value }), 'Notification envoyée');
-  $('#mnt').onclick = act('e7', () => api('maint', { on: !j.maint }), j.maint ? 'Maintenance désactivée' : 'Maintenance activée');
+  const mpSel = () => [...app.querySelectorAll('.mp.on')].map((b) => b.dataset.mp);
+  app.querySelectorAll('.mp').forEach((b) => (b.onclick = () => b.classList.toggle('on')));
+  $('#mmsg').value = (j.maintinfo || {}).msg || '';
+  $('#mnt').onclick = act('e7', () => api('maint', { on: !j.maint, presets: mpSel(), msg: $('#mmsg').value }), j.maint ? 'Maintenance désactivée' : 'Maintenance activée');
+  if ($('#mnu')) $('#mnu').onclick = act('e7', () => api('maint', { on: true, presets: mpSel(), msg: $('#mmsg').value }), 'Message de maintenance mis à jour');
   $('#fr').onsubmit = act('e6', () => api('rename', { pseudo: $('#ru').value, name: $('#rnn').value }), 'Pseudo changé');
   app.querySelectorAll('[data-du]').forEach((b) => (b.onclick = (e) => { if (confirm('Supprimer définitivement le compte ' + b.dataset.du + ' ?')) act('e', () => api('deluser', { pseudo: b.dataset.du }), 'Compte supprimé')(e); }));
   // --- Catégories (au lieu d'une seule longue page) : 5 onglets qui tiennent sur 2 lignes maximum, sans glisser
