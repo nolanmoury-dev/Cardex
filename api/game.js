@@ -43,6 +43,16 @@ async function bcast(text, except) {
 }
 const OP_ID = (process.env.OPERATOR_ID || 'operateur').toLowerCase();
 const OP_NAME = 'Noln_mry';
+// Messages de maintenance prêts à l'emploi (un par onglet du bas) ; le staff peut en cocher plusieurs et ajouter un message libre.
+const MAINT_PRESETS = {
+  shop: ['🛒 Boutique', 'Mise à jour de la Boutique : sachets, prix ou objets.'],
+  col: ['🗂️ Collection', 'Mise à jour des collections : nouvelles cartes ou nouvelles catégories.'],
+  mk: ['🏪 Marché', 'Mise à jour du Marché : annonces et échanges.'],
+  jeu: ['🎲 Jeux', 'Mise à jour des Jeux.'],
+  rk: ['🏆 Social', 'Mise à jour du Social : classement et messages.'],
+  set: ['⚙️ Réglages', 'Mise à jour des Réglages.'],
+};
+const maintInfo = async () => { const i = (await redis.get('maintinfo')) || {}; return { msgs: (i.presets || []).filter((k) => MAINT_PRESETS[k]).map((k) => MAINT_PRESETS[k][1]), msg: i.msg || '' }; };
 const cn = (c) => c.slice(c.indexOf(':') + 1);
 async function checkName(nn, u) {
   if (!/^[A-Za-z0-9_]{3,20}$/.test(nn)) return 'Pseudo : 3 à 20 lettres, chiffres ou _';
@@ -369,7 +379,7 @@ const handler = async (req, res) => {
         const names = (await redis.smembers('users')).sort();
         const list = names.length ? await redis.mget(...names.map(key)) : [];
         const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards }; });
-        return ok({ maint: !!(await redis.get('maint')), users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], themes: cat });
+        return ok({ maint: !!(await redis.get('maint')), maintinfo: (await redis.get('maintinfo')) || { presets: [], msg: '' }, maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], themes: cat });
       }
       if (b.action === 'shop') {
         if (!cat[b.theme] || b.theme === 'obj') return fail('Thème inconnu');
@@ -460,7 +470,12 @@ const handler = async (req, res) => {
         const k = String(b.k || ''); if (!k.startsWith('dm:')) return fail('Conversation introuvable');
         return ok({ thread: ((await redis.get(k)) || []).slice(-200) });
       }
-      if (b.action === 'maint') { await redis.set('maint', !!b.on); return ok({ done: true }); }
+      if (b.action === 'maint') {
+        await redis.set('maint', !!b.on);
+        if (b.on) await redis.set('maintinfo', { presets: (Array.isArray(b.presets) ? b.presets : []).filter((k) => MAINT_PRESETS[k]).slice(0, 6), msg: String(b.msg || '').trim().slice(0, 300) });
+        else await redis.del('maintinfo');
+        return ok({ done: true });
+      }
       if (b.action === 'rename') {
         const u = await redis.get(key(String(b.pseudo || ''))), nn = String(b.name || '').trim();
         if (!u) return fail('Joueur introuvable');
@@ -491,7 +506,7 @@ const handler = async (req, res) => {
     u.bought ||= {}; u.since ||= {}; u.fav ||= []; u.notifs ||= []; u.inbox ||= [];
     tick(u);
     const maintOn = !!(await redis.get('maint')) && u.pseudo !== OP_NAME;
-    if (maintOn && b.action !== 'me') return fail('🔧 Maintenance : une mise à jour arrive bientôt');
+    if (maintOn && !['me', 'report', 'settings'].includes(b.action)) return fail('🔧 Maintenance : une mise à jour arrive bientôt');
     const shAll = await shopOf(cat), sh = visShop(u, shAll, cat);
     let mk = (await redis.get('market')) || [];
     let extra = {};
@@ -541,7 +556,7 @@ const handler = async (req, res) => {
       const text = String(b.text || '').trim().slice(0, 500);
       if (text.length < 5) return fail('Décris le problème (5 caractères minimum)');
       const r = (await redis.get('reports')) || [];
-      r.unshift({ id: Date.now(), pseudo: u.pseudo, text, t: Date.now() });
+      r.unshift({ id: Date.now(), pseudo: u.pseudo, text: (maintOn ? '🔧 [Maintenance] ' : '') + text, t: Date.now() });
       await redis.set('reports', r.slice(0, 100));
       return ok({ done: true });
     } else if (b.action === 'settings') {
@@ -810,7 +825,7 @@ const handler = async (req, res) => {
 
     if (b.action === 'me') { extra = { notifs: u.notifs }; u.notifs = []; }
     await redis.set(key(u.pseudo), u);
-    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), maint: maintOn } });
+    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), maint: maintOn, maintinfo: maintOn ? await maintInfo() : null } });
   } catch (e) {
     console.error(e);
     return fail('Erreur serveur : ' + e.message, 500);
