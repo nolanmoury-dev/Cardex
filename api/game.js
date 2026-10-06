@@ -46,6 +46,13 @@ async function renameUser(u, nn, count) {
   await redis.del('u:' + old.toLowerCase()); await redis.srem('users', old); await redis.sadd('users', nn);
   u.pseudo = nn; if (count) u.renames = (u.renames || 0) + 1;
   const mk = (await redis.get('market')) || [];
+  for (const [lk, e] of Object.entries(u.dm || {})) { // migrer les conversations vers le nouveau pseudo
+    const ok = dmKey(old, e.p), nk = dmKey(nn, e.p), th = (await redis.get(ok)) || [];
+    await redis.set(nk, th.map((m) => (m.f === old ? { ...m, f: nn } : m))); await redis.del(ok); await redis.srem('dms', ok); await redis.sadd('dms', nk);
+    const o = await redis.get('u:' + e.p.toLowerCase());
+    if (o && o.dm) { const x = o.dm[old.toLowerCase()]; delete o.dm[old.toLowerCase()]; if (x) o.dm[nn.toLowerCase()] = { ...x, p: nn, f: x.f === old ? nn : x.f }; await redis.set('u:' + e.p.toLowerCase(), o); }
+  }
+  u.dm = Object.fromEntries(Object.entries(u.dm || {}).map(([lk, e]) => [lk, { ...e, f: e.f === old ? nn : e.f }]));
   if (mk.some((x) => x.seller === old || x.to === old)) await redis.set('market', mk.map((x) => ({ ...x, seller: x.seller === old ? nn : x.seller, ...(x.to === old ? { to: nn } : {}) })));
 }
 const OP_CODE = process.env.OPERATOR_CODE || '100823';
@@ -82,6 +89,31 @@ function note(u, text, quiet) {
   }
   if ((u.subs || []).length) pend.push([u.subs, text]);
 }
+// --- Messages privés : fil "dm:a|b" (200 derniers messages) ; chaque joueur garde un résumé dans u.dm = { pseudo_minuscule: { p, t, x, f, n } } (n = non lus)
+const dmKey = (a, b) => 'dm:' + [a.toLowerCase(), b.toLowerCase()].sort().join('|');
+async function dmPush(a, b, text, sys) {
+  const k = dmKey(a.pseudo, b.pseudo), th = (await redis.get(k)) || [], t = Date.now();
+  th.push({ id: t + Math.random().toString(36).slice(2, 5), f: a.pseudo, t, x: text, ...(sys ? { s: 1 } : {}) });
+  await redis.set(k, th.slice(-200)); await redis.sadd('dms', k);
+  const slot = (o, other, unread) => {
+    o.dm ||= {};
+    const e = (o.dm[other.pseudo.toLowerCase()] ||= { p: other.pseudo, n: 0 });
+    e.p = other.pseudo; e.t = t; e.x = text.slice(0, 80); e.f = a.pseudo; if (unread) e.n = (e.n || 0) + 1;
+  };
+  slot(a, b, false); slot(b, a, true);
+}
+// notification légère (toast + push) sans remplir la boîte 🔔
+function ping(u, text) {
+  (u.notifs ||= []).push(text);
+  if ((u.subs || []).length) pend.push([u.subs, text]);
+}
+async function dmDrop(u) { // suppression d'un compte : fils et résumés chez les autres
+  for (const [, e] of Object.entries(u.dm || {})) {
+    const k = dmKey(u.pseudo, e.p); await redis.del(k); await redis.srem('dms', k);
+    const o = await redis.get('u:' + e.p.toLowerCase());
+    if (o && o.dm) { delete o.dm[u.pseudo.toLowerCase()]; await redis.set('u:' + e.p.toLowerCase(), o); }
+  }
+}
 function tick(u) {
   const now = Date.now();
   if (u.packs >= MAXP) { u.last = now; return; }
@@ -91,15 +123,22 @@ function tick(u) {
 }
 const shopOf = async (cat) => {
   const s = (await redis.get('shop')) || {};
-  return Object.fromEntries(Object.entries(cat).filter(([, o]) => live(o)).map(([t]) => [t, { discount: int(s[t] && s[t].discount, 90), blocked: !!(s[t] && s[t].blocked) }]));
+  return Object.fromEntries(Object.entries(cat).filter(([, o]) => live(o)).map(([t]) => [t, { discount: int(s[(cat[t] && cat[t].base) || t] && s[(cat[t] && cat[t].base) || t].discount, 90), blocked: !!(s[(cat[t] && cat[t].base) || t] && s[(cat[t] && cat[t].base) || t].blocked) }]));
 };
-const price = (sh) => Math.round((PRICE * (100 - sh.discount)) / 100);
+// Niveaux : chaque collection de base (foot…) a 5 niveaux = 5 collections différentes (foot, foot2…foot5).
+// Niveau d'un joueur sur une ligne = 1 + son nombre total de renaissances sur cette ligne (5 max). Le prix du sachet double à chaque niveau : 100, 200, 400, 800, 1600.
+const LVMAX = 5, LINES = Object.keys(T0).filter((t) => Object.values(T0).some((o) => o.base === t));
+const lvOf = (cat, t) => (cat[t] && cat[t].lv) || 1, baseOf = (cat, t) => (cat[t] && cat[t].base) || t;
+const lineLv = (u, b) => Math.min(LVMAX, 1 + [b, ...Array.from({ length: LVMAX - 1 }, (_, i) => b + (i + 2))].reduce((a, k) => a + (((u && u.rb) || {})[k] || 0), 0));
+const price = (sh, t, cat) => Math.round((PRICE * 2 ** (lvOf(cat, t) - 1) * (100 - sh.discount)) / 100);
+// boutique d'un joueur : un seul sachet par ligne (celui de son niveau) ; les anciens ne restent que s'il en reste d'achetés
+const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t); return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
 const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo), inbox: u.inbox || [],
-  pseudo: u.pseudo, renames: u.renames || 0, rb: u.rb || {}, coins: u.coins, packs: u.packs, bought: u.bought || {},
+  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, renames: u.renames || 0, rb: u.rb || {}, coins: u.coins, packs: u.packs, bought: u.bought || {},
   next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), cards: u.cards, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
-  shop: Object.fromEntries(Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s) }])),
+  shop: Object.fromEntries(Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s, t, cat), full: PRICE * 2 ** (lvOf(cat, t) - 1), lvl: lvOf(cat, t) }])), lv: Object.fromEntries(LINES.map((b) => [b, lineLv(u, b)])),
   objs: cu.objs.filter((x) => !x.gone), themes: cat,
 });
 function draw(o, t) {
@@ -129,11 +168,11 @@ const LV = {
 async function botTurn(u, cat, cu, sh, mk) {
   const P = LV[u.bot], rnd = (a, c) => a + Math.random() * (c - a), V = (id) => val(u, id, cat, cu), pick = (a) => a[Math.floor(Math.random() * a.length)];
   const save = async (v) => redis.set(key(v.pseudo), v);
-  tick(u);
+  tick(u); sh = visShop(u, sh, cat);
   // 1. sachets : le fort n'en achète que s'ils sont rentables (valeur moyenne d'un sachet ~46 coins)
   const themes = Object.keys(sh).filter((t) => !sh[t].blocked && t !== 'obj');
   if (themes.length) {
-    const t = pick(themes), p = price(sh[t]);
+    const t = pick(themes), p = price(sh[t], t, cat);
     if (u.coins >= p + 50 && (P.rb < 0.5 || u.bot === 'nul' ? Math.random() < 0.3 : p <= 45)) { u.coins -= p; u.bought[t] = (u.bought[t] || 0) + 1; }
   }
   for (let i = 0; i < 12 && (u.packs > 0 || Object.values(u.bought).some((n) => n > 0)); i++) {
@@ -153,7 +192,7 @@ async function botTurn(u, cat, cu, sh, mk) {
     const v = await redis.get(key(x.seller));
     if (ratio >= P.tm || (u.bot === 'nul' && Math.random() < 0.5)) {
       mk = mk.filter((y) => y !== x); rm(u, x.want, 1); add(u, x.card, 1);
-      if (v) { add(v, x.want, 1); note(v, '🔁 ' + u.pseudo + ' a accepté ton échange : tu reçois ' + cn(x.want)); await save(v); }
+      if (v) { add(v, x.want, 1); await dmPush(u, v, '✅ Échange accepté : ' + cn(x.card) + ' contre ' + cn(x.want), true); note(v, '🔁 ' + u.pseudo + ' a accepté ton échange : tu reçois ' + cn(x.want)); await save(v); }
     } else if (x.to === u.pseudo && ratio >= P.tm * 0.7 && Math.random() < P.ct) {
       x.ask = Math.max(1, Math.ceil((give - get) * 1.1));
       if (v) { note(v, '💬 ' + u.pseudo + ' demande +' + x.ask + ' 🪙 en plus pour ' + cn(x.card) + ' contre ' + cn(x.want)); await save(v); }
@@ -184,7 +223,7 @@ async function botTurn(u, cat, cu, sh, mk) {
   // 5. offres d'échange ouvertes : un doublon contre une carte manquante de même rareté
   if (P.off && mine().filter((x) => x.want).length < P.off && Math.random() < 0.3) {
     const d = Object.keys(u.cards).find((id) => u.cards[id] > 1 && !u.fav.includes(id) && !id.startsWith('obj:'));
-    const r = d && rarOf(cat, d), m = r && pick(Object.keys(cat).filter((t) => t !== 'obj' && live(cat[t])).flatMap((t) => cat[t][r].map((n) => t + ':' + n)).filter((id) => !u.cards[id]).concat([null]));
+    const r = d && rarOf(cat, d), m = r && pick(Object.keys(cat).filter((t) => t !== 'obj' && !cat[t].base && live(cat[t])).flatMap((t) => cat[t][r].map((n) => t + ':' + n)).filter((id) => !u.cards[id]).concat([null]));
     if (m) { rm(u, d, 1); mk.push({ id: crypto.randomBytes(6).toString('hex'), seller: u.pseudo, card: d, want: m, price: 0, to: null, t: Date.now() }); }
   }
   return mk;
@@ -395,6 +434,16 @@ const handler = async (req, res) => {
         if (!n) return fail('Joueur introuvable');
         return ok({ done: true, n });
       }
+      if (b.action === 'dmlist') {
+        const ks = await redis.smembers('dms'), ths = ks.length ? await redis.mget(...ks) : [];
+        const list = ks.map((k, i) => { const th = ths[i] || []; const l = th[th.length - 1]; return l && { k, a: k.slice(3).split('|'), n: th.length, t: l.t, x: l.x.slice(0, 80), f: l.f }; }).filter(Boolean).sort((x, y) => y.t - x.t).slice(0, 200);
+        const names = [...new Set(list.flatMap((c) => c.a))], us = names.length ? await redis.mget(...names.map((n) => 'u:' + n)) : [], nm = Object.fromEntries(names.map((n, i) => [n, (us[i] && us[i].pseudo) || n]));
+        return ok({ convs: list.map((c) => ({ ...c, a: c.a.map((n) => nm[n]) })) });
+      }
+      if (b.action === 'dmview') {
+        const k = String(b.k || ''); if (!k.startsWith('dm:')) return fail('Conversation introuvable');
+        return ok({ thread: ((await redis.get(k)) || []).slice(-200) });
+      }
       if (b.action === 'maint') { await redis.set('maint', !!b.on); return ok({ done: true }); }
       if (b.action === 'rename') {
         const u = await redis.get(key(String(b.pseudo || ''))), nn = String(b.name || '').trim();
@@ -409,6 +458,7 @@ const handler = async (req, res) => {
       if (b.action === 'deluser') {
         const u = await redis.get(key(String(b.pseudo || '')));
         if (!u) return fail('Joueur introuvable');
+        await dmDrop(u);
         await redis.del(key(u.pseudo)); await redis.srem('users', u.pseudo);
         await redis.set('market', ((await redis.get('market')) || []).filter((x) => x.seller !== u.pseudo));
         return ok({ done: true });
@@ -426,17 +476,19 @@ const handler = async (req, res) => {
     tick(u);
     const maintOn = !!(await redis.get('maint')) && u.pseudo !== OP_NAME;
     if (maintOn && b.action !== 'me') return fail('🔧 Maintenance : une mise à jour arrive bientôt');
-    const sh = await shopOf(cat);
+    const shAll = await shopOf(cat), sh = visShop(u, shAll, cat);
     let mk = (await redis.get('market')) || [];
     let extra = {};
     const pack = () => {
-      if (!sh[b.theme]) return 'Ce sachet n\'existe pas ou n\'est plus disponible';
-      if (sh[b.theme].blocked) return 'Ce sachet est bloqué pour le moment';
+      const s = sh[b.theme] || (u.bought[b.theme] > 0 && shAll[b.theme]);
+      if (!s) return 'Ce sachet n\'existe pas ou n\'est plus disponible';
+      if (s.blocked) return 'Ce sachet est bloqué pour le moment';
     };
 
     if (b.action === 'buy') {
       const e = pack(); if (e) return fail(e);
-      const p = price(sh[b.theme]);
+      if (sh[b.theme].nobuy) return fail("Ce sachet n'est plus en vente : passe au niveau supérieur");
+      const p = price(sh[b.theme], b.theme, cat);
       if (u.coins < p) return fail('Pas assez de coins');
       u.coins -= p;
       u.bought[b.theme] = (u.bought[b.theme] || 0) + 1;
@@ -528,12 +580,15 @@ const handler = async (req, res) => {
       if (!ids.length || ids.some((id) => !u.cards[id])) return fail('Collection incomplète');
       const gain = Math.floor(ids.reduce((a, id) => a + val(u, id, cat, cu), 0) / 5);
       for (const id of Object.keys(u.cards)) if (id.startsWith(t + ':')) rm(u, id, u.cards[id]);
-      (u.rb ||= {})[t] = (u.rb[t] || 0) + 1; u.coins += gain; extra = { gain };
+      const L0 = lineLv(u, baseOf(cat, t));
+      (u.rb ||= {})[t] = (u.rb[t] || 0) + 1; u.coins += gain;
+      const L1 = lineLv(u, baseOf(cat, t)), nt = L1 > L0 ? (L1 > 1 ? baseOf(cat, t) + L1 : baseOf(cat, t)) : null;
+      extra = { gain, lv: L1, unlocked: nt && cat[nt] ? cat[nt].name : null };
     } else if (b.action === 'rank') {
       const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
       extra = { rank: list.filter(Boolean).map((v) => {
         const n = { l: 0, e: 0, r: 0, c: 0 };
-        for (const id of Object.keys(v.cards || {})) { const r = rarOf(cat, id); if (n[r] != null && !id.startsWith('obj:')) n[r]++; }
+        for (const [id, q] of Object.entries(v.cards || {})) { const r = rarOf(cat, id); if (n[r] != null && !id.startsWith('obj:')) n[r] += r === 'l' ? q : 1; } // légendaires : chaque exemplaire compte (2 fois la même = 2 légendaires)
         return { pseudo: v.pseudo, ...n, rb: Object.values(v.rb || {}).reduce((a, x) => a + x, 0), coins: v.coins };
       }).sort((a, b) => b.rb - a.rb || b.l - a.l || b.e - a.e || b.r - a.r || b.c - a.c || b.coins - a.coins).slice(0, [5, 10].includes(+b.n) ? +b.n : 10000) };
     } else if (b.action === 'vapid') {
@@ -576,7 +631,7 @@ const handler = async (req, res) => {
           if (u.packs < 1) return fail("Tu n'as aucun sachet gratuit");
           tick(v); u.packs -= 1; v.packs += 1; what = 'un sachet gratuit';
         } else {
-          if (t === 'obj' || !sh[t]) return fail("Ce sachet n'existe pas");
+          if (t === 'obj' || !shAll[t]) return fail("Ce sachet n'existe pas");
           if (!(u.bought[t] > 0)) return fail("Tu n'as pas de sachet " + cat[t].name);
           u.bought[t] -= 1; v.bought[t] = (v.bought[t] || 0) + 1; what = 'un sachet ' + cat[t].name;
         }
@@ -593,9 +648,26 @@ const handler = async (req, res) => {
         const names = Object.entries(cnt).map(([id, n]) => cn(id) + (n > 1 ? ' ×' + n : ''));
         what = ids.length === 1 ? 'la carte ' + names[0] : 'un lot de ' + ids.length + ' cartes (' + names.join(', ') + ')';
       }
+      await dmPush(u, v, '🎁 Cadeau : ' + what + (txt ? ' — « ' + txt + ' »' : ''), true);
       note(v, '🎁 ' + u.pseudo + " t'a offert " + what + (txt ? ' — « ' + txt + ' »' : ''));
       await redis.set(key(v.pseudo), v);
       extra = { gifted: what, to: v.pseudo };
+    } else if (b.action === 'dmsend') {
+      const v = await redis.get(key(String(b.to || '')));
+      if (!v || v.pseudo === u.pseudo) return fail('Joueur introuvable');
+      const txt = String(b.text || '').replace(/\s+/g, ' ').trim().slice(0, 500);
+      if (!txt) return fail('Message vide');
+      const now = Date.now(); u.msgT = (u.msgT || []).filter((x) => now - x < 60000);
+      if (u.msgT.length >= 12) return fail('Doucement ! 12 messages par minute maximum');
+      u.msgT.push(now);
+      await dmPush(u, v, txt, false);
+      ping(v, '💬 ' + u.pseudo + ' : ' + (txt.length > 90 ? txt.slice(0, 90) + '…' : txt));
+      await redis.set(key(v.pseudo), v);
+    } else if (b.action === 'dmget') {
+      const o = await redis.get(key(String(b.with || '')));
+      if (!o) return fail('Joueur introuvable');
+      const e = (u.dm || {})[o.pseudo.toLowerCase()]; if (e) e.n = 0;
+      extra = { thread: ((await redis.get(dmKey(u.pseudo, o.pseudo))) || []).slice(-100), with: o.pseudo };
     } else if (b.action === 'tradeoffer') {
       const gv = b.give, w = String(b.want || '');
       if (!u.cards[gv]) return fail('Carte non possédée');
@@ -611,7 +683,7 @@ const handler = async (req, res) => {
       rm(u, gv, 1);
       mk.push({ id: crypto.randomBytes(6).toString('hex'), seller: u.pseudo, card: gv, want: w, price: 0, to, t: Date.now() });
       await redis.set('market', mk);
-      if (tv) { note(tv, '🔁 ' + u.pseudo + ' te propose : ' + cn(gv) + ' contre ' + cn(w)); await redis.set(key(tv.pseudo), tv); }
+      if (tv) { await dmPush(u, tv, '🔁 Proposition d\'échange : ' + cn(gv) + ' contre ' + cn(w), true); note(tv, '🔁 ' + u.pseudo + ' te propose : ' + cn(gv) + ' contre ' + cn(w)); await redis.set(key(tv.pseudo), tv); }
       else await bcast('🔁 Nouvel échange : ' + cn(gv) + ' contre ' + cn(w), u.pseudo);
     } else if (b.action === 'tradeaccept') {
       const x = mk.find((y) => y.id === b.id && y.want);
@@ -631,7 +703,7 @@ const handler = async (req, res) => {
       if (ask < 1) return fail('Montant invalide');
       x.ask = ask; await redis.set('market', mk);
       const v = await redis.get(key(x.seller));
-      if (v) { note(v, '💬 ' + u.pseudo + ' demande +' + ask + ' 🪙 en plus pour ' + cn(x.card) + ' contre ' + cn(x.want)); await redis.set(key(v.pseudo), v); }
+      if (v) { await dmPush(u, v, '💬 Contre-offre : +' + ask + ' 🪙 en plus pour ' + cn(x.card) + ' contre ' + cn(x.want), true); note(v, '💬 ' + u.pseudo + ' demande +' + ask + ' 🪙 en plus pour ' + cn(x.card) + ' contre ' + cn(x.want)); await redis.set(key(v.pseudo), v); }
     } else if (b.action === 'tradeconfirm') {
       const x = mk.find((y) => y.id === b.id && y.want && y.seller === u.pseudo && y.ask);
       if (!x) return fail('Contre-offre introuvable');
@@ -640,13 +712,13 @@ const handler = async (req, res) => {
       if (!v || !v.cards[x.want]) return fail("Ce joueur n'a plus la carte demandée : retire l'offre");
       mk = mk.filter((y) => y !== x); await redis.set('market', mk);
       u.coins -= x.ask; rm(v, x.want, 1); add(u, x.want, 1); add(v, x.card, 1); v.coins += x.ask;
-      note(v, '✅ ' + u.pseudo + ' a accepté ta contre-offre (+' + x.ask + ' 🪙) : tu reçois ' + cn(x.card)); await redis.set(key(v.pseudo), v);
+      await dmPush(u, v, '✅ Contre-offre acceptée (+' + x.ask + ' 🪙) : ' + cn(x.card) + ' contre ' + cn(x.want), true); note(v, '✅ ' + u.pseudo + ' a accepté ta contre-offre (+' + x.ask + ' 🪙) : tu reçois ' + cn(x.card)); await redis.set(key(v.pseudo), v);
     } else if (b.action === 'tradedecline') {
       const x = mk.find((y) => y.id === b.id && y.want && y.to === u.pseudo);
       if (!x) return fail('Offre introuvable');
       mk = mk.filter((y) => y !== x); await redis.set('market', mk);
       const v = await redis.get(key(x.seller));
-      if (v) { add(v, x.card, 1); note(v, '❌ ' + u.pseudo + ' a refusé ton échange : ta carte t\'est rendue'); await redis.set(key(v.pseudo), v); }
+      if (v) { add(v, x.card, 1); await dmPush(u, v, '❌ Échange refusé : ' + cn(x.card) + ' contre ' + cn(x.want), true); note(v, '❌ ' + u.pseudo + ' a refusé ton échange : ta carte t\'est rendue'); await redis.set(key(v.pseudo), v); }
     } else if (b.action === 'unlist') {
       const x = mk.find((y) => y.id === b.id && y.seller === u.pseudo);
       if (!x) return fail('Annonce introuvable');
@@ -671,7 +743,7 @@ const handler = async (req, res) => {
 
     if (b.action === 'me') { extra = { notifs: u.notifs }; u.notifs = []; }
     await redis.set(key(u.pseudo), u);
-    return ok({ ...extra, state: { ...view(u, sh, cat, cu, mk), maint: maintOn } });
+    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), maint: maintOn } });
   } catch (e) {
     console.error(e);
     return fail('Erreur serveur : ' + e.message, 500);

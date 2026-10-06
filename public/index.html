@@ -79,6 +79,29 @@ main{padding:8px 8px calc(84px + env(safe-area-inset-bottom))}
 @media(max-width:600px){.grid{grid-template-columns:repeat(4,1fr);gap:6px}.card{border-width:2px;border-radius:8px}.card .ct{font-size:11px;padding:4px 2px 0;min-height:2.6em}.card .rn{font-size:9px;padding:0 2px 3px}.card .ac button{font-size:9px;padding:2px;min-height:28px}.card .n{font-size:10px}.tabs button{font-size:11px}}
 .pills{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:8px;-webkit-overflow-scrolling:touch}.pills::-webkit-scrollbar{display:none}.pill{flex:none;padding:5px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font-size:12px}.pill.on{background:var(--l);border-color:var(--l);color:#000}.rt{width:100%;border-collapse:collapse;font-size:12px}.rt th,.rt td{padding:4px 3px;text-align:center;border-top:1px solid var(--line)}.rt .pn{text-align:left;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rt .me{background:var(--cb);font-weight:700}details.rb{border-color:var(--l)}details.rb>summary{color:var(--l)}
 .lg{width:28px;height:28px;object-fit:contain;border-radius:6px}.tr{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.mt .ac,.mt [data-rb],.mt #dup{display:none!important}.tr .card{width:78px}.tr small{display:block;text-align:center}
+
+.pills{flex-wrap:wrap;overflow:visible}
+.dm{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--panel);margin-bottom:8px;cursor:pointer}
+.dm:active{background:var(--cb)}.dm .tx{flex:1;min-width:0}.dm .tx b,.dm .tx small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.av{flex:none;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff}
+.un{flex:none;background:#e5484d;color:#fff;border-radius:999px;min-width:22px;padding:1px 7px;text-align:center;font-size:12px;font-weight:700}
+#dmt{display:flex;flex-direction:column;max-height:52vh;overflow-y:auto;padding:4px 2px}
+.bub{max-width:82%;padding:8px 12px;border-radius:16px;margin:3px 0;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere}
+.bub.me{align-self:flex-end;background:#2a5bd7;color:#fff;border-bottom-right-radius:4px}.bub.th{align-self:flex-start;background:var(--cb);border-bottom-left-radius:4px}
+.bub small{display:block;opacity:.7;font-size:11px;margin-top:2px}
+.sysb{align-self:center;width:92%;border:1px dashed var(--l);border-radius:12px;padding:8px 10px;margin:6px 0;font-size:14px;text-align:center;overflow-wrap:anywhere}
+.sysb button{margin-top:6px;min-height:36px;font-size:13px}
+.sysb small{display:block;opacity:.7;margin-top:2px}
+
+#splash{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;text-align:center;background:var(--bg);color:var(--txt);transition:opacity .45s}
+#splash.out{opacity:0;pointer-events:none}
+#splash img{width:104px;height:104px;border-radius:24px;animation:spl 1.6s ease-in-out infinite}
+@keyframes spl{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+#splash h1{margin:0;font-size:28px;letter-spacing:.5px}
+#splash .sb{width:min(280px,72vw);height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+#splash .sb i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#2a5bd7,#5aa0ff);transition:width .3s linear}
+#splash .tip{min-height:70px;max-width:320px;font-size:16px;line-height:1.45;color:var(--dim);transition:opacity .35s}
+#splash .tip.f{opacity:0}
 </style>
 </head>
 <body><main id="app"></main>
@@ -113,6 +136,7 @@ function wiki(t) {
     try { const c = localStorage['w:' + t]; if (c) return JSON.parse(c); } catch {}
     try {
       const r = await fetch('https://fr.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(t.replace(/ /g, '_')));
+      if (!r.ok) return { img: null, title: t };
       const j = await r.json();
       const w = { img: (j.thumbnail && j.thumbnail.source) || null, title: j.title || t };
       try { localStorage['w:' + t] = JSON.stringify(w); } catch {}
@@ -168,13 +192,13 @@ function authView(msg) {
 const packsOf = (t) => (S.bought[t] || 0) + S.packs;
 function head() {
   return '<div class="bar"><b style="display:flex;align-items:center;gap:6px"><img class="lg" src="/icon-192.png" alt="">' + S.pseudo + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">📦 ' + S.packs + '/10</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button><button class="g" id="lo">Quitter</button></span></div><div class="tabs">' +
-    (S.maint ? [['col', 'Collection']] : [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Classement'], ['set', 'Réglages']]).map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
+    (S.maint ? [['col', 'Collection']] : [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Social' + (dmUnread() ? ' 💬' + dmUnread() : '')], ['set', 'Réglages']]).map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
 }
 function shopHTML() {
   const packs = Object.entries(S.shop).map(([t, sh]) => {
     const o = CAT[t];
-    const pr = sh.blocked ? '<b class="err">Indisponible pour le moment</b>' : sh.discount ? '<s>100</s> <b>' + sh.price + ' coins</b> <span class="pill">-' + sh.discount + '%</span>' : '<b>' + sh.price + ' coins</b>';
-    return '<div class="box"><div class="pk" style="--pc:' + o.color + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button></div></div>';
+    const pr = sh.nobuy ? '<b>Ancien niveau</b> : plus en vente, tu peux ouvrir ceux qu\'il te reste' : sh.blocked ? '<b class="err">Indisponible pour le moment</b>' : sh.discount ? '<s>' + sh.full + '</s> <b>' + sh.price + ' coins</b> <span class="pill">-' + sh.discount + '%</span>' : '<b>' + sh.price + ' coins</b>';
+    return '<div class="box"><div class="pk" style="--pc:' + o.color + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (sh.lvl > 1 ? ' <span class="pill">Niveau ' + sh.lvl + '/5</span>' : '') + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes' + (sh.lvl > 1 ? ' d\'une collection différente à chaque niveau' : '') + '. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || sh.nobuy || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button></div></div>';
   }).join('');
   const objs = S.objs.length ? '<h2>Objets</h2><div class="grid2">' + S.objs.map((x) => '<div class="box"><b style="color:var(--' + x.r + ')">' + esc(x.name) + '</b> — ' + RN[x.r] + '<p>' + x.price + ' coins' + (x.stock != null ? (x.stock > 0 ? ' · Reste ' + x.stock : ' · Épuisé') : '') + '</p><button data-ob="' + esc('obj:' + x.name) + '"' + (S.coins < x.price || (x.stock != null && x.stock <= 0) ? ' disabled' : '') + '>Acheter</button></div>').join('') + '</div>' : '';
   return '<div class="box"><p>Un sachet gratuit toutes les 10 à 14 minutes (10 maximum, 2 h pour tout remplir). Sachets gratuits : <b>' + S.packs + '/10</b>. <span id="cd"></span></p></div><div class="grid2">' + packs + '</div>' + objs;
@@ -188,15 +212,15 @@ function colHTML() {
   return '<div class="row" style="margin-bottom:12px"><select id="so"><option value="def">Tri : normal</option><option value="rar">Tri : rareté</option><option value="fav">Tri : favoris</option></select><button class="g" id="dup">Vendre tous les doublons</button></div><small>Les favoris ⭐ et le 1er exemplaire de chaque carte ne sont jamais vendus en masse. Les cartes prennent +1 % de valeur par jour (max ×2).</small>' +
     Object.entries(CAT).map(([t, o]) => {
       const n = idsOf(t).filter((id) => S.cards[id]).length, tot = idsOf(t).length;
-      if (!n && (o.hidden || (o.until && o.until < Date.now()))) return '';
+      if (!n && (o.hidden || (o.until && o.until < Date.now()) || (o.base && o.lv > ((S.lv || {})[o.base] || 1)))) return '';
       const rb = (S.rb || {})[t] || 0;
-      return '<details data-d="' + t + '"' + (rb ? ' class="rb"' : '') + (openT.has(t) ? ' open' : '') + '><summary>' + o.icon + ' ' + esc(o.name) + ' — ' + n + '/' + tot + (rb ? ' · ♻️×' + rb : '') + '</summary>' + (n === tot && tot && t !== 'obj' ? '<button class="g" data-rb="' + t + '" style="margin:8px 0">♻️ Renaissance : la collection se vide, tu gagnes 1/5 de sa valeur</button>' : '') + '<div class="grid" id="g-' + t + '"></div></details>';
+      return '<details data-d="' + t + '"' + (rb ? ' class="rb"' : '') + (openT.has(t) ? ' open' : '') + '><summary>' + o.icon + ' ' + esc(o.name) + ' — ' + n + '/' + tot + (rb ? ' · ♻️×' + rb : '') + '</summary>' + (n === tot && tot && t !== 'obj' ? '<button class="g" data-rb="' + t + '" style="margin:8px 0">♻️ Renaissance : la collection se vide, tu gagnes 1/5 de sa valeur' + (((S.lv || {})[o.base || t] || 9) < 5 ? ' · débloque le sachet ' + CAT[(o.base || t) + (S.lv[o.base || t] + 1)].name + ' (nouvelles cartes, prix ×2)' : '') + '</button>' : '') + '<div class="grid" id="g-' + t + '"></div></details>';
     }).join('');
 }
 const msg = (t, good) => { const e = $('#e'); if (!e) return; e.style.color = good ? '#3fb950' : ''; e.textContent = t; };
 const run = async (fn) => { try { await fn(); } catch (e) { msg(e.message); } };
-const mf = { t: '', r: '', s: 'new' };
-let mkSub = 'v';
+const mf = { t: '', r: '', s: 'new', n: false };
+let mkSub = 'v', tradePre = null, opTab = 'b';
 function mkHTML() {
   return '<div class="pills">' + [['v', '🏷️ Ventes'], ['t', '🔁 Échange'], ['g', '🎁 Offre']].map(([k, l]) => '<button class="pill' + (mkSub === k ? ' on' : '') + '" data-ms="' + k + '">' + l + '</button>').join('') + '</div>' + (mkSub === 't' ? tradeHTML() : mkSub === 'g' ? giftHTML() : mkSales());
 }
@@ -217,7 +241,7 @@ function tradeInit() {
   const fillG = () => { const t = $('#tgc').value; gl = t ? idsOf(t) : []; giveId = null; $('#tg').innerHTML = '<option value="">Carte donnée</option>' + gl.map((id, i) => '<option value="' + i + '">' + gmark(id) + esc(id.slice(id.indexOf(':') + 1)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] > 1 ? ' ×' + S.cards[id] : '') + '</option>').join(''); };
   $('#tgc').onchange = fillG;
   $('#tg').onchange = () => { giveId = gl[$('#tg').value] || null; };
-  api('players').then((j) => { if ($('#tp')) tp.insertAdjacentHTML('beforeend', j.players.map((n) => '<option>' + esc(n) + '</option>').join('')); }).catch(() => {});
+  api('players').then((j) => { if ($('#tp')) { tp.insertAdjacentHTML('beforeend', j.players.map((n) => '<option>' + esc(n) + '</option>').join('')); if (tradePre && j.players.includes(tradePre)) { tp.value = tradePre; tp.onchange(); } tradePre = null; } }).catch(() => {});
   tp.onchange = async () => {
     const box = $('#tpk'); theirs = null; box.innerHTML = '';
     if (tp.value) {
@@ -321,13 +345,14 @@ function giftInit() {
   legend(); fillPack(); renderLot();
 }
 function mkSales() {
-  return '<div class="box"><p>Achète les cartes des autres joueurs, ou mets tes cartes en vente depuis ta collection (bouton 🏷️) au prix que tu choisis.</p><div class="row"><select id="mft"><option value="">Toutes collections</option>' + Object.entries(CAT).map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="mfr"><option value="">Toutes raretés</option>' + [...'crel'].map((r) => '<option value="' + r + '">' + RN[r] + '</option>').join('') + '</select><select id="mfs"><option value="new">Plus récentes</option><option value="asc">Prix croissant</option><option value="desc">Prix décroissant</option></select></div></div><div class="grid" id="gm"></div><p id="mn"></p>';
+  return '<div class="box"><p>Achète les cartes des autres joueurs, ou mets tes cartes en vente depuis ta collection (bouton 🏷️) au prix que tu choisis.</p><div class="row"><select id="mft"><option value="">Toutes collections</option>' + Object.entries(CAT).map(([t, o]) => '<option value="' + t + '">' + o.icon + ' ' + esc(o.name) + '</option>').join('') + '</select><select id="mfr"><option value="">Toutes raretés</option>' + [...'crel'].map((r) => '<option value="' + r + '">' + RN[r] + '</option>').join('') + '</select><select id="mfs"><option value="new">Plus récentes</option><option value="asc">Prix croissant</option><option value="desc">Prix décroissant</option></select><button class="pill' + (mf.n ? ' on' : '') + '" id="mfn">🆕 Que les cartes que je n\'ai pas</button></div></div><div class="grid" id="gm"></div><p id="mn"></p>';
 }
 function mkInit() {
     const gm = $('#gm');
     ['t', 'r', 's'].forEach((k) => { const e = $('#mf' + k); e.value = mf[k]; e.onchange = () => { mf[k] = e.value; playerView(); }; });
-    const L = S.market.filter((x) => !x.want && (!mf.t || x.card.startsWith(mf.t + ':')) && (!mf.r || RAR[x.card] === mf.r));
-    $('#mn').textContent = L.length ? '' : 'Aucune annonce pour ces filtres.';
+    $('#mfn').onclick = () => { mf.n = !mf.n; playerView(); };
+    const L = S.market.filter((x) => !x.want && (!mf.t || x.card.startsWith(mf.t + ':')) && (!mf.r || RAR[x.card] === mf.r) && (!mf.n || !S.cards[x.card]));
+    $('#mn').textContent = L.length ? '' : mf.n ? 'Aucune annonce de carte que tu n\'as pas.' : 'Aucune annonce pour ces filtres.';
     L.sort((a, b) => (mf.s === 'asc' ? a.price - b.price : mf.s === 'desc' ? b.price - a.price : b.t - a.t)).forEach((x) => {
       const el = cardEl(x.card, 1), mine = x.seller === S.pseudo;
       el.insertAdjacentHTML('beforeend', '<div class="ac" style="flex-direction:column"><small style="text-align:center">' + esc(x.seller) + '</small><button' + (mine ? ' class="g"' : S.coins < x.price ? ' disabled' : '') + ' data-mb>' + (mine ? 'Retirer' : 'Acheter · ' + x.price + '🪙') + '</button></div>');
@@ -341,8 +366,58 @@ function jeuHTML() {
     '<div class="box"><b>Gains</b><p>🐍 Snake (pommes mangées) : gain = mise × (pommes − 5) ÷ 10, maximum ×4. Avec 100 coins : 15 pommes rendent 100, 45 pommes rendent 400.</p><p>🧱 Tetris (lignes) : gain = mise × (lignes − 3) ÷ 6, maximum ×4. Avec 100 coins : 9 lignes rendent 100, 27 lignes rendent 400. Moins de 5 pommes ou 3 lignes : tu perds ta mise.</p></div>';
 }
 let rkN = 10;
+function rankHTML() {
+  return '<div class="pills">' + [[5, 'Top 5'], [10, 'Top 10'], [0, 'Tout']].map(([n, l]) => '<button class="pill' + (rkN === n ? ' on' : '') + '" data-n="' + n + '">' + l + '</button>').join('') + '</div><div class="box" style="padding:8px"><div id="rl">Chargement…</div></div><small>Classé par renaissances ♻️, puis cartes légendaires (L, chaque exemplaire compte), épiques (E), rares (R), communes (C) ; égalité : coins.</small>';
+}
+let rkSub = 'r', dmWith = null, dmNew = false, dmTh = [], dmPl = null;
+const dmUnread = () => ((S && S.dms) || []).reduce((a, e) => a + (e.n || 0), 0);
+const avCol = (n) => 'hsl(' + ([...n].reduce((a, c) => a + c.charCodeAt(0) * 7, 0) % 360) + ',55%,42%)';
+const avEl = (n) => '<span class="av" style="background:' + avCol(n) + '">' + esc([...n][0].toUpperCase()) + '</span>';
+const ago = (t) => { const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? "à l'instant" : m < 60 ? m + ' min' : m < 1440 ? Math.floor(m / 60) + ' h' : Math.floor(m / 1440) + ' j'; };
 function rkHTML() {
-  return '<div class="pills">' + [[5, 'Top 5'], [10, 'Top 10'], [0, 'Tout']].map(([n, l]) => '<button class="pill' + (rkN === n ? ' on' : '') + '" data-n="' + n + '">' + l + '</button>').join('') + '</div><div class="box" style="padding:8px"><div id="rl">Chargement…</div></div><small>Classé par renaissances ♻️, puis cartes légendaires (L), épiques (E), rares (R), communes (C) ; égalité : coins.</small>';
+  const un = dmUnread();
+  return '<div class="pills">' + [['r', '🏆 Classement'], ['m', '💬 Messages' + (un ? ' (' + un + ')' : '')]].map(([k, l]) => '<button class="pill' + (rkSub === k ? ' on' : '') + '" data-rs="' + k + '">' + l + '</button>').join('') + '</div>' + (rkSub === 'm' ? dmHTML() : rankHTML());
+}
+function dmHTML() {
+  if (dmWith) return '<div class="box"><div class="row" style="margin-bottom:8px"><button class="g" id="dmb">← Retour</button>' + avEl(dmWith) + '<b>' + esc(dmWith) + '</b></div><div id="dmt"></div><div class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="dmx" maxlength="500" placeholder="Écrire un message…" style="flex:1;min-width:0"><button id="dms">Envoyer</button></div></div>';
+  if (dmNew) return '<div class="box"><div class="row" style="margin-bottom:8px"><button class="g" id="dmb">← Retour</button><b>Nouveau message : à qui ?</b></div><input id="dmq" placeholder="Rechercher un joueur" style="width:100%;margin-bottom:8px"><div id="dml">Chargement…</div></div>';
+  return '<button id="dmn" style="margin-bottom:10px">✉️ Créer un nouveau message</button><div id="dml">' + ((S.dms || []).map((e) => '<div class="dm" data-w="' + esc(e.p) + '">' + avEl(e.p) + '<div class="tx"><b>' + esc(e.p) + '</b><small>' + (e.f === S.pseudo ? 'Toi : ' : '') + esc(e.x) + '</small></div><small>' + ago(e.t) + '</small>' + (e.n ? '<span class="un">' + e.n + '</span>' : '') + '</div>').join('') || '<p>Aucune conversation. Appuie sur « Créer un nouveau message » pour écrire à un joueur.</p>') + '</div><small>Les propositions d\'échange, contre-offres et cadeaux que tu reçois arrivent aussi ici. Le staff peut consulter les messages (modération).</small>';
+}
+function dmDraw(scroll) {
+  const box = $('#dmt'); if (!box) return;
+  const keep = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  box.innerHTML = dmTh.map((m, i) => {
+    const me = m.f === S.pseudo, t = '<small>' + (m.s ? esc(me ? 'Toi' : m.f) + ' · ' : '') + ago(m.t) + '</small>';
+    if (m.s) return '<div class="sysb"><b>' + esc(m.x) + '</b>' + t + (!me && /^(🔁|💬)/.test(m.x) ? '<button data-ex>↩️ Répondre dans Échange</button>' : '') + '</div>';
+    return '<div class="bub ' + (me ? 'me' : 'th') + '">' + esc(m.x) + t + '</div>';
+  }).join('') || '<small style="text-align:center">Aucun message. Écris le premier !</small>';
+  box.querySelectorAll('[data-ex]').forEach((b) => (b.onclick = () => { tab = 'mk'; mkSub = 't'; tradePre = dmWith; playerView(); }));
+  if (scroll || keep) box.scrollTop = box.scrollHeight;
+}
+async function dmLoad(scroll) {
+  if (!dmWith) return;
+  const j = await api('dmget', { with: dmWith }); setS(j.state); dmTh = j.thread; updHead(); updTabBadge(); dmDraw(scroll);
+}
+function updTabBadge() { const b = document.querySelector('[data-t=rk]'); if (b) b.textContent = 'Social' + (dmUnread() ? ' 💬' + dmUnread() : ''); const m = document.querySelector('[data-rs=m]'); if (m) m.textContent = '💬 Messages' + (dmUnread() ? ' (' + dmUnread() + ')' : ''); }
+function dmInit() {
+  const go = (p) => { dmWith = p; dmNew = false; playerView(); };
+  const back = $('#dmb'); if (back) back.onclick = () => { dmWith = null; dmNew = false; playerView(); };
+  const nb = $('#dmn'); if (nb) nb.onclick = () => { dmNew = true; playerView(); };
+  app.querySelectorAll('[data-w]').forEach((e) => (e.onclick = () => go(e.dataset.w)));
+  if (dmNew) {
+    const draw = () => {
+      const q = ($('#dmq').value || '').toLowerCase(), done = new Set((S.dms || []).map((e) => e.p));
+      $('#dml').innerHTML = (dmPl || []).filter((n) => n.toLowerCase().includes(q)).map((n) => '<div class="dm" data-p="' + esc(n) + '">' + avEl(n) + '<div class="tx"><b>' + esc(n) + '</b><small>' + (done.has(n) ? 'Conversation existante' : 'Nouveau') + '</small></div></div>').join('') || 'Aucun joueur trouvé.';
+      app.querySelectorAll('[data-p]').forEach((e) => (e.onclick = () => go(e.dataset.p)));
+    };
+    $('#dmq').oninput = draw;
+    if (dmPl) draw(); else api('players').then((j) => { dmPl = j.players; if ($('#dmq')) draw(); }).catch((e) => msg(e.message));
+  }
+  if (dmWith) {
+    dmLoad(true).catch((e) => msg(e.message));
+    const send = () => { const x = $('#dmx'), text = x.value.trim(); if (!text) return; x.value = ''; run(async () => { try { const j = await api('dmsend', { to: dmWith, text }); setS(j.state); } catch (er) { x.value = text; throw er; } await dmLoad(true); }); };
+    $('#dms').onclick = send; $('#dmx').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } };
+  }
 }
 function setHTML() {
   const th = document.documentElement.dataset.th;
@@ -370,7 +445,7 @@ function playerView() {
       tk(); timer = setInterval(tk, 1000);
     } else $('#cd').textContent = 'Stock plein : ouvre un sachet pour relancer le compteur.';
   } else if (tab === 'col') {
-    app.querySelectorAll('[data-rb]').forEach((b) => (b.onclick = () => { if (confirm('Toutes tes cartes de cette collection seront supprimées. Continuer ?')) run(async () => { const j = await api('rebirth', { t: b.dataset.rb }); setS(j.state); playerView(); msg('Renaissance ! +' + j.gain + ' 🪙', true); }); }));
+    app.querySelectorAll('[data-rb]').forEach((b) => (b.onclick = () => { if (confirm('Toutes tes cartes de cette collection seront supprimées. Continuer ?')) run(async () => { const j = await api('rebirth', { t: b.dataset.rb }); setS(j.state); playerView(); msg('Renaissance ! +' + j.gain + ' 🪙' + (j.unlocked ? ' · Sachet ' + j.unlocked + ' débloqué (niveau ' + j.lv + ') !' : ''), true); }); }));
     $('#so').value = sort; $('#so').onchange = (e) => { sort = e.target.value; playerView(); };
     $('#dup').onclick = () => run(async () => {
       if (!confirm('Vendre tous les doublons (sauf favoris) ?')) return;
@@ -396,8 +471,10 @@ function playerView() {
     app.querySelectorAll('[data-ms]').forEach((b) => (b.onclick = () => { mkSub = b.dataset.ms; playerView(); }));
     if (mkSub === 't') tradeInit(); else if (mkSub === 'g') giftInit(); else mkInit();
   } else if (tab === 'rk') {
-    app.querySelectorAll('.pill').forEach((b) => (b.onclick = () => { rkN = +b.dataset.n; playerView(); }));
-    api('rank', { n: rkN }).then((j) => {
+    app.querySelectorAll('[data-rs]').forEach((b) => (b.onclick = () => { rkSub = b.dataset.rs; dmWith = null; dmNew = false; playerView(); }));
+    app.querySelectorAll('[data-n]').forEach((b) => (b.onclick = () => { rkN = +b.dataset.n; playerView(); }));
+    if (rkSub === 'm') dmInit();
+    else api('rank', { n: rkN }).then((j) => {
       const el = $('#rl'); if (!el) return;
       const col = { l: 'l', e: 'e', r: 'r', c: 'c' };
       el.innerHTML = j.rank.length ? '<table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th>♻️</th>' + [...'ler'].concat('c').map((k) => '<th style="color:var(--' + k + ')">' + k.toUpperCase() + '</th>').join('') + '<th>🪙</th></tr>' + j.rank.map((x, i) => '<tr' + (x.pseudo === S.pseudo ? ' class="me"' : '') + '><td>' + (i + 1) + '</td><td class="pn">' + esc(x.pseudo) + '</td><td>' + x.rb + '</td>' + [...'lerc'].map((k) => '<td style="color:var(--' + k + ')">' + x[k] + '</td>').join('') + '<td>' + x.coins + '</td></tr>').join('') + '</table>' : 'Aucun joueur pour le moment.';
@@ -628,7 +705,7 @@ async function opView(m) {
   const objs = custom.objs.filter((o) => !o.gone).map((o) => '<div class="row">🎁 <b>' + esc(o.name) + '</b> ' + RN[o.r] + ' — ' + o.price + ' coins' + (o.stock != null ? ' (reste ' + o.stock + ')' : '') + ' <button class="g" data-do="' + esc(o.name) + '">Retirer</button></div>').join('');
   const reps = reports.map((r) => '<div class="row" style="border-top:1px solid var(--line);padding:8px 0"><div style="flex:1"><b>' + esc(r.pseudo) + '</b> <small>' + new Date(r.t).toLocaleString('fr-FR') + '</small><br><span class="rt"></span></div><button class="g" data-dr="' + r.id + '">Supprimer</button></div>').join('') || '<p>Aucun signalement.</p>';
   app.innerHTML = '<div class="bar"><b>Espace opérateur</b><span class="row"><button class="g" id="pv">🎮 Espace joueur</button><button class="g" id="th">🌓</button><button class="g" id="lo">Quitter</button></span></div>' +
-    '<div class="box"><h2>Boutique</h2><div class="grid2">' + Object.keys(shop).map((t) => '<div class="row"><b>' + CAT[t].icon + ' ' + esc(CAT[t].name) + '</b><input type="number" min="0" max="90" value="' + shop[t].discount + '" id="d-' + t + '" style="width:80px" aria-label="Réduction en %"> %<label><input type="checkbox" id="b-' + t + '"' + (shop[t].blocked ? ' checked' : '') + '> bloqué</label><button data-sv="' + t + '">Enregistrer</button></div>').join('') + '</div><div class="err" id="e2"></div></div>' +
+    '<div class="box"><h2>Boutique</h2><div class="grid2">' + Object.keys(shop).filter((t) => !CAT[t].base).map((t) => '<div class="row"><b>' + CAT[t].icon + ' ' + esc(CAT[t].name) + '</b><input type="number" min="0" max="90" value="' + shop[t].discount + '" id="d-' + t + '" style="width:80px" aria-label="Réduction en %"> %<label><input type="checkbox" id="b-' + t + '"' + (shop[t].blocked ? ' checked' : '') + '> bloqué</label><button data-sv="' + t + '">Enregistrer</button></div>').join('') + '</div><div class="err" id="e2"></div></div>' +
     '<div class="grid2"><form class="box" id="fc" style="display:grid;gap:10px"><h2>Collection provisoire</h2><input id="cn" placeholder="Nom" required><input id="ci" placeholder="Emoji (ex : 🎃)" maxlength="4"><input id="cd" type="number" min="1" max="365" value="7" aria-label="Durée en jours"><label class="row" style="gap:8px">Couleur du fond <input id="cc" type="color" value="#0ea5e9" style="width:60px;height:36px;padding:2px"></label><textarea id="cl" rows="6" placeholder="Une carte par ligne (titre Wikipédia). Préfixe r: e: l: pour la rareté, sans préfixe = commune"></textarea><button>Créer</button><div class="err" id="e3"></div>' + cols + '</form>' +
     '<form class="box" id="fo" style="display:grid;gap:10px"><h2>Objet en boutique</h2><input id="on" placeholder="Nom de la carte (titre Wikipédia)" required><select id="or"><option value="c">Commune</option><option value="r">Rare</option><option value="e">Épique</option><option value="l">Légendaire</option></select><input id="op" type="number" min="1" placeholder="Prix en coins" required><input id="os" type="number" min="1" placeholder="Quantité disponible (vide = illimité)"><button>Ajouter</button><div class="err" id="e4"></div>' + objs + '</form></div>' +
     '<div class="box"><h2>Joueurs (' + users.length + ')</h2>' + list + '</div>' +
@@ -661,6 +738,44 @@ async function opView(m) {
   $('#mnt').onclick = act('e7', () => api('maint', { on: !j.maint }), j.maint ? 'Maintenance désactivée' : 'Maintenance activée');
   $('#fr').onsubmit = act('e6', () => api('rename', { pseudo: $('#ru').value, name: $('#rnn').value }), 'Pseudo changé');
   app.querySelectorAll('[data-du]').forEach((b) => (b.onclick = (e) => { if (confirm('Supprimer définitivement le compte ' + b.dataset.du + ' ?')) act('e', () => api('deluser', { pseudo: b.dataset.du }), 'Compte supprimé')(e); }));
+  // --- Catégories (au lieu d'une seule longue page) : 5 onglets qui tiennent sur 2 lignes maximum, sans glisser
+  const OC = [['b', '🛒 Boutique', ['Boutique', 'Collection provisoire', 'Objet en boutique']], ['j', '👥 Joueurs', ['Joueurs', 'Donner ou retirer', 'Changer le pseudo']], ['m', '✉️ Messages', ['Envoyer une notification']], ['s', '🚩 Signalements', ['Signalements']], ['x', '🔧 Maintenance', ['Maintenance']]];
+  const bar = app.querySelector('.bar'), dmBox = document.createElement('div');
+  dmBox.className = 'box'; dmBox.id = 'opdm'; dmBox.innerHTML = '<h2>👁️ Voir les messages des joueurs</h2><div id="opdl">Chargement…</div><div id="opdt"></div>';
+  app.append(dmBox);
+  [...app.children].forEach((el) => {
+    if (el === bar) return;
+    const h = el.id === 'opdm' ? 'Voir les messages' : (el.querySelector('h2') || {}).textContent || '';
+    const c = OC.find(([, , hs]) => hs.some((x) => h.includes(x))); el.dataset.oc = c ? c[0] : el.id === 'opdm' ? 'm' : 'b';
+  });
+  const opTabs = document.createElement('div'); opTabs.className = 'pills'; opTabs.style.margin = '8px 0';
+  bar.after(opTabs);
+  const showOc = () => {
+    opTabs.innerHTML = OC.map(([k, l]) => '<button class="pill' + (opTab === k ? ' on' : '') + '" data-oc="' + k + '">' + l + '</button>').join('');
+    opTabs.querySelectorAll('[data-oc]').forEach((b) => (b.onclick = () => { opTab = b.dataset.oc; showOc(); }));
+    [...app.children].forEach((el) => { if (el !== bar && el !== opTabs) el.style.display = el.dataset.oc === opTab ? '' : 'none'; });
+    if (opTab === 'm') opDmList();
+  };
+  const opDmList = async () => {
+    const box = $('#opdl'), th = $('#opdt'); th.innerHTML = '';
+    try {
+      const { convs } = await api('dmlist');
+      box.style.display = '';
+      box.innerHTML = convs.map((c, i) => '<div class="dm" data-i="' + i + '">' + avEl(c.a[0]) + '<div class="tx"><b>' + esc(c.a[0]) + ' ↔ ' + esc(c.a[1]) + '</b><small>' + esc(c.f) + ' : ' + esc(c.x) + '</small></div><small>' + c.n + ' msg · ' + ago(c.t) + '</small></div>').join('') || '<p>Aucune conversation pour le moment.</p>';
+      box.querySelectorAll('[data-i]').forEach((e) => (e.onclick = async () => {
+        const c = convs[+e.dataset.i];
+        try {
+          const j = await api('dmview', { k: c.k });
+          box.style.display = 'none';
+          th.innerHTML = '<div class="row" style="margin-bottom:8px"><button class="g" id="opdb">← Retour</button><b>' + esc(c.a[0]) + ' ↔ ' + esc(c.a[1]) + '</b></div><div id="dmt"></div><small>Lecture seule.</small>';
+          $('#opdb').onclick = opDmList;
+          $('#dmt').innerHTML = j.thread.map((m) => m.s ? '<div class="sysb"><b>' + esc(m.x) + '</b><small>' + esc(m.f) + ' · ' + new Date(m.t).toLocaleString('fr-FR') + '</small></div>' : '<div class="bub ' + (m.f === c.a[0] ? 'th' : 'me') + '"><b>' + esc(m.f) + '</b><br>' + esc(m.x) + '<small>' + new Date(m.t).toLocaleString('fr-FR') + '</small></div>').join('');
+          $('#dmt').scrollTop = $('#dmt').scrollHeight;
+        } catch (er) { box.insertAdjacentHTML('afterbegin', '<p class="err">' + esc(er.message) + '</p>'); }
+      }));
+    } catch (er) { box.textContent = er.message; }
+  };
+  showOc();
   if (m) { const [i, t] = m.split('|'), el = $('#' + i); el.style.color = '#3fb950'; el.textContent = t; }
 }
 
@@ -670,15 +785,51 @@ async function poll() {
     const was = !!S.maint, j = await api('me'); setS(j.state);
     if (was !== !!S.maint) return playerView();
     updHead();
+    updTabBadge();
+    if (tab === 'rk' && rkSub === 'm' && dmWith) { if (j.notifs && j.notifs.length) notify(j.notifs); dmLoad(false).catch(() => {}); return; }
     if (j.notifs && j.notifs.length) { notify(j.notifs); if (!document.querySelector('.ov') && tab !== 'jeu' && tab !== 'set') playerView(); }
   } catch {}
 }
 setInterval(poll, 5000);
 document.addEventListener('visibilitychange', poll);
+// --- Écran de chargement : 5 à 10 secondes, avec une astuce qui change toutes les 3 secondes
+const TIPS = [
+  "💡 N'oubliez pas de consulter le Marché : de bonnes affaires apparaissent tous les jours !",
+  "📦 Un sachet gratuit arrive toutes les 10 à 14 minutes. Pensez à les ouvrir !",
+  "♻️ Complète une collection puis fais une renaissance : le sachet du niveau suivant contient de toutes nouvelles cartes.",
+  "🔁 Tes doublons n'ont rien à faire dans ton classeur : échange-les avec d'autres joueurs !",
+  "🎁 Fais un cadeau à un ami : des cartes, un sachet ou des coins, avec un petit message.",
+  "💬 Écris aux autres joueurs dans Social → Messages. Tes propositions d'échange y arrivent aussi.",
+  "🔔 Active les notifications pour ne jamais rater un échange, un cadeau ou un sachet gratuit.",
+  "📲 Ajoute Cardex à ton écran d'accueil pour l'ouvrir en un clic, comme une vraie application.",
+  "⭐ Mets tes cartes préférées en favoris : elles ne seront jamais vendues par erreur.",
+  "🏆 Le classement se joue d'abord aux renaissances, puis aux cartes légendaires.",
+  "🃏 Chaque sachet peut cacher une carte légendaire. Tente ta chance !",
+  "🆕 Dans le Marché, filtre les cartes que tu n'as pas encore pour compléter ta collection plus vite.",
+  "🪙 Revends tes doublons pour gagner des coins et acheter de nouveaux sachets.",
+  "🎯 Dans Échange, le symbole 🎯 repère la carte qu'un joueur a et que tu n'as pas.",
+  "🤝 Dans Offre, le symbole 🤝 repère la carte que tu as et que l'autre joueur n'a pas encore.",
+  "🎮 Un petit tour dans l'onglet Jeux ? Mise raisonnablement !",
+];
+let appReady = false;
+const splashDone = new Promise((resolve) => {
+  const t0 = Date.now(), MIN = 5000, MAX = 10000, sp = document.createElement('div');
+  sp.id = 'splash'; sp.innerHTML = '<img src="/icon.png" alt=""><h1>Cardex</h1><div class="sb"><i></i></div><div class="tip"></div>';
+  document.body.append(sp);
+  const bar = sp.querySelector('i'), tip = sp.querySelector('.tip');
+  let k = Math.floor(Math.random() * TIPS.length);
+  tip.textContent = TIPS[k++ % TIPS.length];
+  const iv = setInterval(() => { tip.classList.add('f'); setTimeout(() => { tip.textContent = TIPS[k++ % TIPS.length]; tip.classList.remove('f'); }, 350); }, 3000);
+  const tk = setInterval(() => {
+    const el = Date.now() - t0, end = (appReady && el >= MIN) || el >= MAX;
+    bar.style.width = (end ? 100 : Math.min(90, (el / MIN) * 90)) + '%';
+    if (end) { clearInterval(tk); clearInterval(iv); setTimeout(() => { sp.classList.add('out'); setTimeout(() => { sp.remove(); resolve(); }, 450); }, 250); }
+  }, 100);
+});
 async function start() {
-  try { if (isOp && !asP) await opView(); else { await refresh(); checkPush().then(() => { if (pushOn && tab === 'set') playerView(); setTimeout(nudge, 800); }); } } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); }
+  try { if (isOp && !asP) await opView(); else { await refresh(); checkPush().then(() => { if (pushOn && tab === 'set') playerView(); splashDone.then(() => setTimeout(nudge, 600)); }); } } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); } finally { appReady = true; }
 }
-tok ? start() : authView();
+if (tok) start(); else { authView(); appReady = true; }
 </script>
 </body>
 </html>
