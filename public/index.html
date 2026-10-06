@@ -363,6 +363,7 @@ function mkInit() {
 function jeuHTML() {
   return '<div class="box"><h2>Jeux d\'argent</h2><p>Mise entre 10 et 500 coins. Repère : un sachet coûte 100 coins. Sur téléphone, glisse le doigt sur le jeu (Tetris : touche = tourner, glisser vers le bas = chute).</p><div class="row"><input id="bet" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button data-g="snake">🐍 Snake</button><button data-g="tetris">🧱 Tetris</button></div></div>' +
     '<div class="box"><h2>🎡 Roulette</h2><p>Mise de 10 à 500 coins. Rouge, noir, pair, impair : gain ×2,5. Douzaine (1-12, 13-24, 25-36) : ×3,7. Numéro exact (0 à 36) : ×43. Le 0 fait perdre tous les paris sauf celui sur le numéro 0. Bien plus généreux que Snake et Tetris. Limite : 10 tours par jour, avec 30 s entre deux tours.</p><div class="row"><input id="rb" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise roulette"></div><div class="row" style="margin-top:8px"><button data-rk="red">🔴 Rouge</button><button data-rk="black">⚫ Noir</button><button data-rk="even">Pair</button><button data-rk="odd">Impair</button></div><div class="row" style="margin-top:8px"><button data-rk="dozen" data-rv="0">1-12</button><button data-rk="dozen" data-rv="1">13-24</button><button data-rk="dozen" data-rv="2">25-36</button><input id="rn" type="number" min="0" max="36" placeholder="N°" style="width:80px" aria-label="Numéro"><button data-rk="num">Numéro</button></div><div style="text-align:center;margin-top:10px"><canvas id="rc" width="260" height="260" style="max-width:100%"></canvas></div><div id="rw" style="text-align:center;font-size:40px;min-height:80px"></div><div id="rt" style="text-align:center;font-size:14px;opacity:.8;margin-top:6px"></div></div>' +
+    '<div class="box"><h2>🎰 Machine à sous</h2><p>5 rouleaux : il faut au moins 3 symboles identiques (peu importe l’endroit). Gains pour 3 / 4 / 5 identiques : 🚲 ⚽ ×2 / ×6 / ×30 · 🤾 ×2,5 / ×8 / ×40 · 🦁 ×3,5 / ×12 / ×60 · 🏛️ ×5 / ×20 / ×120 · 🚀 ×10 / ×50 / ×400. Limite : 15 parties par jour.</p><div class="row"><input id="sl-b" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button id="sl-go">Lancer</button></div><div id="sl-out" style="text-align:center;font-size:34px;min-height:56px;margin-top:8px"></div><div id="sl-r" style="text-align:center"></div><div id="ml-slots" class="mgl" style="text-align:center;font-size:13px;opacity:.8"></div></div><div class="box"><h2>🪙 Pile ou face / Double ou rien</h2><p>Choisis pile ou face : 48 % de chance, gain ×2. Après une victoire, encaisse ou double (×4, ×8, jusqu’à ×16 ; une défaite fait tout perdre). Limite : 15 parties par jour.</p><div class="row"><input id="fl-b" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button data-fp="pile">Pile</button><button data-fp="face">Face</button></div><div id="fl-out" style="text-align:center;margin-top:8px"></div><div id="ml-flip" class="mgl" style="text-align:center;font-size:13px;opacity:.8"></div></div><div class="box"><h2>🎟️ Ticket à gratter</h2><p>Ticket à 50 🪙. Trouve 3 montants identiques pour gagner ce montant : 50, 100, 200, 500, 2 500 ou 5 000 🪙. Limite : 10 tickets par jour.</p><div class="row"><button id="tk-go">Acheter un ticket (50 🪙)</button><button id="tk-all" disabled>Tout gratter</button></div><div id="tk-g" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:300px;margin:10px auto"></div><div id="tk-r" style="text-align:center;font-size:18px;min-height:28px"></div><div id="ml-scratch" class="mgl" style="text-align:center;font-size:13px;opacity:.8"></div></div><div class="box"><h2>⚔️ Bataille de raretés</h2><p>Toi et l’adversaire tirez une carte au hasard : la plus rare gagne ×1,85 la mise. Égalité : on relance (5 fois max, puis la mise est rendue). Tu ne perds jamais de carte, seulement des coins. Limite : 10 batailles par jour.</p><div class="row"><input id="bt-b" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button id="bt-go">⚔️ Combattre</button></div><div id="bt-out" style="margin-top:10px"></div><div id="bt-r" style="text-align:center;font-size:18px;min-height:28px"></div><div id="ml-battle" class="mgl" style="text-align:center;font-size:13px;opacity:.8"></div></div>' +
     '<div class="box"><b>Gains</b><p>🐍 Snake (pommes mangées) : gain = mise × (pommes − 5) ÷ 10, maximum ×4. Avec 100 coins : 15 pommes rendent 100, 45 pommes rendent 400.</p><p>🧱 Tetris (lignes) : gain = mise × (lignes − 3) ÷ 6, maximum ×4. Avec 100 coins : 9 lignes rendent 100, 27 lignes rendent 400. Moins de 5 pommes ou 3 lignes : tu perds ta mise.</p></div>';
 }
 let rkN = 10;
@@ -502,6 +503,56 @@ function playerView() {
         updHead(); spinning = false; rlTick();
       });
     }));
+    const MGN = { slots: 15, flip: 15, scratch: 10, battle: 10 }, SYM = ['🚲', '⚽', '🤾', '🦁', '🏛️', '🚀'], alive = (e) => e && document.body.contains(e);
+    const mgTxt = () => Object.entries(MGN).forEach(([k, n]) => { const e = $('#ml-' + k); if (e) e.textContent = 'Parties restantes aujourd’hui : ' + (((S.mg || {})[k]) ?? n) + '/' + n; });
+    mgTxt();
+    const sg = $('#sl-go');
+    if (sg) sg.onclick = async () => {
+      sg.disabled = true; const o = $('#sl-out'); let j; $('#sl-r').textContent = '';
+      try { j = await api('slots', { amount: $('#sl-b').value }); } catch (e) { sg.disabled = false; return msg(e.message); }
+      msg(''); let n = 0;
+      const iv = setInterval(() => {
+        if (!alive(o)) return clearInterval(iv);
+        n++; o.textContent = Array.from({ length: 5 }, (_, i) => (n > 6 + i * 4 ? j.reels[i] : SYM[Math.floor(Math.random() * 6)])).join(' ');
+        if (n > 26) { clearInterval(iv); setS(j.state); $('#sl-r').innerHTML = j.win ? '<b>' + j.m + ' × ' + j.sym + ' : +' + j.gain + ' 🪙</b>' : 'Perdu : −' + j.bet + ' 🪙'; updHead(); mgTxt(); sg.disabled = false; }
+      }, 80);
+    };
+    const flR = (txt) => {
+      const o = $('#fl-out'); if (!o) return; const d = S.dn;
+      o.innerHTML = (txt ? '<div style="font-size:20px;margin-bottom:6px">' + txt + '</div>' : '') + (d ? '<div>Gain en jeu : <b>' + d.bet * 2 ** d.n + ' 🪙</b> (×' + 2 ** d.n + ')</div><div class="row" style="justify-content:center;margin-top:6px"><button id="fl-c">💰 Encaisser</button><button id="fl-d">🔥 Doubler (48 %)</button></div>' : '');
+      app.querySelectorAll('[data-fp]').forEach((x) => (x.disabled = !!d));
+      const step = async (st) => { try { const j = await api('flip', { step: st }); setS(j.state); updHead(); mgTxt(); flR(j.cashed ? '💰 Encaissé : +' + j.gain + ' 🪙' : j.win ? '✅ Gagné !' : '❌ Perdu : tout est perdu'); } catch (e) { msg(e.message); } };
+      if ($('#fl-c')) { $('#fl-c').onclick = () => step('cash'); $('#fl-d').onclick = () => step('double'); }
+    };
+    flR('');
+    app.querySelectorAll('[data-fp]').forEach((b) => (b.onclick = async () => {
+      try { const j = await api('flip', { step: 'start', pick: b.dataset.fp, amount: $('#fl-b').value }); msg(''); setS(j.state); updHead(); mgTxt(); flR(j.cashed ? '🍀 ' + j.side.toUpperCase() + ' ! Maximum atteint : +' + j.gain + ' 🪙' : j.win ? '✅ ' + j.side.toUpperCase() + ' ! Bien deviné' : '❌ ' + j.side.toUpperCase() + ' : perdu, −' + j.bet + ' 🪙'); } catch (e) { msg(e.message); }
+    }));
+    let tkC = [], tkN = 0, tkJ = null;
+    const tkEnd = () => { if (tkN < 6 || !tkJ) return; setS(tkJ.state); updHead(); mgTxt(); $('#tk-r').innerHTML = tkJ.win ? '🎉 3 × ' + tkJ.gain + ' : +' + tkJ.gain + ' 🪙 (ticket ' + tkJ.price + ' 🪙)' : 'Perdu : −' + tkJ.price + ' 🪙'; $('#tk-go').disabled = false; $('#tk-all').disabled = true; tkJ = null; };
+    const tkShow = (i) => { const c = $('#tk-g').children[i]; if (!c || c.dataset.o) return; c.dataset.o = 1; c.textContent = tkC[i]; c.style.background = 'var(--panel)'; tkN++; tkEnd(); };
+    const tg = $('#tk-go');
+    if (tg) { tg.onclick = async () => {
+      tg.disabled = true; let j; try { j = await api('scratch', {}); } catch (e) { tg.disabled = false; return msg(e.message); }
+      msg(''); tkJ = j; tkC = j.cases; tkN = 0; $('#tk-r').textContent = ''; $('#tk-all').disabled = false;
+      $('#tk-g').innerHTML = j.cases.map((_, i) => '<button data-tk="' + i + '" style="height:56px;font-size:18px;background:#8b949e;color:#fff">🎟️</button>').join('');
+      $('#tk-g').querySelectorAll('[data-tk]').forEach((c) => (c.onclick = () => tkShow(+c.dataset.tk)));
+    }; $('#tk-all').onclick = () => tkC.forEach((_, i) => tkShow(i)); }
+    const bb = $('#bt-go');
+    if (bb) bb.onclick = async () => {
+      bb.disabled = true; let j; $('#bt-r').textContent = ''; $('#bt-out').innerHTML = '';
+      try { j = await api('battle', { amount: $('#bt-b').value }); } catch (e) { bb.disabled = false; return msg(e.message); }
+      msg(''); let i = 0;
+      const nx = () => {
+        const o = $('#bt-out'); if (!alive(o)) return;
+        if (i >= j.rounds.length) { setS(j.state); updHead(); mgTxt(); $('#bt-r').innerHTML = j.res > 0 ? '🏆 Gagné : +' + j.gain + ' 🪙' : j.res < 0 ? '💀 Perdu : −' + j.bet + ' 🪙' : '🤝 Égalité : mise rendue'; bb.disabled = false; return; }
+        const [p, q] = j.rounds[i++], row = document.createElement('div'), mk = (t, id) => { const w = document.createElement('div'); w.style.cssText = 'width:120px;text-align:center'; w.innerHTML = '<div style="font-size:13px">' + t + '</div>'; w.append(cardEl(id, 1, 0)); return w; };
+        row.style.cssText = 'display:flex;gap:16px;justify-content:center;align-items:center;margin-bottom:8px'; row.append(mk('Toi', p), document.createTextNode('⚔️'), mk('Adversaire', q)); o.innerHTML = ''; o.append(row);
+        if (i < j.rounds.length) { const t = document.createElement('div'); t.style.textAlign = 'center'; t.textContent = 'Égalité, on relance…'; o.append(t); }
+        setTimeout(nx, 1800);
+      };
+      nx();
+    };
     app.querySelectorAll('[data-g]').forEach((b) => (b.onclick = () => run(async () => { const j = await api('bet', { game: b.dataset.g, amount: $('#bet').value }); setS(j.state); play(b.dataset.g, j.gid, +$('#bet').value); })));
   } else {
     if ($('#pn2')) $('#pn2').onclick = () => run(async () => { await enablePush(); playerView(); msg('Notifications activées', true); });
@@ -818,6 +869,7 @@ const TIPS = [
   "🎯 Dans Échange, le symbole 🎯 repère la carte qu'un joueur a et que tu n'as pas.",
   "🤝 Dans Offre, le symbole 🤝 repère la carte que tu as et que l'autre joueur n'a pas encore.",
   "🎮 Un petit tour dans l'onglet Jeux ? Mise raisonnablement !",
+  "💬 Un tour dans la catégorie 'Social' pour discuter avec d'autre joueurs ?",
 ];
 let appReady = false;
 const splashDone = new Promise((resolve) => {
