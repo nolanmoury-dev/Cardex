@@ -253,7 +253,7 @@ function colHTML() {
       const n = idsOf(t).filter((id) => S.cards[id]).length, tot = idsOf(t).length;
       if (!n && (o.hidden || (o.until && o.until < Date.now()) || (o.base && o.lv > ((S.lv || {})[o.base] || 1)))) return '';
       const rb = (S.rb || {})[t] || 0;
-      return '<details data-d="' + t + '"' + (rb ? ' class="rb"' : '') + (openT.has(t) ? ' open' : '') + '><summary>' + o.icon + ' ' + esc(o.name) + ' — ' + n + '/' + tot + (rb ? ' · ♻️×' + rb : '') + '</summary>' + (n === tot && tot && t !== 'obj' ? '<button class="g" data-rb="' + t + '" style="margin:8px 0">♻️ Renaissance : la collection se vide, tu gagnes 1/5 de sa valeur' + (((S.lv || {})[o.base || t] || 9) < 5 ? ' · débloque le sachet ' + CAT[(o.base || t) + (S.lv[o.base || t] + 1)].name + ' (nouvelles cartes, prix ×2)' : '') + '</button>' : '') + '<div class="grid" id="g-' + t + '"></div></details>';
+      return '<details data-d="' + t + '"' + (rb ? ' class="rb"' : '') + (openT.has(t) ? ' open' : '') + '><summary>' + o.icon + ' ' + esc(o.name) + ' — ' + n + '/' + tot + (rb ? ' · ♻️×' + rb : '') + '</summary>' + (n === tot && tot && t !== 'obj' ? '<button class="g" data-rb="' + t + '" style="margin:8px 0">♻️ Renaissance : la collection se vide, tu gagnes 1/5 de sa valeur' + (((S.lv || {})[o.base || t] || 9) < 5 ? ' · débloque le sachet ' + ((S.lvn || {})[o.base || t] || 'suivant') + ' (nouvelles cartes, prix ×2)' : '') + '</button>' : '') + '<div class="grid" id="g-' + t + '"></div></details>';
     }).join('');
 }
 const msg = (t, good) => { const e = $('#e'); if (!e) return; e.style.color = good ? '#3fb950' : ''; e.textContent = t; };
@@ -469,7 +469,7 @@ function setHTML() {
 }
 function rebirthFlow(t) {
   const o = CAT[t], tot = idsOf(t).length, base = o.base || t, lv = (S.lv || {})[base] || 9;
-  const nx = lv < 5 ? CAT[base + (lv + 1)].name : '';
+  const nx = lv < 5 ? ((S.lvn || {})[base] || '') : '';
   let tm = [], iv, fin = false;
   const ov = document.createElement('div'); ov.id = 'rbo';
   const close = () => { clearInterval(iv); tm.forEach(clearTimeout); ov.remove(); };
@@ -951,7 +951,6 @@ const TIPS = [
   "🎯 Dans Échange, le symbole 🎯 repère la carte qu'un joueur a et que tu n'as pas.",
   "🤝 Dans Offre, le symbole 🤝 repère la carte que tu as et que l'autre joueur n'a pas encore.",
   "🎮 Un petit tour dans l'onglet Jeux ? Mise raisonnablement !",
-  "💬 Demander pas trop de coins dans un echange ou il vous cera refuser a coup sur ! 💡",
 ];
 let appReady = false;
 const splashDone = new Promise((resolve) => {
