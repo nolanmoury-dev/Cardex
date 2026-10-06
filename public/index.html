@@ -362,7 +362,7 @@ function mkInit() {
 }
 function jeuHTML() {
   return '<div class="box"><h2>Jeux d\'argent</h2><p>Mise entre 10 et 500 coins. Repère : un sachet coûte 100 coins. Sur téléphone, glisse le doigt sur le jeu (Tetris : touche = tourner, glisser vers le bas = chute).</p><div class="row"><input id="bet" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button data-g="snake">🐍 Snake</button><button data-g="tetris">🧱 Tetris</button></div></div>' +
-    '<div class="box"><h2>🎡 Roulette</h2><p>Mise de 10 à 500 coins. Rouge, noir, pair, impair : gain ×2,5. Douzaine (1-12, 13-24, 25-36) : ×3,7. Numéro exact (0 à 36) : ×43. Le 0 fait perdre tous les paris sauf celui sur le numéro 0. Bien plus généreux que Snake et Tetris.</p><div class="row"><input id="rb" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise roulette"></div><div class="row" style="margin-top:8px"><button data-rk="red">🔴 Rouge</button><button data-rk="black">⚫ Noir</button><button data-rk="even">Pair</button><button data-rk="odd">Impair</button></div><div class="row" style="margin-top:8px"><button data-rk="dozen" data-rv="0">1-12</button><button data-rk="dozen" data-rv="1">13-24</button><button data-rk="dozen" data-rv="2">25-36</button><input id="rn" type="number" min="0" max="36" placeholder="N°" style="width:80px" aria-label="Numéro"><button data-rk="num">Numéro</button></div><div style="text-align:center;margin-top:10px"><canvas id="rc" width="260" height="260" style="max-width:100%"></canvas></div><div id="rw" style="text-align:center;font-size:40px;min-height:80px"></div></div>' +
+    '<div class="box"><h2>🎡 Roulette</h2><p>Mise de 10 à 500 coins. Rouge, noir, pair, impair : gain ×2,5. Douzaine (1-12, 13-24, 25-36) : ×3,7. Numéro exact (0 à 36) : ×43. Le 0 fait perdre tous les paris sauf celui sur le numéro 0. Bien plus généreux que Snake et Tetris. Limite : 10 tours par jour, avec 30 s entre deux tours.</p><div class="row"><input id="rb" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise roulette"></div><div class="row" style="margin-top:8px"><button data-rk="red">🔴 Rouge</button><button data-rk="black">⚫ Noir</button><button data-rk="even">Pair</button><button data-rk="odd">Impair</button></div><div class="row" style="margin-top:8px"><button data-rk="dozen" data-rv="0">1-12</button><button data-rk="dozen" data-rv="1">13-24</button><button data-rk="dozen" data-rv="2">25-36</button><input id="rn" type="number" min="0" max="36" placeholder="N°" style="width:80px" aria-label="Numéro"><button data-rk="num">Numéro</button></div><div style="text-align:center;margin-top:10px"><canvas id="rc" width="260" height="260" style="max-width:100%"></canvas></div><div id="rw" style="text-align:center;font-size:40px;min-height:80px"></div><div id="rt" style="text-align:center;font-size:14px;opacity:.8;margin-top:6px"></div></div>' +
     '<div class="box"><b>Gains</b><p>🐍 Snake (pommes mangées) : gain = mise × (pommes − 5) ÷ 10, maximum ×4. Avec 100 coins : 15 pommes rendent 100, 45 pommes rendent 400.</p><p>🧱 Tetris (lignes) : gain = mise × (lignes − 3) ÷ 6, maximum ×4. Avec 100 coins : 9 lignes rendent 100, 27 lignes rendent 400. Moins de 5 pommes ou 3 lignes : tu perds ta mise.</p></div>';
 }
 let rkN = 10;
@@ -482,16 +482,24 @@ function playerView() {
   } else if (tab === 'jeu') {
     wheel($('#rc'), 0, () => {}, true);
     const bt = app.querySelectorAll('[data-rk]');
+    let spinning = false, tk;
+    const rlTick = () => {
+      const el = $('#rt'); if (!el) return clearInterval(tk);
+      const r = S.rl || { left: 10, next: 0 }, w = Math.ceil((r.next - Date.now()) / 1000);
+      el.textContent = r.left <= 0 ? '🎡 Limite du jour atteinte (0/10). Reviens demain !' : '🎡 Tours restants aujourd\'hui : ' + r.left + '/10' + (w > 0 ? ' · prochain tour dans ' + w + ' s' : '');
+      bt.forEach((x) => (x.disabled = spinning || r.left <= 0 || w > 0));
+    };
+    clearInterval(window.rlT); window.rlT = tk = setInterval(rlTick, 500); rlTick();
     bt.forEach((b) => (b.onclick = async () => {
-      bt.forEach((x) => (x.disabled = true)); const rw = $('#rw'); let j;
+      spinning = true; rlTick(); const rw = $('#rw'); let j;
       try { j = await api('roulette', { amount: $('#rb').value, kind: b.dataset.rk, value: b.dataset.rk === 'num' ? $('#rn').value : b.dataset.rv }); }
-      catch (e) { bt.forEach((x) => (x.disabled = false)); return msg(e.message); }
+      catch (e) { spinning = false; rlTick(); return msg(e.message); }
       msg(''); rw.textContent = '';
       wheel($('#rc'), j.n, () => {
         setS(j.state);
         if (!document.body.contains(rw)) return;
         rw.innerHTML = '<span style="color:' + (j.n === 0 ? '#3fb950' : j.red ? '#f85149' : 'inherit') + '">' + j.n + '</span><div style="font-size:18px">' + (j.win ? 'Gagné : +' + j.gain + ' 🪙' : 'Perdu : −' + j.bet + ' 🪙') + '</div>';
-        updHead(); bt.forEach((x) => (x.disabled = false));
+        updHead(); spinning = false; rlTick();
       });
     }));
     app.querySelectorAll('[data-g]').forEach((b) => (b.onclick = () => run(async () => { const j = await api('bet', { game: b.dataset.g, amount: $('#bet').value }); setS(j.state); play(b.dataset.g, j.gid, +$('#bet').value); })));
