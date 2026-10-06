@@ -102,6 +102,45 @@ main{padding:8px 8px calc(84px + env(safe-area-inset-bottom))}
 #splash .sb i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#2a5bd7,#5aa0ff);transition:width .3s linear}
 #splash .tip{min-height:70px;max-width:320px;font-size:16px;line-height:1.45;color:var(--dim);transition:opacity .35s}
 #splash .tip.f{opacity:0}
+/* Renaissance : animation */
+#rbo{position:fixed;inset:0;z-index:30;background:#000c;display:flex;align-items:center;justify-content:center;padding:12px;color:#e6edf3;animation:rbIn .25s both}
+@keyframes rbIn{from{opacity:0}}
+#rbo .dlg{width:100%;max-width:340px;background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px}
+#rbo .dlg h3{margin:0 0 8px;font-size:20px}
+#rbo .dlg p{margin:0 0 14px;font-size:14px;color:#8b949e;line-height:1.5}
+#rbo .bts{display:flex;gap:10px}
+#rbo .bts button{flex:1}
+#rbs{position:relative;height:520px;width:100%;max-width:380px;border-radius:12px;background:#0d1117;overflow:hidden;animation:rbBg 10s ease forwards}
+@keyframes rbBg{0%{background:#0d1117}25%{background:#1f1346}55%{background:#0e2c4d}80%{background:#10301f}100%{background:#0d1117}}
+#rbs .a{position:absolute}
+#rbs .k{position:absolute;width:54px;height:74px;border:2px solid var(--k);border-radius:6px;background:#161b22;padding:4px;animation:rbCv 1.5s var(--d) ease-in forwards}
+#rbs .im{height:34px;border-radius:3px;opacity:.4;margin-bottom:5px}
+#rbs .ln{height:4px;border-radius:2px;background:#30363d;margin-bottom:4px}
+#rbs .ln.s{width:60%}
+@keyframes rbCv{0%{transform:none;opacity:1}30%{transform:translate(0,-10px) rotate(-8deg) scale(1.1)}100%{transform:translate(var(--dx),var(--dy)) rotate(540deg) scale(.15);opacity:0}}
+#rbs .r{left:50%;top:200px;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;border:4px solid var(--q);opacity:0;animation:rbRg 1.4s var(--d) ease-out forwards}
+@keyframes rbRg{0%{opacity:1;transform:scale(.5)}100%{opacity:0;transform:scale(8)}}
+#rbs .em{left:50%;top:200px;width:84px;height:84px;margin:-42px 0 0 -42px;border-radius:50%;border:5px solid #f5c518;background:#161b22;display:flex;align-items:center;justify-content:center;font-size:42px;transform:scale(0);opacity:0;animation:rbEm .8s 1.4s cubic-bezier(.34,1.56,.64,1) forwards,rbBc 3s 2.2s linear infinite}
+#rbs .em i{font-style:normal;animation:rbSp 4s 2.2s linear infinite}
+@keyframes rbEm{to{transform:scale(1);opacity:1}}
+@keyframes rbSp{to{transform:rotate(360deg)}}
+@keyframes rbBc{0%,100%{border-color:#f5c518}25%{border-color:#a371f7}50%{border-color:#39c5cf}75%{border-color:#3fb950}}
+#rbs .p{left:50%;top:200px;width:9px;height:9px;margin:-4px 0 0 -4px;background:var(--q);opacity:0;animation:rbPp 1.2s 1.5s ease-out forwards}
+@keyframes rbPp{0%{opacity:1;transform:translate(0,0)}100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(200deg)}}
+#rbs .cf{top:-20px;width:var(--w);height:calc(var(--w)*1.5);background:var(--q);opacity:0;animation:rbCf var(--t) var(--d) ease-in forwards}
+@keyframes rbCf{0%{opacity:0;transform:translateY(0) rotate(0)}6%{opacity:1}85%{opacity:1}100%{opacity:0;transform:translateY(560px) rotate(540deg)}}
+#rbs .t{left:0;right:0;text-align:center;opacity:0;transform:translateY(10px);animation:rbFu .6s var(--d) ease-out forwards}
+#rbs .tt{animation:rbFu .6s var(--d) ease-out forwards,rbTc 2.4s 2.8s linear infinite}
+@keyframes rbFu{to{opacity:1;transform:none}}
+@keyframes rbTc{0%,100%{color:#f5c518}25%{color:#a371f7}50%{color:#39c5cf}75%{color:#3fb950}}
+#rbs .pb{left:16px;right:16px;top:62px;height:10px;border-radius:5px;background:#30363d;overflow:hidden}
+#rbs .pb i{display:block;height:100%;width:100%;background:#3fb950;animation:rbBw 1s 1.2s ease-in forwards}
+@keyframes rbBw{to{width:0}}
+#rbs .sk{top:10px;right:12px;padding:4px 12px;border-radius:16px;font-size:13px;font-weight:400;background:#161b22;border-color:#30363d;color:#e6edf3;animation:rbOut .3s 6.4s forwards}
+@keyframes rbOut{to{opacity:0;visibility:hidden}}
+#rbs .u{left:12px;right:12px;bottom:12px;background:#161b22;border:1px solid #30363d;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;opacity:0;transform:translateY(40px);z-index:3;animation:rbFu .5s 6.4s ease-out forwards}
+#rbs .u button{white-space:nowrap}
+@media(prefers-reduced-motion:reduce){#rbo,#rbs{animation:none}}
 </style>
 </head>
 <body><main id="app"></main>
@@ -428,6 +467,49 @@ function setHTML() {
     '<form class="box" id="fpw" style="display:grid;gap:10px;max-width:400px"><h2>Mot de passe</h2><input id="po" type="password" placeholder="Ancien mot de passe" autocomplete="current-password" required><input id="pn" type="password" placeholder="Nouveau mot de passe" autocomplete="new-password" required><button>Changer</button></form>' +
     '<form class="box" id="frp" style="display:grid;gap:10px"><h2>Contacter un staff</h2><textarea id="rt" rows="4" maxlength="500" placeholder="Signale un problème, un bug ou un joueur" required></textarea><button>Envoyer le signalement</button></form>';
 }
+function rebirthFlow(t) {
+  const o = CAT[t], tot = idsOf(t).length, base = o.base || t, lv = (S.lv || {})[base] || 9;
+  const nx = lv < 5 ? CAT[base + (lv + 1)].name : '';
+  let tm = [], iv, fin = false;
+  const ov = document.createElement('div'); ov.id = 'rbo';
+  const close = () => { clearInterval(iv); tm.forEach(clearTimeout); ov.remove(); };
+  ov.innerHTML = '<div class="dlg"><h3>♻️ Faire renaissance ?</h3><p>Toutes tes cartes ' + esc(o.name) + ' (favorites comprises) seront supprimées. Tu gagnes 1/5 de la valeur de la collection' + (nx ? ' et le sachet ' + esc(nx) + ' est débloqué.' : '.') + '</p><div class="bts"><button class="g" data-x>Annuler</button><button data-ok style="background:#f5c518;border-color:#f5c518;color:#0d1117">Confirmer</button></div></div>';
+  document.body.appendChild(ov);
+  ov.querySelector('[data-x]').onclick = close;
+  ov.querySelector('[data-ok]').onclick = async (e) => {
+    e.target.disabled = true;
+    try { const j = await api('rebirth', { t }); setS(j.state); play(j); } catch (er) { close(); msg(er.message); }
+  };
+  function play(j) {
+    const done = () => { if (fin) return; fin = true; close(); playerView(); msg('Renaissance ! +' + j.gain + ' 🪙' + (j.unlocked ? ' · Sachet ' + j.unlocked + ' débloqué (niveau ' + j.lv + ') !' : ''), true); };
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return done();
+    const P = ['#f5c518', '#2f81f7', '#a371f7', '#3fb950', '#ff7b72', '#39c5cf'], CR = ['#8b949e', '#3fb950', '#a371f7', '#f5c518'];
+    let h = '';
+    [[-96, 0], [-32, 0], [32, 0], [96, 0], [-96, 1], [-32, 1], [32, 1], [96, 1]].forEach((c, i) => {
+      const cy = 137 + c[1] * 84, col = CR[i % 4];
+      h += '<div class="k" style="left:calc(50% + ' + (c[0] - 27) + 'px);top:' + (cy - 37) + 'px;--k:' + col + ';--dx:' + (-c[0]) + 'px;--dy:' + (200 - cy) + 'px;--d:' + (i * .07).toFixed(2) + 's"><div class="im" style="background:' + col + '"></div><div class="ln"></div><div class="ln s"></div></div>';
+    });
+    for (let i = 0; i < 16; i++) { const a = i / 16 * 6.283, r = 110 + Math.random() * 70; h += '<span class="a p" style="--x:' + Math.round(Math.cos(a) * r) + 'px;--y:' + Math.round(Math.sin(a) * r) + 'px;--q:' + P[i % 6] + '"></span>'; }
+    for (let i = 0; i < 30; i++) h += '<span class="a cf" style="left:' + Math.round(Math.random() * 96) + '%;--q:' + P[i % 6] + ';--d:' + (1.6 + Math.random() * 3).toFixed(2) + 's;--t:' + (2.2 + Math.random() * 1.6).toFixed(2) + 's;--w:' + (6 + Math.round(Math.random() * 5)) + 'px"></span>';
+    [1.5, 1.7, 1.9, 2.1].forEach((d, i) => { h += '<div class="a r" style="--q:' + P[i] + ';--d:' + d + 's"></div>'; });
+    ov.innerHTML = '<div id="rbs">'
+      + '<div class="a" style="left:16px;top:14px;font-size:18px;font-weight:500">' + o.icon + ' ' + esc(o.name) + '</div>'
+      + '<button class="a sk" data-sk>Passer ›</button>'
+      + '<div class="a" style="left:16px;top:42px;font-size:12px;color:#8b949e">Collection terminée</div>'
+      + '<div class="a" id="rbp" style="right:16px;top:42px;font-size:12px;color:#3fb950">' + tot + '/' + tot + '</div>'
+      + '<div class="a pb"><i></i></div>' + h
+      + '<div class="a em"><i>♻️</i></div>'
+      + '<div class="a t tt" style="top:262px;font-size:26px;font-weight:500;--d:2.2s">Renaissance</div>'
+      + '<div class="a t" style="top:296px;font-size:14px;color:#8b949e;--d:2.5s">' + esc(o.name) + ' complété</div>'
+      + '<div class="a t" style="top:318px;font-size:22px;font-weight:500;color:#f5c518;--d:3s">🪙 <span id="rbc">+0</span></div>'
+      + '<div class="a u"><span style="font-size:28px">' + (j.unlocked ? '🎁' : '♻️') + '</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">' + (j.unlocked ? 'Niveau ' + j.lv + '/5 débloqué' : 'Renaissance validée') + '</div><div style="font-size:12px;color:#8b949e">' + (j.unlocked ? 'Sachet ' + esc(j.unlocked) + ' dans la Boutique' : 'Niveau maximum atteint') + '</div></div><button data-ct>Continuer</button></div>'
+      + '</div>';
+    ov.querySelector('[data-sk]').onclick = done;
+    ov.querySelector('[data-ct]').onclick = done;
+    tm.push(setTimeout(() => { const p = $('#rbp'); if (p) { p.textContent = '0/' + tot; p.style.color = '#8b949e'; } }, 1800));
+    tm.push(setTimeout(() => { const t0 = Date.now(); iv = setInterval(() => { const k = Math.min(1, (Date.now() - t0) / 1200), c = $('#rbc'); if (c) c.textContent = '+' + Math.round(j.gain * k); if (k >= 1) clearInterval(iv); }, 30); }, 3000));
+  }
+}
 function playerView() {
   clearInterval(timer);
   if (S.maint) tab = 'col';
@@ -446,7 +528,7 @@ function playerView() {
       tk(); timer = setInterval(tk, 1000);
     } else $('#cd').textContent = 'Stock plein : ouvre un sachet pour relancer le compteur.';
   } else if (tab === 'col') {
-    app.querySelectorAll('[data-rb]').forEach((b) => (b.onclick = () => { if (confirm('Toutes tes cartes de cette collection seront supprimées. Continuer ?')) run(async () => { const j = await api('rebirth', { t: b.dataset.rb }); setS(j.state); playerView(); msg('Renaissance ! +' + j.gain + ' 🪙' + (j.unlocked ? ' · Sachet ' + j.unlocked + ' débloqué (niveau ' + j.lv + ') !' : ''), true); }); }));
+    app.querySelectorAll('[data-rb]').forEach((b) => (b.onclick = () => rebirthFlow(b.dataset.rb)));
     $('#so').value = sort; $('#so').onchange = (e) => { sort = e.target.value; playerView(); };
     $('#dup').onclick = () => run(async () => {
       if (!confirm('Vendre tous les doublons (sauf favoris) ?')) return;
@@ -869,7 +951,7 @@ const TIPS = [
   "🎯 Dans Échange, le symbole 🎯 repère la carte qu'un joueur a et que tu n'as pas.",
   "🤝 Dans Offre, le symbole 🤝 repère la carte que tu as et que l'autre joueur n'a pas encore.",
   "🎮 Un petit tour dans l'onglet Jeux ? Mise raisonnablement !",
-  "💬 Un tour dans la catégorie 'Social' pour discuter avec d'autre joueurs ?",
+  "💬 Demander pas trop de coins dans un echange ou il vous cera refuser a coup sur ! 💡",
 ];
 let appReady = false;
 const splashDone = new Promise((resolve) => {
