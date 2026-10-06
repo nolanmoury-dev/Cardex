@@ -5,6 +5,13 @@ let redis;
 const W = { c: 60, r: 25, e: 11, l: 4 }, BASE = { c: 2, r: 8, e: 25, l: 80 }, R = 'crel';
 const RL_MAX = 10, RL_WAIT = 30000, parisDay = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
 const rlInfo = (u) => { const r = u.rl && u.rl.d === parisDay() ? u.rl : { n: 0, t: 0 }; return { left: Math.max(0, RL_MAX - r.n), next: r.t + RL_WAIT }; };
+// Mini-jeux : limite de parties par jour (heure de Paris). Retour moyen visé : ~88-96 % (jamais > 100 %), mise 10-500.
+const MG_MAX = { slots: 15, flip: 15, scratch: 10, battle: 10 }, TICKET = 50, FLIP_P = 48, FLIP_MAX = 4, BATTLE_X = 1.85;
+const SL = [['🚲', 22, [2, 6, 30]], ['⚽', 22, [2, 6, 30]], ['🤾', 20, [2.5, 8, 40]], ['🦁', 18, [3.5, 12, 60]], ['🏛️', 12, [5, 20, 120]], ['🚀', 6, [10, 50, 400]]];
+const TK = [[6095, 0], [2100, 1], [1200, 2], [500, 4], [80, 10], [20, 50], [5, 100]]; // [poids sur 10000, multiplicateur du ticket]
+const mgInfo = (u) => { const m = u.mg && u.mg.d === parisDay() ? u.mg : {}; return Object.fromEntries(Object.entries(MG_MAX).map(([k, n]) => [k, Math.max(0, n - (m[k] || 0))])); };
+const mgUse = (u, k) => { if (!u.mg || u.mg.d !== parisDay()) u.mg = { d: parisDay() }; if ((u.mg[k] || 0) >= MG_MAX[k]) return 'Limite du jour atteinte : ' + MG_MAX[k] + ' parties par jour pour ce jeu. Reviens demain !'; u.mg[k] = (u.mg[k] || 0) + 1; };
+const shuf = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const DAY = 864e5, MAXP = 10, PRICE = 100, PACK = 5;
 const stepOf = (k) => Math.round((10 + (4 * k) / 9) * 60000); // 10 min pour le 1er sachet, 14 min pour le 10e (total 2 h)
 const pend = [];
@@ -137,7 +144,7 @@ const price = (sh, t, cat) => Math.round((PRICE * 2 ** (lvOf(cat, t) - 1) * (100
 const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t); return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
 const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo), inbox: u.inbox || [],
-  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, rl: rlInfo(u), renames: u.renames || 0, rb: u.rb || {}, coins: u.coins, packs: u.packs, bought: u.bought || {},
+  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, coins: u.coins, packs: u.packs, bought: u.bought || {},
   next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), cards: u.cards, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
   shop: Object.fromEntries(Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s, t, cat), full: PRICE * 2 ** (lvOf(cat, t) - 1), lvl: lvOf(cat, t) }])), lv: Object.fromEntries(LINES.map((b) => [b, lineLv(u, b)])),
@@ -566,6 +573,53 @@ const handler = async (req, res) => {
       const gain = win ? Math.floor(a * mult) : 0;
       u.coins += gain - a; u.rl = { d: parisDay(), n: (RL_MAX - ri.left) + 1, t: Date.now() };
       extra = { n, red, win, gain, bet: a };
+    } else if (b.action === 'slots') {
+      const a = int(b.amount, 500);
+      if (a < 10) return fail('Mise minimale : 10 coins (maximale : 500)');
+      if (u.coins < a) return fail('Pas assez de coins');
+      const e = mgUse(u, 'slots'); if (e) return fail(e);
+      const reels = Array.from({ length: 5 }, () => { let x = crypto.randomInt(100); for (let i = 0; i < SL.length; i++) if ((x -= SL[i][1]) < 0) return i; return 0; });
+      const cnt = SL.map((_, i) => reels.filter((r) => r === i).length), m = Math.max(...cnt), k = cnt.indexOf(m);
+      const gain = m >= 3 ? Math.floor(a * SL[k][2][m - 3]) : 0;
+      u.coins += gain - a; extra = { reels: reels.map((i) => SL[i][0]), gain, bet: a, win: gain > 0, m, sym: SL[k][0] };
+    } else if (b.action === 'flip') {
+      const st = b.step, d = u.dn, flip = () => crypto.randomInt(100) < FLIP_P;
+      if (st === 'start') {
+        const a = int(b.amount, 500);
+        if (d) return fail('Une partie est déjà en cours : encaisse ou double d’abord');
+        if (a < 10) return fail('Mise minimale : 10 coins (maximale : 500)');
+        if (u.coins < a) return fail('Pas assez de coins');
+        const e = mgUse(u, 'flip'); if (e) return fail(e);
+        u.coins -= a; const win = flip();
+        if (win) u.dn = { bet: a, n: 1 };
+        extra = { win, side: win === (b.pick === 'pile') ? 'pile' : 'face', bet: a };
+      } else if (st === 'double') {
+        if (!d) return fail('Aucune partie en cours');
+        const win = flip(); if (win) d.n += 1; else u.dn = null;
+        extra = { win, side: win ? 'pile' : 'face', bet: d.bet };
+      } else if (st === 'cash') {
+        if (!d) return fail('Aucune partie en cours');
+        extra = { gain: d.bet * 2 ** d.n, cashed: true }; u.coins += extra.gain; u.dn = null;
+      } else return fail('Action inconnue');
+      if (u.dn && u.dn.n >= FLIP_MAX) { extra.gain = u.dn.bet * 2 ** u.dn.n; extra.cashed = true; u.coins += extra.gain; u.dn = null; }
+    } else if (b.action === 'scratch') {
+      if (u.coins < TICKET) return fail('Pas assez de coins (ticket : ' + TICKET + ')');
+      const e = mgUse(u, 'scratch'); if (e) return fail(e);
+      let x = crypto.randomInt(10000), mult = 0; for (const [w, m] of TK) { if ((x -= w) < 0) { mult = m; break; } }
+      const V = [1, 2, 4, 10, 50, 100].map((m) => m * TICKET), prize = mult * TICKET;
+      const pool = shuf(V.filter((v) => v !== prize).flatMap((v) => [v, v]));
+      const cases = mult ? shuf([prize, prize, prize, ...pool.slice(0, 3)]) : pool.slice(0, 6);
+      u.coins += prize - TICKET; extra = { cases, gain: prize, win: prize > 0, price: TICKET };
+    } else if (b.action === 'battle') {
+      const a = int(b.amount, 500);
+      if (a < 10) return fail('Mise minimale : 10 coins (maximale : 500)');
+      if (u.coins < a) return fail('Pas assez de coins');
+      const e = mgUse(u, 'battle'); if (e) return fail(e);
+      const pick = () => { const t = LINES[crypto.randomInt(LINES.length)]; return draw(cat[t], t, 1); };
+      const rk = (id) => 'crel'.indexOf(rarOf(cat, id)), rounds = []; let res = 0;
+      for (let i = 0; i < 5 && !res; i++) { const p = pick(), o = pick(); rounds.push([p, o]); res = Math.sign(rk(p) - rk(o)); }
+      const gain = res > 0 ? Math.floor(a * BATTLE_X) : res < 0 ? 0 : a;
+      u.coins += gain - a; extra = { rounds, res, gain, bet: a };
     } else if (b.action === 'betend') {
       const g = await redis.get('g:' + b.gid);
       if (!g || g.p !== u.pseudo) return fail('Partie introuvable');
