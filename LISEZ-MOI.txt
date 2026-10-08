@@ -1,0 +1,7 @@
+Cardex - structure du projet (déploiement Vercel)
+
+index.html, sw.js, manifest.json, icon*.png  -> le site (racine)
+api/game.js                                  -> le serveur (appelé sur /api/game, y compris par les crons)
+lib/cards.js + lib/levels.json               -> les collections et leurs niveaux 2 à 5
+package.json, vercel.json                    -> dépendances et tâches planifiées
+_maquettes/                                  -> maquettes de travail, ignorées au déploiement (.vercelignore)
