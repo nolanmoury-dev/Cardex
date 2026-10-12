@@ -94,6 +94,10 @@ async function renameUser(u, nn, count) {
     if (o && o.dm) { const x = o.dm[old.toLowerCase()]; delete o.dm[old.toLowerCase()]; if (x) o.dm[nn.toLowerCase()] = { ...x, p: nn, f: x.f === old ? nn : x.f }; await redis.set('u:' + e.p.toLowerCase(), o); }
   }
   u.dm = Object.fromEntries(Object.entries(u.dm || {}).map(([lk, e]) => [lk, { ...e, f: e.f === old ? nn : e.f }]));
+  for (const k of ['challenges', 'chh']) { // défis en cours et historique : suivre le changement de pseudo
+    const L = await redis.get(k);
+    if (L && L.some((x) => [x.from, x.to, x.a, x.b].includes(old))) await redis.set(k, L.map((x) => ({ ...x, ...(x.from === old ? { from: nn } : {}), ...(x.to === old ? { to: nn } : {}), ...(x.a === old ? { a: nn } : {}), ...(x.b === old ? { b: nn } : {}) })));
+  }
   if (mk.some((x) => x.seller === old || x.to === old)) await redis.set('market', mk.map((x) => ({ ...x, seller: x.seller === old ? nn : x.seller, ...(x.to === old ? { to: nn } : {}) })));
 }
 const OP_CODE = process.env.OPERATOR_CODE || '100823';
@@ -102,7 +106,7 @@ const hash = (pw, salt) => crypto.scryptSync(pw, salt, 32).toString('hex');
 const int = (v, max = 1e6) => Math.max(0, Math.min(max, parseInt(v, 10) || 0));
 const envFind = (re) => { const k = Object.keys(process.env).find((x) => re.test(x) && process.env[x]); return k && process.env[k]; };
 const live = (o) => !o.hidden && (!o.until || o.until > Date.now());
-const loadCu = async () => ({ cols: [], objs: [], vals: {}, ...((await redis.get('custom')) || {}) });
+const loadCu = async () => ({ cols: [], objs: [], vals: {}, stats: {}, ...((await redis.get('custom')) || {}) });
 const full = (cu) => {
   const t = { ...T0 };
   cu.cols.forEach((c) => (t[c.key] = c));
@@ -122,6 +126,85 @@ const val = (u, id, cat, cu) => {
 };
 const add = (u, id, n) => { if (!u.cards[id]) u.since[id] = Date.now(); u.cards[id] = (u.cards[id] || 0) + n; };
 const rm = (u, id, n) => { u.cards[id] -= n; if (u.cards[id] <= 0) { delete u.cards[id]; delete u.since[id]; u.fav = u.fav.filter((x) => x !== id); } };
+
+// =================== DÉFIS ===================
+// Cartes jouables : collections de niveau II à V, ou n'importe quelle collection dont le joueur a déjà fait une renaissance ; objets seulement si l'opérateur leur a donné des stats.
+const CH = { fee: 5, max: 5000, ttl: 48 * 36e5, day: 10, vs: 3, sent: 5 };
+const HP0 = { c: [20, 5], r: [30, 8], e: [45, 12], l: [70, 18] }, LVM = [1, 1.2, 1.4, 1.6, 1.8], COST = { c: 1, r: 3, e: 8, l: 20 };
+const rbTot = (u) => Object.values((u && u.rb) || {}).reduce((a, x) => a + x, 0);
+const statsOf = (id, cat, cu, raw) => {
+  const o = !raw && (cu.stats || {})[id];
+  if (o) return { hp: o.hp, atk: o.atk, custom: true };
+  if (id.startsWith('obj:')) return null;
+  const r = rarOf(cat, id); if (!r) return null;
+  const t = id.slice(0, id.indexOf(':')), lv = Math.min(5, Math.max(1, (cat[t] && cat[t].lv) || 1));
+  const h = parseInt(crypto.createHash('md5').update(id).digest('hex').slice(0, 6), 16) / 0xffffff, k = LVM[lv - 1] * (0.9 + 0.2 * h); // écart propre à chaque carte : -10 % à +10 %
+  return { hp: Math.max(1, Math.round(HP0[r][0] * k)), atk: Math.max(1, Math.round(HP0[r][1] * k)) };
+};
+const playable = (u, id, cat, cu) => {
+  if (!statsOf(id, cat, cu)) return false;
+  if (id.startsWith('obj:')) return true;
+  const t = id.slice(0, id.indexOf(':'));
+  return ((cat[t] && cat[t].lv) || 1) >= 2 || ((u.rb || {})[t] || 0) >= 1;
+};
+const dlInfo = (u) => { const d = u.dl && u.dl.d === parisDay() ? u.dl : { n: 0, o: {} }, max = u.dlMax != null ? u.dlMax : CH.day; return { left: Math.max(0, max - d.n), max, o: d.o || {} }; };
+const dlUse = (u, opp) => { if (!u.dl || u.dl.d !== parisDay()) u.dl = { d: parisDay(), n: 0, o: {} }; u.dl.n++; const k = opp.toLowerCase(); u.dl.o[k] = (u.dl.o[k] || 0) + 1; };
+// Cartes engagées : sorties de la collection du joueur (donc bloquées partout) puis rendues ou transférées au résultat
+const lock = (u, ids) => ids.map((id) => { const x = { id, since: (u.since || {})[id] || Date.now(), fav: u.fav.includes(id) }; rm(u, id, 1); return x; });
+const unlock = (u, xs) => xs.forEach((x) => { const had = u.cards[x.id]; add(u, x.id, 1); if (!had) { u.since[x.id] = x.since; if (x.fav && !u.fav.includes(x.id)) u.fav.push(x.id); } });
+const refundCh = (A, x, text) => { if (x.mode === 'war') A.coins += x.s; unlock(A, x.c); note(A, text); };
+function pickCards(u, ids, fmt, stake, mode, cat, cu) {
+  if (!Array.isArray(ids) || ids.length !== fmt) return 'Choisis exactement ' + fmt + ' carte' + (fmt > 1 ? 's' : '');
+  const cnt = {}; let pts = 0;
+  for (const id of ids) {
+    const r = rarOf(cat, id);
+    if (!r) return 'Carte inconnue';
+    if (!playable(u, id, cat, cu)) return cn(id) + " n'est pas jouable en défi";
+    cnt[id] = (cnt[id] || 0) + 1;
+    if (cnt[id] > (u.cards[id] || 0)) return "Tu n'as pas assez d'exemplaires de " + cn(id);
+    if (mode === 'war' && u.fav.includes(id)) return cn(id) + ' est en favori ⭐ : retire-la des favoris pour la jouer en mode Guerre';
+    pts += COST[r];
+  }
+  if (pts > Math.floor(stake / 10)) return 'Trop de force : ' + pts + ' points pour ' + Math.floor(stake / 10) + ' autorisés (mise ' + stake + ' ÷ 10). Augmente la mise ou prends des cartes plus faibles.';
+}
+function duel(ia, ib, sa, sb) {
+  let ha = sa.hp, hb = sb.hp; const r = [], roll = (a) => Math.max(1, Math.round(a * (0.8 + crypto.randomInt(0, 401) / 1000)));
+  for (let i = 0; i < 60 && ha > 0 && hb > 0; i++) { const da = roll(sa.atk), db = roll(sb.atk); hb -= da; ha -= db; r.push([da, db]); }
+  const ea = Math.max(0, ha), eb = Math.max(0, hb);
+  return { a: ia, b: ib, ha: sa.hp, aa: sa.atk, hb: sb.hp, ab: sb.atk, r, ea, eb, w: Math.sign(ea - eb) };
+}
+// A = celui qui a lancé le défi (x), B = celui qui accepte. Retourne le combat enregistré (replay).
+async function settle(A, B, x, sb, cb, cat, cu) {
+  const sa = x.s, ca = x.c, war = x.mode === 'war', duels = [];
+  for (let i = 0; i < x.fmt; i++) duels.push(duel(ca[i].id, cb[i].id, statsOf(ca[i].id, cat, cu), statsOf(cb[i].id, cat, cu)));
+  const wa = duels.filter((d) => d.w === 1).length, wb = duels.filter((d) => d.w === -1).length;
+  const w = wa !== wb ? Math.sign(wa - wb) : Math.sign(duels.reduce((a, d) => a + d.ea - d.eb, 0)); // plus de duels gagnés, sinon plus de points de vie restants
+  const h = { id: crypto.randomBytes(6).toString('hex'), t: Date.now(), a: A.pseudo, b: B.pseudo, mode: x.mode, fmt: x.fmt, sa, sb, w, d: duels, pot: 0, fee: 0, got: null };
+  if (w === 0 || !war) { if (war) { A.coins += sa; B.coins += sb; } unlock(A, ca); unlock(B, cb); }
+  else {
+    const [W, Lo, cw, cl] = w > 0 ? [A, B, ca, cb] : [B, A, cb, ca], tot = sa + sb;
+    h.pot = tot - Math.floor((tot * CH.fee) / 100); h.fee = tot - h.pot;
+    W.coins += h.pot; unlock(W, cw);
+    const k = crypto.randomInt(cl.length); h.got = cl[k].id;
+    cl.forEach((c, i) => { if (i === k) add(W, c.id, 1); else unlock(Lo, [c]); });
+  }
+  dlUse(A, B.pseudo); dlUse(B, A.pseudo);
+  const say = (P, O) => {
+    const m = (P === A ? 1 : -1) * w, ms = P === A ? sa : sb;
+    return '⚔️ ' + (war ? 'Guerre' : 'Amical') + ' ' + x.fmt + 'v' + x.fmt + ' contre ' + O.pseudo + ' : ' + (m === 0 ? 'égalité' + (war ? ' (mises rendues)' : '') : m > 0 ? 'victoire !' + (war ? ' +' + h.pot + ' 🪙 et la carte ' + cn(h.got) : '') : 'défaite' + (war ? ' −' + ms + ' 🪙 et la carte ' + cn(h.got) : ''));
+  };
+  note(A, say(A, B)); note(B, say(B, A));
+  const H = (await redis.get('chh')) || []; H.unshift(h); await redis.set('chh', H.slice(0, 300));
+  return h;
+}
+let chChk = 0;
+async function expireCh() { // défis sans réponse au bout de 48 h : mise et cartes rendues
+  const now = Date.now(); if (now - chChk < 60000) return; chChk = now;
+  const L = (await redis.get('challenges')) || [], dead = L.filter((x) => x.exp <= now);
+  if (!dead.length) return;
+  await redis.set('challenges', L.filter((x) => x.exp > now));
+  for (const x of dead) { const A = await redis.get(key(x.from)); if (!A) continue; refundCh(A, x, '⌛ Ton défi ' + (x.to ? 'contre ' + x.to : 'ouvert') + " est resté sans réponse : mise et cartes rendues"); await redis.set(key(A.pseudo), A); }
+}
 
 function note(u, text, quiet) {
   if (!quiet) {
@@ -180,7 +263,7 @@ const price = (sh, t, cat) => Math.round((PRICE * 2 ** (lvOf(cat, t) - 1) * (100
 const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t), ob = cat[t]; if (ob && ob.until != null && !ob.base && ((u.rb || {})[t] || 0) >= 1) return false; return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
 const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => x.seller === u.pseudo || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))), inbox: u.inbox || [],
-  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, coins: u.coins, packs: u.packs, bought: u.bought || {},
+  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, coins: u.coins, packs: u.packs, bought: u.bought || {},
   next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), cards: u.cards, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
   shop: Object.fromEntries(Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s, t, cat), full: PRICE * 2 ** (lvOf(cat, t) - 1), lvl: lvOf(cat, t) }])), lv: Object.fromEntries(LINES.map((b) => [b, lineLv(u, b)])), lvn: Object.fromEntries(LINES.map((b) => [b, (cat[b + (lineLv(u, b) + 1)] || {}).name || null])),
@@ -530,6 +613,7 @@ const handler = async (req, res) => {
         const u = await redis.get(key(String(b.pseudo || '')));
         if (!u) return fail('Joueur introuvable');
         await dmDrop(u);
+        await redis.set('challenges', ((await redis.get('challenges')) || []).filter((x) => x.from !== u.pseudo));
         await redis.del(key(u.pseudo)); await redis.srem('users', u.pseudo);
         await redis.set('market', ((await redis.get('market')) || []).filter((x) => x.seller !== u.pseudo));
         return ok({ done: true });
@@ -540,7 +624,7 @@ const handler = async (req, res) => {
         tick(u);
         const nms = await redis.smembers('users'), all = nms.length ? await redis.mget(...nms.map(key)) : [];
         const same = (u.ips || []).length ? all.filter((x) => x && x.pseudo !== u.pseudo && (x.ips || []).some((h) => u.ips.includes(h))).map((x) => x.pseudo) : [];
-        return ok({ p: { seen: u.bot ? u.lastAct || 0 : u.seen || 0, ban: banOf(u), same, pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards || {}, rb: u.rb || {}, rl: rlInfo(u).left, mg: mgInfo(u), renames: u.renames || 0 }, max: { rl: RL_MAX, mg: MG_MAX } });
+        return ok({ p: { seen: u.bot ? u.lastAct || 0 : u.seen || 0, ban: banOf(u), same, pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards || {}, rb: u.rb || {}, rl: rlInfo(u).left, dl: { left: dlInfo(u).left, max: dlInfo(u).max }, mg: mgInfo(u), renames: u.renames || 0 }, max: { rl: RL_MAX, mg: MG_MAX } });
       }
       if (b.action === 'pset') {
         const u = await redis.get(key(String(b.pseudo || '')));
@@ -552,6 +636,7 @@ const handler = async (req, res) => {
         if (P.packs != null) { const n = int(P.packs, 1000); if (n !== u.packs) { u.packs = n; u.last = Date.now(); } }
         for (const [t, n] of Object.entries(P.bought || {})) { if (!cat[t] || t === 'obj') continue; const v = int(n, 1000); if (v) u.bought[t] = v; else delete u.bought[t]; }
         for (const [t, n] of Object.entries(P.rb || {})) { if (!cat[t] || t === 'obj') continue; const v = int(n, 100); if (v) u.rb[t] = v; else delete u.rb[t]; }
+        if (P.dlMax != null) u.dlMax = int(P.dlMax, 1000);
         if (P.rl != null) u.rl = { d: parisDay(), n: RL_MAX - Math.min(RL_MAX, int(P.rl, RL_MAX)), t: 0 };
         if (P.mg) {
           if (!u.mg || u.mg.d !== parisDay()) u.mg = { d: parisDay() };
@@ -576,6 +661,10 @@ const handler = async (req, res) => {
         const until = secs === null ? null : Date.now() + secs * 1000;
         u.ban = { until, reason: String(b.reason || '').trim().slice(0, 300), t: Date.now() };
         for (const h of u.ips || []) await banIp(h, u, until);
+        { // ses défis en attente sont annulés et remboursés
+          const L = (await redis.get('challenges')) || [], mine = L.filter((x) => x.from === u.pseudo);
+          if (mine.length) { await redis.set('challenges', L.filter((x) => x.from !== u.pseudo)); mine.forEach((x) => refundCh(u, x, '↩️ Ton défi en attente a été annulé : mise et cartes rendues')); }
+        }
         note(u, '⛔ Ton compte a été banni' + (u.ban.reason ? ' : ' + u.ban.reason : ''));
         await redis.set(key(u.pseudo), u);
         return ok({ done: true });
@@ -596,7 +685,15 @@ const handler = async (req, res) => {
         let hand = 0, owners = 0, bots = 0;
         for (const v of list) { const n = v && v.cards && v.cards[id]; if (n) { hand += n; owners++; if (v.bot) bots++; } }
         const sale = mk0.filter((x) => x.card === id && !x.want).length, trade = mk0.filter((x) => x.card === id && x.want).length, def = defBase(id, r, cu), set = (cu.vals || {})[id];
-        return ok({ card: { id, name: cn(id), col: (cat[id.slice(0, id.indexOf(':'))] || {}).name || '?', r, def, cur: set || def, custom: !!set, hand, sale, trade, total: hand + sale + trade, owners, bots } });
+        return ok({ card: { id, name: cn(id), col: (cat[id.slice(0, id.indexOf(':'))] || {}).name || '?', r, def, cur: set || def, custom: !!set, st: statsOf(id, cat, cu), sd: statsOf(id, cat, cu, true), hand, sale, trade, total: hand + sale + trade, owners, bots } });
+      }
+      if (b.action === 'cardstat') {
+        const id = String(b.id || '');
+        if (!rarOf(cat, id)) return fail('Carte inconnue');
+        const hp = int(b.hp, 100000), atk = int(b.atk, 100000); cu.stats ||= {};
+        if (hp > 0 && atk > 0) cu.stats[id] = { hp, atk }; else delete cu.stats[id];
+        await redis.set('custom', cu);
+        return ok({ done: true });
       }
       if (b.action === 'cardset') {
         const id = String(b.id || '');
@@ -613,6 +710,7 @@ const handler = async (req, res) => {
       return fail('Action inconnue');
     }
 
+    await expireCh().catch((e) => console.error('expireCh', e.message));
     const u = await redis.get(key(s.p));
     if (!u) return fail('Session expirée, reconnecte-toi', 401);
     u.bought ||= {}; u.since ||= {}; u.fav ||= []; u.notifs ||= []; u.inbox ||= [];
@@ -781,11 +879,11 @@ const handler = async (req, res) => {
       if (!ids.length || ids.some((id) => !u.cards[id])) return fail('Collection incomplète');
       const gain = Math.floor(ids.reduce((a, id) => a + val(u, id, cat, cu), 0) / 5);
       for (const id of Object.keys(u.cards)) if (id.startsWith(t + ':')) rm(u, id, u.cards[id]);
-      const L0 = lineLv(u, baseOf(cat, t));
+      const L0 = lineLv(u, baseOf(cat, t)), rb0 = rbTot(u);
       (u.rb ||= {})[t] = (u.rb[t] || 0) + 1; u.coins += gain;
       if (o.until != null && !o.base && u.bought[t] > 0) { u.packs += u.bought[t]; delete u.bought[t]; } // collection provisoire : les sachets restants deviennent des sachets gratuits
       const L1 = lineLv(u, baseOf(cat, t)), nt = L1 > L0 ? (L1 > 1 ? baseOf(cat, t) + L1 : baseOf(cat, t)) : null;
-      extra = { gain, lv: L1, unlocked: nt && cat[nt] ? cat[nt].name : null };
+      extra = { chUnlock: rb0 === 0, gain, lv: L1, unlocked: nt && cat[nt] ? cat[nt].name : null };
     } else if (b.action === 'rank') {
       const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
       extra = { rank: list.filter(Boolean).map((v) => {
@@ -941,6 +1039,66 @@ const handler = async (req, res) => {
         note(v, '💰 ' + u.pseudo + ' a acheté ta carte ' + x.card.slice(x.card.indexOf(':') + 1) + ' pour ' + x.price + ' coins');
         await redis.set(key(v.pseudo), v);
       }
+    } else if (b.action === 'chlist') {
+      const now = Date.now(), L = ((await redis.get('challenges')) || []).filter((x) => x.exp > now), H = (await redis.get('chh')) || [];
+      const cl = (x) => ({ id: x.id, from: x.from, to: x.to, mode: x.mode, fmt: x.fmt, s: x.s, exp: x.exp }); // jamais les cartes de l'adversaire
+      extra = { inc: L.filter((x) => x.to === u.pseudo).map(cl), open: L.filter((x) => !x.to && x.from !== u.pseudo).map(cl), sent: L.filter((x) => x.from === u.pseudo).map(cl), res: H.filter((h) => h.a === u.pseudo || h.b === u.pseudo).slice(0, 10) };
+      if (b.pl) { const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : []; extra.players = list.filter((v) => v && !v.bot && v.pseudo !== u.pseudo && rbTot(v) > 0 && !banOf(v)).map((v) => v.pseudo).sort(); }
+    } else if (b.action === 'chnew') {
+      if (!rbTot(u)) return fail('Les défis se débloquent à ta première renaissance');
+      const mode = b.mode === 'fun' ? 'fun' : 'war', fmt = [1, 2, 3].includes(+b.fmt) ? +b.fmt : 3, st = int(b.stake, CH.max), di = dlInfo(u);
+      if (st < 10) return fail('Mise minimale : 10');
+      if (di.left <= 0) return fail('Limite du jour atteinte : ' + di.max + ' défis par jour. Reviens demain !');
+      const L = (await redis.get('challenges')) || [];
+      if (L.filter((x) => x.from === u.pseudo).length >= CH.sent) return fail(CH.sent + ' défis en attente au maximum : annule-en un ou attends une réponse');
+      let to = null, tv = null;
+      if (b.to) {
+        tv = await redis.get(key(String(b.to)));
+        if (!tv || tv.pseudo === u.pseudo) return fail('Joueur introuvable');
+        if (tv.bot) return fail('Les bots ne jouent pas aux défis');
+        if (!rbTot(tv)) return fail("Ce joueur n'a pas encore débloqué les défis");
+        if (banOf(tv)) return fail('Ce joueur est banni');
+        if ((di.o[tv.pseudo.toLowerCase()] || 0) >= CH.vs) return fail('Déjà ' + CH.vs + ' défis aujourd’hui contre ' + tv.pseudo);
+        to = tv.pseudo;
+      }
+      if (mode === 'war' && u.coins < st) return fail('Pas assez de coins');
+      const ids = [].concat(b.cards || []).map(String), er = pickCards(u, ids, fmt, st, mode, cat, cu); if (er) return fail(er);
+      const c = lock(u, ids); if (mode === 'war') u.coins -= st;
+      const now = Date.now(); L.push({ id: crypto.randomBytes(6).toString('hex'), from: u.pseudo, to, mode, fmt, s: st, c, t: now, exp: now + CH.ttl });
+      await redis.set('challenges', L);
+      if (tv) { note(tv, '⚔️ ' + u.pseudo + ' te défie en ' + fmt + 'v' + fmt + ' (' + (mode === 'war' ? 'Guerre, mise ' + st + ' 🪙' : 'Amical') + ') : Social → Défis'); await redis.set(key(tv.pseudo), tv); }
+    } else if (b.action === 'chacc') {
+      if (!rbTot(u)) return fail('Les défis se débloquent à ta première renaissance');
+      const L = (await redis.get('challenges')) || [], x = L.find((y) => y.id === b.id);
+      if (!x || x.exp <= Date.now()) return fail('Défi introuvable : il a été accepté, annulé ou a expiré');
+      if (x.from === u.pseudo) return fail("C'est ton propre défi");
+      if (x.to && x.to !== u.pseudo) return fail("Ce défi ne t'est pas destiné");
+      const A = await redis.get(key(x.from));
+      if (!A) { await redis.set('challenges', L.filter((y) => y !== x)); return fail("Ce joueur n'existe plus"); }
+      const di = dlInfo(u), da = dlInfo(A);
+      if (di.left <= 0) return fail('Limite du jour atteinte : ' + di.max + ' défis par jour. Reviens demain !');
+      if (da.left <= 0) return fail('Ton adversaire a atteint sa limite de défis du jour');
+      if ((di.o[A.pseudo.toLowerCase()] || 0) >= CH.vs || (da.o[u.pseudo.toLowerCase()] || 0) >= CH.vs) return fail('Déjà ' + CH.vs + ' défis aujourd’hui entre vous deux');
+      const st = int(b.stake, CH.max);
+      if (st < 10) return fail('Mise minimale : 10');
+      if (x.mode === 'war' && u.coins < st) return fail('Pas assez de coins');
+      const ids = [].concat(b.cards || []).map(String), er = pickCards(u, ids, x.fmt, st, x.mode, cat, cu); if (er) return fail(er);
+      const cb = lock(u, ids); if (x.mode === 'war') u.coins -= st;
+      await redis.set('challenges', L.filter((y) => y !== x));
+      const h = await settle(A, u, x, st, cb, cat, cu);
+      await redis.set(key(A.pseudo), A);
+      extra = { res: h };
+    } else if (b.action === 'chdec') {
+      const L = (await redis.get('challenges')) || [], x = L.find((y) => y.id === b.id && y.to === u.pseudo);
+      if (!x) return fail('Défi introuvable');
+      await redis.set('challenges', L.filter((y) => y !== x));
+      const A = await redis.get(key(x.from));
+      if (A) { refundCh(A, x, '❌ ' + u.pseudo + ' a refusé ton défi : mise et cartes rendues'); await redis.set(key(A.pseudo), A); }
+    } else if (b.action === 'chcancel') {
+      const L = (await redis.get('challenges')) || [], x = L.find((y) => y.id === b.id && y.from === u.pseudo);
+      if (!x) return fail('Défi introuvable (déjà accepté ou expiré)');
+      await redis.set('challenges', L.filter((y) => y !== x));
+      refundCh(u, x, '↩️ Défi annulé : mise et cartes rendues');
     } else if (b.action !== 'me') return fail('Action inconnue');
 
     if (b.action === 'me') { extra = { notifs: u.notifs }; u.notifs = []; }
