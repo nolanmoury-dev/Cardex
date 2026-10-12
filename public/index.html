@@ -656,7 +656,12 @@ function dmInit() {
     if (dmPl) draw(); else api('players').then((j) => { dmPl = j.players; if ($('#dmq')) draw(); }).catch((e) => msg(e.message));
   }
   if (dmWith) {
-    const cb = $('#dmch'); if (cb) cb.onclick = () => { if (!S.ch || !S.ch.ok) return msg('Les défis se débloquent à ta première renaissance (♻️)'); chForm = { mode: 'war', fmt: 3, to: dmWith, stake: 100, sel: [], q: '' }; CHD = CHD || { players: [dmWith], inc: [], open: [], sent: [], res: [] }; rkSub = 'd'; dmWith = null; playerView(); };
+    const cb = $('#dmch'); if (cb) cb.onclick = () => {
+      if (!S.ch || !S.ch.ok) return msg('Les défis se débloquent à ta première renaissance (♻️)');
+      const who = dmWith, ov = overlay('<div class="box" style="max-width:420px;margin:12vh auto;text-align:center"><h2>⚔️ Défier ' + esc(who) + '</h2><p>Quel type de défi ?</p><div style="display:grid;gap:10px"><button id="dcf">🤝 Amical<br><small>On ne perd rien : ni coins, ni cartes</small></button><button id="dcw" class="g">⚔️ Guerre<br><small>Mise en coins + le gagnant prend 1 carte</small></button><button id="dcx" class="g">Annuler</button></div></div>');
+      const open = (mode) => { ov.remove(); chForm = { mode, fmt: 3, to: who, stake: mode === 'fun' ? 200 : 100, sel: [], q: '' }; CHD = CHD || { players: [who], inc: [], open: [], sent: [], res: [] }; rkSub = 'd'; dmWith = null; playerView(); };
+      ov.querySelector('#dcf').onclick = () => open('fun'); ov.querySelector('#dcw').onclick = () => open('war'); ov.querySelector('#dcx').onclick = () => ov.remove();
+    };
     dmLoad(true).catch((e) => msg(e.message));
     const send = () => { const x = $('#dmx'), text = x.value.trim(); if (!text) return; x.value = ''; run(async () => { try { const j = await api('dmsend', { to: dmWith, text }); setS(j.state); } catch (er) { x.value = text; throw er; } await dmLoad(true); }); };
     $('#dms').onclick = send; $('#dmx').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } };
