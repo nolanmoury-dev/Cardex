@@ -539,7 +539,7 @@ function chFormDraw(el) {
     + '<label>' + (war() ? 'Mise (coins, 10 à 5000)' : 'Mise virtuelle (fixe la force)') + ' <input id="cfs" type="number" min="10" max="5000" value="' + f.stake + '" style="width:120px"></label></div>'
     + (acc ? '<p><small>Mise de ' + esc(acc.from) + ' : ' + acc.s + ' 🪙. Tu choisis ta propre mise.</small></p>' : '')
     + '<p id="cfp"></p><div id="cfsel" class="row" style="margin-bottom:8px"></div>'
-    + '<input id="cfq" placeholder="🔎 Chercher dans mes cartes jouables" style="width:100%;margin-bottom:8px" value="' + esc(f.q || '') + '"><div class="grid" id="cfg"></div>'
+    + '<input id="cfq" placeholder="🔎 Chercher : nom, ou un nombre (vie, guerre ou batterie)" style="width:100%;margin-bottom:8px" value="' + esc(f.q || '') + '"><div class="row" style="margin-bottom:8px;gap:8px"><label>❤️ Vie <input id="cfh" type="number" min="0" style="width:80px" value="' + esc(f.qh || '') + '"></label><label>⚔️ Guerre <input id="cfa" type="number" min="0" style="width:80px" value="' + esc(f.qa || '') + '"></label><label>🔋 Batterie <input id="cfbt" type="number" min="0" style="width:80px" value="' + esc(f.qb || '') + '"></label></div><div class="grid" id="cfg"></div>'
     + '<div class="row" style="margin-top:12px"><button id="cfok">' + (acc ? '⚔️ Accepter et combattre' : '🚀 Envoyer le défi') + '</button></div><div class="err" id="cfe"></div></div>';
   $('#cfm').value = f.mode; $('#cff').value = f.fmt; if ($('#cft')) $('#cft').value = f.to || '';
   const name = (id) => esc(cname(id)), st = (id) => stk(id) || [0, 0, 0];
@@ -549,9 +549,16 @@ function chFormDraw(el) {
     $('#cfsel').innerHTML = f.sel.map((id, i) => '<span class="pill">' + (i + 1) + '. ' + name(id) + ' · ❤️' + st(id)[0] + ' ⚔️' + st(id)[1] + ' <a data-rm="' + i + '" style="cursor:pointer">✕</a></span>').join('') || '<small>Choisis ' + f.fmt + ' carte' + (f.fmt > 1 ? 's' : '') + ' ci-dessous : elles combattent dans l\'ordre (duel 1, 2, 3). Elles resteront cachées jusqu\'au résultat.</small>';
     $('#cfsel').querySelectorAll('[data-rm]').forEach((a) => (a.onclick = () => { f.sel.splice(+a.dataset.rm, 1); info(); grid(); }));
   };
+  const matchQ = (id, q) => {
+    const s = st(id), bat = COSTC[RAR[id]], ok = (v, x) => x === '' || x == null || +x === v;
+    if (!ok(s[0], f.qh) || !ok(s[1], f.qa) || !ok(bat, f.qb)) return false;
+    const t = q.trim(); if (!t) return true;
+    if (/^\d+$/.test(t)) return cname(id).toLowerCase().includes(t) || +t === s[0] || +t === s[1] || +t === bat;
+    return cname(id).toLowerCase().includes(t);
+  };
   const grid = () => {
     const g = $('#cfg'), q = (f.q || '').toLowerCase(), used = {}; f.sel.forEach((id) => (used[id] = (used[id] || 0) + 1));
-    const ids = Object.keys(S.cards).filter((id) => stk(id) && stk(id)[2] && !(war() && S.fav.includes(id)) && cname(id).toLowerCase().includes(q)).sort((a, b) => 'lerc'.indexOf(RAR[a]) - 'lerc'.indexOf(RAR[b]) || cname(a).localeCompare(cname(b)));
+    const ids = Object.keys(S.cards).filter((id) => stk(id) && stk(id)[2] && !(war() && S.fav.includes(id)) && matchQ(id, q)).sort((a, b) => 'lerc'.indexOf(RAR[a]) - 'lerc'.indexOf(RAR[b]) || cname(a).localeCompare(cname(b)));
     g.innerHTML = ''; if (!ids.length) g.innerHTML = '<small>Aucune carte jouable' + (q ? ' pour cette recherche' : ' : seules les cartes des collections niveau II à V (ou d\'une collection dont tu as fait la renaissance) peuvent combattre') + '.</small>';
     ids.slice(0, 60).forEach((id) => {
       const left = S.cards[id] - (used[id] || 0), c = cardEl(id, left);
@@ -571,6 +578,9 @@ function chFormDraw(el) {
   if ($('#cft')) $('#cft').onchange = (e) => (f.to = e.target.value);
   $('#cfs').oninput = (e) => { f.stake = e.target.value; info(); };
   $('#cfq').oninput = (e) => { f.q = e.target.value; grid(); };
+  $('#cfh').oninput = (e) => { f.qh = e.target.value; grid(); };
+  $('#cfa').oninput = (e) => { f.qa = e.target.value; grid(); };
+  $('#cfbt').oninput = (e) => { f.qb = e.target.value; grid(); };
   $('#cfok').onclick = async () => {
     const er = $('#cfe'); er.textContent = '';
     try {
