@@ -154,7 +154,7 @@ const known = (u, cat, t) => { const o = cat[t]; return !o || !o.base || o.lv <=
 const knownId = (u, cat, id) => known(u, cat, String(id).slice(0, String(id).indexOf(':')));
 const price = (sh, t, cat) => Math.round((PRICE * 2 ** (lvOf(cat, t) - 1) * (100 - sh.discount)) / 100);
 // boutique d'un joueur : un seul sachet par ligne (celui de son niveau) ; les anciens ne restent que s'il en reste d'achetés
-const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t); return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
+const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t), ob = cat[t]; if (ob && ob.until != null && !ob.base && ((u.rb || {})[t] || 0) >= 1) return false; return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
 const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => x.seller === u.pseudo || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))), inbox: u.inbox || [],
   dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, coins: u.coins, packs: u.packs, bought: u.bought || {},
@@ -506,6 +506,36 @@ const handler = async (req, res) => {
         await redis.set('market', ((await redis.get('market')) || []).filter((x) => x.seller !== u.pseudo));
         return ok({ done: true });
       }
+      if (b.action === 'pinfo') {
+        const u = await redis.get(key(String(b.pseudo || '')));
+        if (!u) return fail('Joueur introuvable');
+        tick(u);
+        return ok({ p: { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards || {}, rb: u.rb || {}, rl: rlInfo(u).left, mg: mgInfo(u), renames: u.renames || 0 }, max: { rl: RL_MAX, mg: MG_MAX } });
+      }
+      if (b.action === 'pset') {
+        const u = await redis.get(key(String(b.pseudo || '')));
+        if (!u) return fail('Joueur introuvable');
+        u.bought ||= {}; u.since ||= {}; u.fav ||= []; u.notifs ||= []; u.cards ||= {}; u.rb ||= {};
+        tick(u);
+        const P = b.set || {};
+        if (P.coins != null) u.coins = int(P.coins, 1e9);
+        if (P.packs != null) { const n = int(P.packs, 1000); if (n !== u.packs) { u.packs = n; u.last = Date.now(); } }
+        for (const [t, n] of Object.entries(P.bought || {})) { if (!cat[t] || t === 'obj') continue; const v = int(n, 1000); if (v) u.bought[t] = v; else delete u.bought[t]; }
+        for (const [t, n] of Object.entries(P.rb || {})) { if (!cat[t] || t === 'obj') continue; const v = int(n, 100); if (v) u.rb[t] = v; else delete u.rb[t]; }
+        if (P.rl != null) u.rl = { d: parisDay(), n: RL_MAX - Math.min(RL_MAX, int(P.rl, RL_MAX)), t: 0 };
+        if (P.mg) {
+          if (!u.mg || u.mg.d !== parisDay()) u.mg = { d: parisDay() };
+          for (const k of Object.keys(MG_MAX)) if (P.mg[k] != null) u.mg[k] = MG_MAX[k] - Math.min(MG_MAX[k], int(P.mg[k], MG_MAX[k]));
+        }
+        for (const [id, n] of Object.entries(P.cards || {})) {
+          if (!rarOf(cat, id)) return fail('Carte inconnue : ' + id);
+          const want = int(n, 10000), cur = u.cards[id] || 0;
+          if (want > cur) add(u, id, want - cur); else if (want < cur) rm(u, id, cur - want);
+        }
+        note(u, '⚙️ Le staff a mis à jour ton compte');
+        await redis.set(key(u.pseudo), u);
+        return ok({ done: true });
+      }
       if (b.action === 'delreport') {
         await redis.set('reports', ((await redis.get('reports')) || []).filter((x) => x.id !== b.id));
         return ok({ done: true });
@@ -524,6 +554,7 @@ const handler = async (req, res) => {
     let extra = {};
     const pack = () => {
       const s = sh[b.theme] || (u.bought[b.theme] > 0 && shAll[b.theme]);
+      { const oo = cat[b.theme]; if (oo && oo.until != null && !oo.base && ((u.rb || {})[b.theme] || 0) >= 1) return 'Cette collection provisoire a déjà fait sa renaissance : plus de sachets pour toi'; }
       if (!s) return 'Ce sachet n\'existe pas ou n\'est plus disponible';
       if (s.blocked) return 'Ce sachet est bloqué pour le moment';
     };
@@ -671,11 +702,13 @@ const handler = async (req, res) => {
       const t = String(b.t || ''), o = cat[t];
       if (!o || t === 'obj') return fail('Collection inconnue');
       const ids = [...R].flatMap((r) => o[r].map((n) => t + ':' + n));
+      if (o.until != null && !o.base && ((u.rb || {})[t] || 0) >= 1) return fail('Cette collection provisoire a déjà fait sa renaissance (une seule fois)');
       if (!ids.length || ids.some((id) => !u.cards[id])) return fail('Collection incomplète');
       const gain = Math.floor(ids.reduce((a, id) => a + val(u, id, cat, cu), 0) / 5);
       for (const id of Object.keys(u.cards)) if (id.startsWith(t + ':')) rm(u, id, u.cards[id]);
       const L0 = lineLv(u, baseOf(cat, t));
       (u.rb ||= {})[t] = (u.rb[t] || 0) + 1; u.coins += gain;
+      if (o.until != null && !o.base && u.bought[t] > 0) { u.packs += u.bought[t]; delete u.bought[t]; } // collection provisoire : les sachets restants deviennent des sachets gratuits
       const L1 = lineLv(u, baseOf(cat, t)), nt = L1 > L0 ? (L1 > 1 ? baseOf(cat, t) + L1 : baseOf(cat, t)) : null;
       extra = { gain, lv: L1, unlocked: nt && cat[nt] ? cat[nt].name : null };
     } else if (b.action === 'rank') {
