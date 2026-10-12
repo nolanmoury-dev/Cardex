@@ -43,6 +43,28 @@ async function bcast(text, except) {
 }
 const OP_ID = (process.env.OPERATOR_ID || 'operateur').toLowerCase();
 const OP_NAME = 'Noln_mry';
+// --- IP (hachée avec une clé secrète : on ne stocke jamais l'adresse en clair) et bannissements
+const IP_KEY = process.env.IP_SALT || process.env.OPERATOR_CODE || 'cardex-ip';
+const ipHash = (req) => { const ip = String((req.headers && (req.headers['x-forwarded-for'] || req.headers['x-real-ip'])) || (req.socket && req.socket.remoteAddress) || '').split(',')[0].trim(); return ip ? crypto.createHmac('sha256', IP_KEY).update(ip).digest('hex').slice(0, 24) : null; };
+const addIp = (u, h) => { if (h) u.ips = [h, ...(u.ips || []).filter((x) => x !== h)].slice(0, 5); };
+const banOf = (u) => (u && u.ban && (u.ban.until == null || u.ban.until > Date.now()) ? { until: u.ban.until, reason: u.ban.reason || '' } : null);
+const banIp = (h, u, until) => redis.set('banip:' + h, { until, pseudo: u.pseudo }, until == null ? undefined : { ex: Math.max(1, Math.ceil((until - Date.now()) / 1000)) });
+// Compte de l'opérateur (Noln_mry) : toutes les notifications du staff arrivent dans sa boîte 🔔 (et en push sur ses appareils)
+async function opUser() {
+  let v = await redis.get(key(OP_NAME));
+  if (!v) {
+    const salt = crypto.randomBytes(16).toString('hex');
+    v = { pseudo: OP_NAME, salt, hash: hash(crypto.randomBytes(8).toString('hex'), salt), coins: 200, packs: 1, bought: {}, last: Date.now(), cards: {}, since: {}, fav: [], notifs: [] };
+    await redis.set(key(OP_NAME), v); await redis.sadd('users', OP_NAME);
+  }
+  return v;
+}
+async function opNote(text, self) {
+  try {
+    if (self && self.pseudo === OP_NAME) { note(self, text); await redis.set(key(self.pseudo), self); return; }
+    const v = await opUser(); note(v, text); await redis.set(key(OP_NAME), v);
+  } catch (e) { console.error('opNote', e.message); }
+}
 // Messages de maintenance prêts à l'emploi (un par onglet du bas) ; le staff peut en cocher plusieurs et ajouter un message libre.
 const MAINT_PRESETS = {
   shop: ['🛒 Boutique', 'Mise à jour de la Boutique : sachets, prix ou objets.'],
@@ -80,7 +102,7 @@ const hash = (pw, salt) => crypto.scryptSync(pw, salt, 32).toString('hex');
 const int = (v, max = 1e6) => Math.max(0, Math.min(max, parseInt(v, 10) || 0));
 const envFind = (re) => { const k = Object.keys(process.env).find((x) => re.test(x) && process.env[x]); return k && process.env[k]; };
 const live = (o) => !o.hidden && (!o.until || o.until > Date.now());
-const loadCu = async () => ({ cols: [], objs: [], ...((await redis.get('custom')) || {}) });
+const loadCu = async () => ({ cols: [], objs: [], vals: {}, ...((await redis.get('custom')) || {}) });
 const full = (cu) => {
   const t = { ...T0 };
   cu.cols.forEach((c) => (t[c.key] = c));
@@ -90,10 +112,11 @@ const full = (cu) => {
   return t;
 };
 const rarOf = (cat, id) => { const i = id.indexOf(':'), o = cat[id.slice(0, i)], n = id.slice(i + 1); return o && [...R].find((r) => o[r].includes(n)); };
+const defBase = (id, r, cu) => { const ob = id.startsWith('obj:') && cu.objs.find((x) => 'obj:' + x.name === id); return ob ? Math.max(1, Math.floor(ob.price * 0.6)) : BASE[r]; };
+// Valeur de base d'une carte : réglable par l'opérateur (cu.vals), sinon selon la rareté ; l'ancienneté s'ajoute par-dessus (+1 %/jour, max ×2)
 const val = (u, id, cat, cu) => {
   const r = rarOf(cat, id); if (!r) return 0;
-  const ob = id.startsWith('obj:') && cu.objs.find((x) => 'obj:' + x.name === id);
-  const b = ob ? Math.max(1, Math.floor(ob.price * 0.6)) : BASE[r];
+  const b = (cu.vals && cu.vals[id]) || defBase(id, r, cu);
   const d = Math.min(100, Math.floor((Date.now() - ((u.since || {})[id] || Date.now())) / DAY));
   return Math.max(1, Math.round(b * (1 + d / 100)));
 };
@@ -157,7 +180,7 @@ const price = (sh, t, cat) => Math.round((PRICE * 2 ** (lvOf(cat, t) - 1) * (100
 const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t), ob = cat[t]; if (ob && ob.until != null && !ob.base && ((u.rb || {})[t] || 0) >= 1) return false; return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
 const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => x.seller === u.pseudo || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))), inbox: u.inbox || [],
-  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, coins: u.coins, packs: u.packs, bought: u.bought || {},
+  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, coins: u.coins, packs: u.packs, bought: u.bought || {},
   next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), cards: u.cards, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
   shop: Object.fromEntries(Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s, t, cat), full: PRICE * 2 ** (lvOf(cat, t) - 1), lvl: lvOf(cat, t) }])), lv: Object.fromEntries(LINES.map((b) => [b, lineLv(u, b)])), lvn: Object.fromEntries(LINES.map((b) => [b, (cat[b + (lineLv(u, b) + 1)] || {}).name || null])),
@@ -345,13 +368,18 @@ const handler = async (req, res) => {
       if (!pw) return fail('Entre un mot de passe');
       if (b.action === 'register' && (await redis.get('maint'))) return fail('🔧 Maintenance : les inscriptions reviennent bientôt');
       let u = await redis.get(key(pseudo));
+      const ih = ipHash(req);
       if (b.action === 'register') {
+        const bi = ih && (await redis.get('banip:' + ih));
+        if (bi && (bi.until == null || bi.until > Date.now())) return fail("Inscription impossible depuis cette connexion pour le moment");
         if (u || pseudo.toLowerCase() === OP_ID || pseudo.toLowerCase() === OP_NAME.toLowerCase() || isBotName(pseudo)) return fail('Ce pseudo est déjà pris');
         const salt = crypto.randomBytes(16).toString('hex');
-        u = { pseudo, salt, hash: hash(pw, salt), coins: 200, packs: 1, bought: {}, last: Date.now(), cards: {}, since: {}, fav: [], notifs: [] };
+        u = { pseudo, salt, hash: hash(pw, salt), coins: 200, packs: 1, bought: {}, last: Date.now(), cards: {}, since: {}, fav: [], notifs: [], ips: ih ? [ih] : [], seen: Date.now() };
         await redis.set(key(pseudo), u);
         await redis.sadd('users', pseudo);
+        await opNote('🆕 Nouvelle inscription : ' + pseudo);
       } else if (!u || hash(pw, u.salt) !== u.hash) return fail('Pseudo ou mot de passe incorrect', 401);
+      else if (ih) { addIp(u, ih); if (banOf(u)) await banIp(ih, u, u.ban.until); await redis.set(key(u.pseudo), u); }
       const token = crypto.randomBytes(24).toString('hex');
       await redis.set('s:' + token, { p: u.pseudo }, { ex: 86400 * 30 });
       return ok({ token });
@@ -378,7 +406,7 @@ const handler = async (req, res) => {
       if (b.action === 'users') {
         const names = (await redis.smembers('users')).sort();
         const list = names.length ? await redis.mget(...names.map(key)) : [];
-        const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards }; });
+        const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u) }; });
         return ok({ maint: !!(await redis.get('maint')), maintinfo: (await redis.get('maintinfo')) || { presets: [], msg: '' }, maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], themes: cat });
       }
       if (b.action === 'shop') {
@@ -510,7 +538,9 @@ const handler = async (req, res) => {
         const u = await redis.get(key(String(b.pseudo || '')));
         if (!u) return fail('Joueur introuvable');
         tick(u);
-        return ok({ p: { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards || {}, rb: u.rb || {}, rl: rlInfo(u).left, mg: mgInfo(u), renames: u.renames || 0 }, max: { rl: RL_MAX, mg: MG_MAX } });
+        const nms = await redis.smembers('users'), all = nms.length ? await redis.mget(...nms.map(key)) : [];
+        const same = (u.ips || []).length ? all.filter((x) => x && x.pseudo !== u.pseudo && (x.ips || []).some((h) => u.ips.includes(h))).map((x) => x.pseudo) : [];
+        return ok({ p: { seen: u.bot ? u.lastAct || 0 : u.seen || 0, ban: banOf(u), same, pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards || {}, rb: u.rb || {}, rl: rlInfo(u).left, mg: mgInfo(u), renames: u.renames || 0 }, max: { rl: RL_MAX, mg: MG_MAX } });
       }
       if (b.action === 'pset') {
         const u = await redis.get(key(String(b.pseudo || '')));
@@ -536,6 +566,46 @@ const handler = async (req, res) => {
         await redis.set(key(u.pseudo), u);
         return ok({ done: true });
       }
+      if (b.action === 'ban') {
+        const u = await redis.get(key(String(b.pseudo || '')));
+        if (!u) return fail('Joueur introuvable');
+        if (u.bot) return fail('Un bot ne se bannit pas');
+        if (u.pseudo === OP_NAME) return fail("L'opérateur ne se bannit pas");
+        const secs = b.perm ? null : int(b.days, 3650) * 86400 + int(b.hours, 1e5) * 3600 + int(b.minutes, 1e6) * 60 + int(b.seconds, 1e8);
+        if (secs !== null && secs < 1) return fail('Choisis une durée ou « Définitif »');
+        const until = secs === null ? null : Date.now() + secs * 1000;
+        u.ban = { until, reason: String(b.reason || '').trim().slice(0, 300), t: Date.now() };
+        for (const h of u.ips || []) await banIp(h, u, until);
+        note(u, '⛔ Ton compte a été banni' + (u.ban.reason ? ' : ' + u.ban.reason : ''));
+        await redis.set(key(u.pseudo), u);
+        return ok({ done: true });
+      }
+      if (b.action === 'unban') {
+        const u = await redis.get(key(String(b.pseudo || '')));
+        if (!u) return fail('Joueur introuvable');
+        delete u.ban;
+        for (const h of u.ips || []) { const bi = await redis.get('banip:' + h); if (bi && bi.pseudo === u.pseudo) await redis.del('banip:' + h); }
+        note(u, '✅ Ton bannissement a été levé : bon retour !');
+        await redis.set(key(u.pseudo), u);
+        return ok({ done: true });
+      }
+      if (b.action === 'cardinfo') {
+        const id = String(b.id || ''), r = rarOf(cat, id);
+        if (!r) return fail('Carte inconnue');
+        const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], mk0 = (await redis.get('market')) || [];
+        let hand = 0, owners = 0, bots = 0;
+        for (const v of list) { const n = v && v.cards && v.cards[id]; if (n) { hand += n; owners++; if (v.bot) bots++; } }
+        const sale = mk0.filter((x) => x.card === id && !x.want).length, trade = mk0.filter((x) => x.card === id && x.want).length, def = defBase(id, r, cu), set = (cu.vals || {})[id];
+        return ok({ card: { id, name: cn(id), col: (cat[id.slice(0, id.indexOf(':'))] || {}).name || '?', r, def, cur: set || def, custom: !!set, hand, sale, trade, total: hand + sale + trade, owners, bots } });
+      }
+      if (b.action === 'cardset') {
+        const id = String(b.id || '');
+        if (!rarOf(cat, id)) return fail('Carte inconnue');
+        const v = int(b.value, 1e6); cu.vals ||= {};
+        if (v > 0) cu.vals[id] = v; else delete cu.vals[id];
+        await redis.set('custom', cu);
+        return ok({ done: true });
+      }
       if (b.action === 'delreport') {
         await redis.set('reports', ((await redis.get('reports')) || []).filter((x) => x.id !== b.id));
         return ok({ done: true });
@@ -547,6 +617,10 @@ const handler = async (req, res) => {
     if (!u) return fail('Session expirée, reconnecte-toi', 401);
     u.bought ||= {}; u.since ||= {}; u.fav ||= []; u.notifs ||= []; u.inbox ||= [];
     tick(u);
+    u.seen = Date.now();
+    if (u.ban && u.ban.until != null && u.ban.until <= Date.now()) { delete u.ban; note(u, '✅ Ton bannissement est terminé : bon retour !'); }
+    const banned = !!banOf(u);
+    if (banned && !['me', 'report', 'settings', 'delnote'].includes(b.action)) return fail('⛔ Compte banni : seuls les Réglages sont accessibles');
     const maintOn = !!(await redis.get('maint')) && u.pseudo !== OP_NAME;
     if (maintOn && !['me', 'report', 'settings'].includes(b.action)) return fail('🔧 Maintenance : une mise à jour arrive bientôt');
     const shAll = await shopOf(cat), sh = visShop(u, shAll, cat);
@@ -599,8 +673,9 @@ const handler = async (req, res) => {
       const text = String(b.text || '').trim().slice(0, 500);
       if (text.length < 5) return fail('Décris le problème (5 caractères minimum)');
       const r = (await redis.get('reports')) || [];
-      r.unshift({ id: Date.now(), pseudo: u.pseudo, text: (maintOn ? '🔧 [Maintenance] ' : '') + text, t: Date.now() });
+      r.unshift({ id: Date.now(), pseudo: u.pseudo, text: (banned ? '⛔ [Banni] ' : '') + (maintOn ? '🔧 [Maintenance] ' : '') + text, t: Date.now() });
       await redis.set('reports', r.slice(0, 100));
+      await opNote('🚩 ' + (banned ? '[Banni] ' : '') + u.pseudo + ' au staff : ' + (text.length > 140 ? text.slice(0, 140) + '…' : text), u);
       return ok({ done: true });
     } else if (b.action === 'settings') {
       if (b.theme) u.theme = b.theme === 'light' ? 'light' : 'dark';
