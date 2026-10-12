@@ -251,7 +251,7 @@ function authView(msg) {
 const packsOf = (t) => (S.bought[t] || 0) + S.packs;
 function head() {
   return '<div class="bar"><b style="display:flex;align-items:center;gap:6px"><img class="lg" src="/icon-192.png" alt="">' + S.pseudo + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">📦 ' + S.packs + '/10</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button></span></div><div class="tabs">' +
-    (S.maint ? [['col', 'Collection'], ['set', 'Réglages']] : [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Social' + (dmUnread() ? ' 💬' + dmUnread() : '')], ['set', 'Réglages']]).map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
+    (S.ban ? [['set', 'Réglages']] : S.maint ? [['col', 'Collection'], ['set', 'Réglages']] : [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Social' + (dmUnread() ? ' 💬' + dmUnread() : '')], ['set', 'Réglages']]).map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
 }
 function shopHTML() {
   const packs = Object.entries(S.shop).map(([t, sh]) => {
@@ -273,6 +273,11 @@ function maintBox() {
     + (ms.length ? '<p><b>Au programme :</b></p><ul>' + ms.map((m) => '<li>' + esc(m) + '</li>').join('') + '</ul>' : '')
     + (mi.msg ? '<p>💬 <b>Message du staff :</b> ' + esc(mi.msg) + '</p>' : '')
     + '<button id="mct">💬 Contacter le staff</button></div>';
+}
+const fmtDur = (s) => { const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60); return (d ? d + ' j ' : '') + [h, m, s % 60].map((n) => String(n).padStart(2, '0')).join(':'); };
+function banBox() {
+  const b = S.ban;
+  return '<div class="box" style="border-color:#f85149"><h2>⛔ Compte banni</h2><p>' + (b.reason ? '<b>Raison :</b> ' + esc(b.reason) : 'Aucune raison précisée.') + '</p><p>' + (b.until ? 'Fin du bannissement dans <b id="bc"></b> (le ' + new Date(b.until).toLocaleString('fr-FR') + ').' : '<b>Bannissement définitif.</b>') + '</p><p>Tu peux encore contacter le staff avec le formulaire « Contacter un staff » ci-dessous.</p></div>';
 }
 function rbBook() {
   const lines = {};
@@ -318,9 +323,10 @@ function colHTML() {
   const vis = [], book = [];
   Object.entries(CAT).forEach(([t, o]) => {
     const n = idsOf(t).filter((id) => S.cards[id]).length, rb = (S.rb || {})[t] || 0;
-    if (!n && (o.hidden || isEnd(o) || (isTmp(o) && rb >= 1) || (o.base && o.lv > ((S.lv || {})[o.base] || 1)))) return;
+    if (!n) return; // une collection sans aucune carte n'apparaît pas (elle revient dès qu'on en ouvre une)
     (isEnd(o) ? book : vis).push(colBlock(t, o, isEnd(o)));
   });
+  if (!vis.length && !book.length) return '<div class="box"><p>🗂️ Ta collection est vide pour le moment. Ouvre un sachet dans la Boutique pour recevoir tes premières cartes !</p></div>' + rbBook();
   return '<div class="row" style="margin-bottom:12px"><select id="so"><option value="def">Tri : normal</option><option value="rar">Tri : rareté</option><option value="fav">Tri : favoris</option></select><button class="g" id="dup">Vendre tous les doublons</button></div><small>Les favoris ⭐ et le 1er exemplaire de chaque carte ne sont jamais vendus en masse. Les cartes prennent +1 % de valeur par jour (max ×2).</small>' + rbBook()
     + (book.length ? '<div class="bkw"><h2>📚 Livre des collections</h2><small>Les collections provisoires terminées (plus de sachets en vente) sont rangées ici. Tu peux toujours vendre tes cartes et chercher celles qui te manquent au Marché.</small><details class="lvc" data-d="book"' + (openT.has('book') ? ' open' : '') + '><summary>📚 ' + book.length + ' collection' + (book.length > 1 ? 's' : '') + ' terminée' + (book.length > 1 ? 's' : '') + '</summary>' + book.join('') + '</details></div>' : '')
     + vis.join('');
@@ -530,9 +536,9 @@ function dmInit() {
 }
 function setHTML() {
   const th = document.documentElement.dataset.th;
-  return (pushOn || S.maint ? '' : '<div class="box"><h2>🔔 Notifications</h2><p>Messages du staff, nouveaux objets et nouvelles cartes au Marché, même app fermée. <b>Sur iPhone</b> : ajoute d\'abord le site à l\'écran d\'accueil (Partager → « Sur l\'écran d\'accueil »), ouvre-le depuis l\'icône, puis appuie ici.</p><button id="pn2">Activer</button></div>') +
+  return (pushOn || S.maint || S.ban ? '' : '<div class="box"><h2>🔔 Notifications</h2><p>Messages du staff, nouveaux objets et nouvelles cartes au Marché, même app fermée. <b>Sur iPhone</b> : ajoute d\'abord le site à l\'écran d\'accueil (Partager → « Sur l\'écran d\'accueil »), ouvre-le depuis l\'icône, puis appuie ici.</p><button id="pn2">Activer</button></div>') +
     '<div class="box"><h2>Apparence</h2><select id="tsel"><option value="dark"' + (th === 'dark' ? ' selected' : '') + '>Sombre</option><option value="light"' + (th === 'light' ? ' selected' : '') + '>Clair</option></select></div>' +
-    (S.maint ? '' : '<form class="box" id="frn" style="display:grid;gap:10px;max-width:400px"><h2>Pseudo</h2>' + (S.renames ? '<p>Tu as utilisé ton changement gratuit. Pour changer à nouveau, fais une demande au staff (« Contacter un staff » ci-dessous).</p>' : '<p>Tu as un changement de pseudo gratuit. Ensuite, il faudra le demander au staff.</p><input id="rn2" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button>') + '</form>') +
+    (S.maint || S.ban ? '' : '<form class="box" id="frn" style="display:grid;gap:10px;max-width:400px"><h2>Pseudo</h2>' + (S.renames ? '<p>Tu as utilisé ton changement gratuit. Pour changer à nouveau, fais une demande au staff (« Contacter un staff » ci-dessous).</p>' : '<p>Tu as un changement de pseudo gratuit. Ensuite, il faudra le demander au staff.</p><input id="rn2" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button>') + '</form>') +
     '<form class="box" id="fpw" style="display:grid;gap:10px;max-width:400px"><h2>Mot de passe</h2><input id="po" type="password" placeholder="Ancien mot de passe" autocomplete="current-password" required><input id="pn" type="password" placeholder="Nouveau mot de passe" autocomplete="new-password" required><button>Changer</button></form>' +
     '<form class="box" id="frp" style="display:grid;gap:10px"><h2>Contacter un staff</h2><textarea id="rt" rows="4" maxlength="500" placeholder="Signale un problème, un bug ou un joueur" required></textarea><button>Envoyer le signalement</button></form>' +
     '<div class="box"><h2>Compte</h2><p>Tu seras déconnecté de ton compte sur cet appareil.</p><button class="g" id="lo">Quitter</button></div>';
@@ -582,13 +588,14 @@ function rebirthFlow(t) {
 }
 function playerView() {
   clearInterval(timer);
-  if (S.maint && tab !== 'col' && tab !== 'set') tab = 'col';
-  app.classList.toggle('mt', !!S.maint);
-  app.innerHTML = head() + (S.maint ? maintBox() : '') + { shop: shopHTML, col: colHTML, mk: mkHTML, jeu: jeuHTML, rk: rkHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
+  if (S.ban) tab = 'set'; else if (S.maint && tab !== 'col' && tab !== 'set') tab = 'col';
+  app.classList.toggle('mt', !!(S.maint || S.ban));
+  app.innerHTML = head() + (S.ban ? banBox() : S.maint ? maintBox() : '') + { shop: shopHTML, col: colHTML, mk: mkHTML, jeu: jeuHTML, rk: rkHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
   $('#th').onclick = flip; if ($('#lo')) $('#lo').onclick = logout;
   if ($('#mct')) $('#mct').onclick = () => { tab = 'set'; playerView(); setTimeout(() => { const r = $('#rt'); if (r) { r.scrollIntoView({ block: 'center' }); r.focus(); } }, 0); };
   if (isOp) $('#ob').onclick = () => { asP = false; localStorage.asp = '0'; start(); };
   $('#bl').onclick = inbox;
+  if (S.ban && S.ban.until) { const tkb = () => { const s = Math.ceil((S.ban.until - Date.now()) / 1000); if (s <= 0) { clearInterval(timer); refresh(); return; } const el = $('#bc'); if (el) el.textContent = fmtDur(s); }; tkb(); timer = setInterval(tkb, 1000); }
   app.querySelectorAll('[data-t]').forEach((b) => (b.onclick = () => { tab = b.dataset.t; playerView(); }));
   if (tab === 'shop') {
     app.querySelectorAll('[data-b]').forEach((b) => (b.onclick = () => run(async () => { setS((await api('buy', { theme: b.dataset.b })).state); playerView(); })));
@@ -606,8 +613,8 @@ function playerView() {
       const j = await api('sell', { mode: 'all', theme: b.dataset.sa }); setS(j.state); playerView(); msg(j.cnt + ' carte(s) vendue(s) : +' + j.gain + ' 🪙', true);
     })));
     app.querySelectorAll('[data-bm]').forEach((b) => (b.onclick = () => { mf.t = b.dataset.bm; mf.r = ''; mf.n = true; mkSub = 'v'; tab = 'mk'; playerView(); }));
-    $('#so').value = sort; $('#so').onchange = (e) => { sort = e.target.value; playerView(); };
-    $('#dup').onclick = () => run(async () => {
+    if ($('#so')) { $('#so').value = sort; $('#so').onchange = (e) => { sort = e.target.value; playerView(); }; }
+    if ($('#dup')) $('#dup').onclick = () => run(async () => {
       if (!confirm('Vendre tous les doublons (sauf favoris) ?')) return;
       const j = await api('sell', { mode: 'dupes' }); setS(j.state); playerView(); msg(j.cnt + ' carte(s) vendue(s) : +' + j.gain + ' 🪙', true);
     });
@@ -764,24 +771,24 @@ const pushCap = () => 'serviceWorker' in navigator && 'PushManager' in window &&
 let pushOn = localStorage.pushOk === '1', instEv = null;
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); instEv = e; });
 window.addEventListener('appinstalled', () => { instEv = null; });
-async function checkPush() {
+async function checkPush(ax = {}) {
   let ok = false;
   try {
     if (pushCap() && Notification.permission === 'granted') {
       const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(() => r(null), 4000))]);
       const sub = reg && (await reg.pushManager.getSubscription());
-      if (sub) { ok = true; api('subscribe', { sub: sub.toJSON() }).catch(() => {}); }
+      if (sub) { ok = true; api('subscribe', { sub: sub.toJSON(), ...ax }).catch(() => {}); }
     }
   } catch {}
   pushOn = ok; if (ok) localStorage.pushOk = '1'; else localStorage.removeItem('pushOk');
 }
-async function enablePush() {
+async function enablePush(ax = {}) {
   if (!pushCap()) throw new Error(IOS ? "Sur iPhone, ouvre d'abord le site depuis l'icône de l'écran d'accueil" : "Notifications indisponibles sur ce navigateur");
   if ((await Notification.requestPermission()) !== 'granted') throw new Error(MOB ? "Notifications refusées : autorise-les dans les Réglages du téléphone (Notifications → Cardex ou ton navigateur)" : "Notifications refusées : clique sur le cadenas 🔒 à côté de l'adresse → Notifications → Autoriser, puis recharge la page");
-  const reg = await navigator.serviceWorker.ready, k = (await api('vapid')).key;
+  const reg = await navigator.serviceWorker.ready, k = (await api('vapid', ax)).key;
   const raw = atob((k + '='.repeat((4 - (k.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
   const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Uint8Array.from(raw, (c) => c.charCodeAt(0)) });
-  await api('subscribe', { sub: sub.toJSON() });
+  await api('subscribe', { sub: sub.toJSON(), ...ax });
   pushOn = true; localStorage.pushOk = '1';
 }
 function nudge() {
@@ -911,18 +918,40 @@ function play(kind, gid, bet) {
 }
 
 // --- Opérateur
+const dotOf = (t) => { const a = t ? Date.now() - t : Infinity, c = a <= 300000 ? '#3fb950' : a > 86400000 ? '#f85149' : '#8b949e'; return '<span title="' + (t ? 'Dernière action : ' + (a < 60000 ? "à l'instant" : 'il y a ' + ago(t)) : 'Jamais vu') + '" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + c + ';margin-right:6px;flex:none"></span>'; };
+let opInb = [], opOn = false;
+async function opBell() {
+  const j = await api('me', { as: 'player' });
+  opInb = (j.state && j.state.inbox) || [];
+  if (j.notifs && j.notifs.length) notify(j.notifs);
+  const b = $('#obl'); if (b) b.textContent = '🔔' + (opInb.length ? ' ' + opInb.length : '');
+}
+function opInbox() {
+  document.querySelectorAll('.ovn').forEach((x) => x.remove());
+  const ov = overlay('<div class="box" style="max-width:480px;margin:10vh auto"><h2>🔔 Notifications du staff</h2>' + (pushOn ? '' : '<p><small>Pour les recevoir aussi sur cet appareil, même app fermée :</small> <button id="opn">📲 Activer ici</button></p>') + '<div id="nl"></div><div class="row" style="margin-top:10px"><button class="g" id="nc">Tout effacer</button><button id="nx">Fermer</button></div><div class="err" id="ne2"></div></div>');
+  ov.classList.add('ovn');
+  const nl = ov.querySelector('#nl'); if (!opInb.length) nl.textContent = 'Aucune notification.';
+  const del = async (id) => { try { opInb = (await api('delnote', { id, as: 'player' })).state.inbox || []; const b = $('#obl'); if (b) b.textContent = '🔔' + (opInb.length ? ' ' + opInb.length : ''); opInbox(); } catch (e) { ov.querySelector('#ne2').textContent = e.message; } };
+  opInb.forEach((n) => {
+    const d = document.createElement('div'); d.className = 'row'; d.style.cssText = 'border-top:1px solid var(--line);padding:6px 0';
+    d.innerHTML = '<span style="flex:1"></span><small>' + new Date(n.t).toLocaleString('fr-FR') + '</small><button class="g">✕</button>';
+    d.firstChild.textContent = n.text; d.querySelector('button').onclick = () => del(n.id); nl.append(d);
+  });
+  ov.querySelector('#nc').onclick = () => del('all'); ov.querySelector('#nx').onclick = () => ov.remove();
+  const pn = ov.querySelector('#opn'); if (pn) pn.onclick = async () => { try { await enablePush({ as: 'player' }); opInbox(); } catch (e) { ov.querySelector('#ne2').textContent = e.message; } };
+}
 async function opView(m) {
   const j = await api('users'), { users, shop, custom, reports } = j; setCat(j.themes);
   const opts = Object.entries(CAT).map(([t, o]) => '<optgroup label="' + esc(o.name) + '">' + [...'crel'].flatMap((r) => o[r].map((n) => '<option value="' + esc(t + ':' + n) + '">' + RN[r] + ' — ' + esc(n) + '</option>')).join('') + '</optgroup>').join('');
   const list = users.map((u) => {
     const nb = u.packs + Object.values(u.bought).reduce((a, b) => a + b, 0);
-    return '<div class="dm" data-pu="' + esc(u.pseudo) + '" data-pn="' + esc(u.pseudo.toLowerCase()) + '">' + avEl(u.pseudo) + '<div class="tx"><b>' + (u.bot ? '🤖 ' : '') + esc(u.pseudo) + '</b><small>🪙 ' + u.coins + ' · 📦 ' + nb + ' · ' + Object.keys(u.cards).length + ' cartes</small></div><small>Ouvrir ›</small></div>';
+    return '<div class="dm" data-pu="' + esc(u.pseudo) + '" data-pn="' + esc(u.pseudo.toLowerCase()) + '">' + avEl(u.pseudo) + '<div class="tx"><b>' + dotOf(u.seen) + (u.bot ? '🤖 ' : '') + (u.banned ? '⛔ ' : '') + esc(u.pseudo) + '</b><small>🪙 ' + u.coins + ' · 📦 ' + nb + ' · ' + Object.keys(u.cards).length + ' cartes</small></div><small>Ouvrir ›</small></div>';
   }).join('') || '<p>Aucun joueur pour le moment.</p>';
   const now = Date.now();
   const cols = custom.cols.filter((c) => c.until > now).map((c) => '<div class="row">' + c.icon + ' <b>' + esc(c.name) + '</b> jusqu\'au ' + new Date(c.until).toLocaleDateString('fr-FR') + ' <input type="date" data-ed="' + c.key + '" value="' + dstr(c.until) + '" min="' + dstr(Date.now() + 864e5) + '"> <button class="g" data-ee="' + c.key + '">Changer la fin</button> <button class="g" data-ec="' + c.key + '">Terminer maintenant</button></div>').join('');
   const objs = custom.objs.filter((o) => !o.gone).map((o) => '<div class="row">🎁 <b>' + esc(o.name) + '</b> ' + RN[o.r] + ' — ' + o.price + ' coins' + (o.stock != null ? ' (reste ' + o.stock + ')' : '') + ' <button class="g" data-do="' + esc(o.name) + '">Retirer</button></div>').join('');
   const reps = reports.map((r) => '<div class="row" style="border-top:1px solid var(--line);padding:8px 0"><div style="flex:1"><b>' + esc(r.pseudo) + '</b> <small>' + new Date(r.t).toLocaleString('fr-FR') + '</small><br><span class="rt"></span></div><button class="g" data-dr="' + r.id + '">Supprimer</button></div>').join('') || '<p>Aucun signalement.</p>';
-  app.innerHTML = '<div class="bar"><b>Espace opérateur</b><span class="row"><button class="g" id="pv">🎮 Espace joueur</button><button class="g" id="th">🌓</button><button class="g" id="lo">Quitter</button></span></div>' +
+  app.innerHTML = '<div class="bar"><b>Espace opérateur</b><span class="row"><button class="g" id="obl" aria-label="Notifications">🔔' + (opInb.length ? ' ' + opInb.length : '') + '</button><button class="g" id="pv">🎮 Espace joueur</button><button class="g" id="th">🌓</button><button class="g" id="lo">Quitter</button></span></div>' +
     '<div class="box"><h2>Boutique</h2><div class="grid2">' + Object.keys(shop).filter((t) => !CAT[t].base).map((t) => '<div class="row"><b>' + CAT[t].icon + ' ' + esc(CAT[t].name) + '</b><input type="number" min="0" max="90" value="' + shop[t].discount + '" id="d-' + t + '" style="width:80px" aria-label="Réduction en %"> %<label><input type="checkbox" id="b-' + t + '"' + (shop[t].blocked ? ' checked' : '') + '> bloqué</label><button data-sv="' + t + '">Enregistrer</button></div>').join('') + '</div><div class="err" id="e2"></div></div>' +
     '<div class="grid2"><form class="box" id="fc" style="display:grid;gap:10px"><h2>Collection provisoire</h2><input id="cn" placeholder="Nom" required><input id="ci" placeholder="Emoji (ex : 🎃)" maxlength="4"><label class="row" style="gap:8px">Date de fin <input id="cd" type="date" required min="' + dstr(Date.now() + 864e5) + '" value="' + dstr(Date.now() + 7 * 864e5) + '"></label><label class="row" style="gap:8px">Couleur du fond <input id="cc" type="color" value="#0ea5e9" style="width:60px;height:36px;padding:2px"></label><textarea id="cl" rows="6" placeholder="Une carte par ligne (titre Wikipédia). Préfixe r: e: l: pour la rareté, sans préfixe = commune"></textarea><button>Créer</button><div class="err" id="e3"></div>' + cols + '</form>' +
     '<form class="box" id="fo" style="display:grid;gap:10px"><h2>Objet en boutique</h2><input id="on" placeholder="Nom de la carte (titre Wikipédia)" required><select id="or"><option value="c">Commune</option><option value="r">Rare</option><option value="e">Épique</option><option value="l">Légendaire</option></select><input id="op" type="number" min="1" placeholder="Prix en coins" required><input id="os" type="number" min="1" placeholder="Quantité disponible (vide = illimité)"><button>Ajouter</button><div class="err" id="e4"></div>' + objs + '</form></div>' +
@@ -931,6 +960,7 @@ async function opView(m) {
     '<form class="box" id="fm" style="display:grid;gap:10px"><h2>Envoyer une notification</h2><select id="mt"><option value="*">Tous les joueurs</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="mx" maxlength="200" placeholder="Message" required><button>Envoyer</button><div class="err" id="e5"></div></form>' +
     '<div class="box"><h2>🔧 Maintenance</h2><p>' + (j.maint ? 'ACTIVE : les joueurs voient « maintenance », peuvent seulement regarder leurs cartes, aller dans Réglages et te contacter.' : 'Désactivée.') + '</p><p><small>Explication montrée aux joueurs (facultatif, plusieurs choix possibles) :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible">' + j.maintPresets.map((p) => '<button type="button" class="pill mp' + ((j.maintinfo.presets || []).includes(p.k) ? ' on' : '') + '" data-mp="' + p.k + '">' + p.label + '</button>').join('') + '</div><textarea id="mmsg" rows="2" maxlength="300" placeholder="Message du staff (facultatif)" style="margin:8px 0"></textarea><div class="row"><button id="mnt" class="' + (j.maint ? '' : 'g') + '">' + (j.maint ? 'Désactiver la maintenance' : 'Activer la maintenance (tout verrouiller)') + '</button>' + (j.maint ? '<button class="g" id="mnu">Mettre à jour le message</button>' : '') + '</div><div class="err" id="e7"></div></div>' +
     '<form class="box" id="fr" style="display:grid;gap:10px"><h2>Changer le pseudo d\'un joueur</h2><select id="ru" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="rnn" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button><div class="err" id="e6"></div></form>' +
+    '<div class="box" id="cpn"><h2>🎴 Panneau Cartes</h2><input id="cq" placeholder="🔎 Nom d\'une carte (objets compris)" style="width:100%;margin-bottom:8px" autocomplete="off"><div id="cres"></div><div id="cinf"></div></div>' +
     '<div class="box"><h2>Signalements (' + reports.length + ')</h2>' + reps + '</div>';
   app.querySelectorAll('.rt').forEach((el, i) => (el.textContent = reports[i].text));
   $('#pv').onclick = () => { asP = true; localStorage.asp = '1'; start(); };
@@ -952,7 +982,11 @@ async function opView(m) {
       const gm = [['rl', '🎡 Roulette', mx.rl, p.rl]].concat([['slots', '🎰 Machine à sous'], ['flip', '🪙 Pile ou face'], ['scratch', '🎟️ Ticket à gratter'], ['battle', '⚔️ Bataille de raretés']].map(([k, l]) => [k, l, mx.mg[k], p.mg[k]]));
       const rbTot = Object.values(p.rb).reduce((a, x) => a + x, 0);
       const cardRow = (id, n) => '<tr><td>' + esc(nm(id)) + ' <small>(' + (RN[RAR[id]] || '?') + ' · ' + esc((CAT[id.slice(0, id.indexOf(':'))] || {}).name || '?') + ')</small></td><td><input type="number" min="0" data-pc="' + esc(id) + '" value="' + n + '"></td></tr>';
-      pf.innerHTML = '<div class="row"><button class="g" id="pfb">← Retour</button>' + avEl(p.pseudo) + '<h2 style="margin:0">' + esc(p.pseudo) + (p.bot ? ' 🤖' : '') + '</h2></div>'
+      const banHtml = p.bot ? '' : '<details open><summary>⛔ Bannissement' + (p.ban ? ' (en cours)' : '') + '</summary>' + (p.ban ? '<p>Banni ' + (p.ban.until ? "jusqu'au " + new Date(p.ban.until).toLocaleString('fr-FR') : 'définitivement') + (p.ban.reason ? ' — ' + esc(p.ban.reason) : '') + '</p><button class="g" id="pf-ub" type="button">Lever le ban maintenant</button>' : '<div class="row">' + [['d', 'Jours'], ['h', 'Heures'], ['m', 'Minutes'], ['s', 'Secondes']].map(([k, l]) => '<label>' + l + ' <input type="number" min="0" id="bn-' + k + '" value="0" style="width:84px"></label>').join('') + '</div><label class="row" style="margin:6px 0"><input type="checkbox" id="bn-p"> Définitif</label><input id="bn-r" maxlength="300" placeholder="Raison (facultative, visible par le joueur)" style="width:100%;margin-bottom:8px"><button type="button" id="pf-bn">⛔ Bannir</button>') + '</details>';
+      pf.innerHTML = '<div class="row"><button class="g" id="pfb">← Retour</button>' + avEl(p.pseudo) + '<h2 style="margin:0">' + esc(p.pseudo) + (p.bot ? ' 🤖' : '') + (p.ban ? ' ⛔' : '') + '</h2></div>'
+        + '<p>' + dotOf(p.seen) + 'Dernière action : ' + (p.seen ? (Date.now() - p.seen < 60000 ? "à l'instant" : 'il y a ' + ago(p.seen)) : 'jamais') + '</p>'
+        + (p.same && p.same.length ? '<p class="err" style="min-height:0">⚠️ Même IP que : ' + p.same.map(esc).join(', ') + '</p>' : '')
+        + banHtml
         + '<div class="row"><label>🪙 Coins <input type="number" min="0" id="pf-co" value="' + p.coins + '"></label><label>📦 Sachets gratuits <input type="number" min="0" id="pf-pk" value="' + p.packs + '"></label></div>'
         + '<details><summary>🛒 Sachets achetés (' + Object.values(p.bought).reduce((a, x) => a + x, 0) + ')</summary><table>' + ths.map(([t, o]) => '<tr><td>' + o.icon + ' ' + esc(o.name) + '</td><td><input type="number" min="0" data-pb="' + esc(t) + '" value="' + (p.bought[t] || 0) + '"></td></tr>').join('') + '</table></details>'
         + '<details><summary>♻️ Renaissances (' + rbTot + ')</summary><table>' + ths.map(([t, o]) => '<tr><td>' + o.icon + ' ' + esc(o.name) + '</td><td><input type="number" min="0" data-pr="' + esc(t) + '" value="' + (p.rb[t] || 0) + '"></td></tr>').join('') + '</table></details>'
@@ -961,6 +995,13 @@ async function opView(m) {
         + '<div class="row"><button id="pf-sv">💾 Enregistrer</button><button class="g" id="pf-del" type="button">🗑️ Supprimer le compte</button></div><div class="err" id="epf"></div>';
       $('#pfb').onclick = backList;
       ['u', 'ru', 'mt'].forEach((id) => { const s = $('#' + id); if (s && [...s.options].some((o) => o.value === p.pseudo)) s.value = p.pseudo; }); $('#u').onchange(); // « Donner ou retirer », « Changer le pseudo » et « Envoyer une notification » ciblent déjà ce joueur
+      const banDone = async (txt) => { await openFiche(p.pseudo); const e2 = $('#epf'); e2.style.color = '#3fb950'; e2.textContent = txt; };
+      if ($('#pf-bn')) $('#pf-bn').onclick = async () => {
+        const perm = $('#bn-p').checked;
+        if (!confirm('Bannir ' + p.pseudo + (perm ? ' définitivement' : '') + ' ?')) return;
+        try { await api('ban', { pseudo: p.pseudo, perm, days: $('#bn-d').value, hours: $('#bn-h').value, minutes: $('#bn-m').value, seconds: $('#bn-s').value, reason: $('#bn-r').value }); await banDone('Joueur banni'); } catch (er) { $('#epf').style.color = ''; $('#epf').textContent = er.message; }
+      };
+      if ($('#pf-ub')) $('#pf-ub').onclick = async () => { try { await api('unban', { pseudo: p.pseudo }); await banDone('Ban levé'); } catch (er) { $('#epf').style.color = ''; $('#epf').textContent = er.message; } };
       $('#pf-gm').onclick = () => pf.querySelectorAll('[data-pg]').forEach((e) => (e.value = e.dataset.max));
       $('#pf-aa').onclick = () => {
         const id = $('#pf-ac').value, n = Math.max(1, Math.floor(+$('#pf-an').value) || 1), ex = [...pf.querySelectorAll('[data-pc]')].find((e) => e.dataset.pc === id);
@@ -978,6 +1019,29 @@ async function opView(m) {
     } catch (er) { pf.innerHTML = '<p class="err">' + esc(er.message) + '</p><button class="g" id="pfb">← Retour</button>'; $('#pfb').onclick = backList; }
   };
   app.querySelectorAll('[data-pu]').forEach((e) => (e.onclick = () => openFiche(e.dataset.pu)));
+  $('#obl').onclick = opInbox;
+  // --- Panneau Cartes : recherche, circulation, valeur
+  const allIds = Object.entries(CAT).flatMap(([t, o]) => [...'crel'].flatMap((r) => o[r].map((n) => t + ':' + n)));
+  const showCard = async (id) => {
+    const box = $('#cinf'); box.innerHTML = 'Chargement…';
+    try {
+      const c = (await api('cardinfo', { id })).card;
+      box.innerHTML = '<div style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px"><h2 style="margin:0">' + esc(c.name) + '</h2><p><small>' + esc(c.col) + ' · ' + RN[c.r] + '</small></p>'
+        + '<p>📊 <b>En circulation : ' + c.total + '</b><br>✋ En main : ' + c.hand + ' · 🏷️ En vente au Marché : ' + c.sale + ' · 🔁 En échange : ' + c.trade + '<br>👥 Joueurs qui la possèdent : ' + c.owners + (c.bots ? ' (dont ' + c.bots + ' bot' + (c.bots > 1 ? 's' : '') + ')' : '') + '</p>'
+        + '<p>🪙 Valeur de base : <b>' + c.cur + '</b>' + (c.custom ? ' <small>(modifiée, par défaut ' + c.def + ')</small>' : ' <small>(par défaut)</small>') + '</p>'
+        + '<div class="row"><input type="number" min="1" id="cv" value="' + c.cur + '" style="width:110px"><button id="cvs">Enregistrer la valeur</button>' + (c.custom ? '<button class="g" id="cvr">Remettre par défaut (' + c.def + ')</button>' : '') + '</div>'
+        + '<small>Appliquée tout de suite à tout le monde : vente, gain de renaissance, bots, valeur affichée. L\'ancienneté (+1 %/jour, max ×2) s\'ajoute par-dessus.</small><div class="err" id="ecv"></div></div>';
+      const sv = async (v, t) => { try { await api('cardset', { id, value: v }); await showCard(id); const e = $('#ecv'); e.style.color = '#3fb950'; e.textContent = t; } catch (er) { $('#ecv').style.color = ''; $('#ecv').textContent = er.message; } };
+      $('#cvs').onclick = () => sv($('#cv').value, 'Valeur enregistrée');
+      if ($('#cvr')) $('#cvr').onclick = () => sv(0, 'Valeur remise par défaut');
+    } catch (er) { box.innerHTML = '<p class="err">' + esc(er.message) + '</p>'; }
+  };
+  $('#cq').oninput = () => {
+    const q = $('#cq').value.trim().toLowerCase();
+    const res = q.length < 2 ? [] : allIds.filter((id) => id.slice(id.indexOf(':') + 1).toLowerCase().includes(q)).slice(0, 30);
+    $('#cres').innerHTML = res.map((id) => '<div class="dm" data-ci="' + esc(id) + '"><div class="tx"><b>' + esc(id.slice(id.indexOf(':') + 1)) + '</b><small>' + esc((CAT[id.slice(0, id.indexOf(':'))] || {}).name || '?') + ' · ' + RN[RAR[id]] + '</small></div><small>Ouvrir ›</small></div>').join('') || '<small>' + (q.length < 2 ? 'Tape au moins 2 lettres.' : 'Aucune carte trouvée.') + '</small>';
+    $('#cres').querySelectorAll('[data-ci]').forEach((e) => (e.onclick = () => { $('#cres').innerHTML = ''; showCard(e.dataset.ci); }));
+  };
   $('#lo').onclick = logout; $('#th').onclick = flip;
   const act = (eid, fn, okm) => async (e) => {
     if (e) e.preventDefault(); const el = $('#' + eid);
@@ -1000,7 +1064,7 @@ async function opView(m) {
   $('#fr').onsubmit = act('e6', () => api('rename', { pseudo: $('#ru').value, name: $('#rnn').value }), 'Pseudo changé');
   app.querySelectorAll('[data-du]').forEach((b) => (b.onclick = (e) => { if (confirm('Supprimer définitivement le compte ' + b.dataset.du + ' ?')) act('e', () => api('deluser', { pseudo: b.dataset.du }), 'Compte supprimé')(e); }));
   // --- Catégories (au lieu d'une seule longue page) : 5 onglets qui tiennent sur 2 lignes maximum, sans glisser
-  const OC = [['b', '🛒 Boutique', ['Boutique', 'Collection provisoire', 'Objet en boutique']], ['j', '👥 Joueurs', ['Joueurs', 'Donner ou retirer', 'Changer le pseudo']], ['m', '✉️ Messages', ['Envoyer une notification']], ['s', '🚩 Signalements', ['Signalements']], ['x', '🔧 Maintenance', ['Maintenance']]];
+  const OC = [['b', '🛒 Boutique', ['Boutique', 'Collection provisoire', 'Objet en boutique']], ['j', '👥 Joueurs', ['Joueurs', 'Donner ou retirer', 'Changer le pseudo']], ['m', '✉️ Messages', ['Envoyer une notification']], ['s', '🚩 Signalements', ['Signalements']], ['c', '🎴 Cartes', ['Panneau Cartes']], ['x', '🔧 Maintenance', ['Maintenance']]];
   const bar = app.querySelector('.bar'), dmBox = document.createElement('div');
   dmBox.className = 'box'; dmBox.id = 'opdm'; dmBox.innerHTML = '<h2>👁️ Voir les messages des joueurs</h2><div id="opdl">Chargement…</div><div id="opdt"></div>';
   app.append(dmBox);
@@ -1037,14 +1101,16 @@ async function opView(m) {
     } catch (er) { box.textContent = er.message; }
   };
   showOc();
+  opOn = true; opBell().catch(() => {});
   if (m) { const [i, t] = m.split('|'), el = $('#' + i); el.style.color = '#3fb950'; el.textContent = t; }
 }
 
 async function poll() {
-  if (!tok || document.hidden || (isOp && !asP)) return;
+  if (!tok || document.hidden) return;
+  if (isOp && !asP) { if (opOn) opBell().catch(() => {}); return; }
   try {
-    const was = !!S.maint, j = await api('me'); setS(j.state);
-    if (was !== !!S.maint) return playerView();
+    const was = !!S.maint, wb = !!S.ban, j = await api('me'); setS(j.state);
+    if (was !== !!S.maint || wb !== !!S.ban) { if (j.notifs && j.notifs.length) notify(j.notifs); return playerView(); }
     updHead();
     updTabBadge();
     if (tab === 'rk' && rkSub === 'm' && dmWith) { if (j.notifs && j.notifs.length) notify(j.notifs); dmLoad(false).catch(() => {}); return; }
@@ -1088,7 +1154,7 @@ const splashDone = new Promise((resolve) => {
   }, 100);
 });
 async function start() {
-  try { if (isOp && !asP) await opView(); else { await refresh(); checkPush().then(() => { if (pushOn && tab === 'set') playerView(); splashDone.then(() => setTimeout(nudge, 600)); }); } } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); } finally { appReady = true; }
+  try { if (isOp && !asP) { await opView(); checkPush({ as: 'player' }).catch(() => {}); } else { await refresh(); checkPush().then(() => { if (pushOn && tab === 'set') playerView(); splashDone.then(() => setTimeout(nudge, 600)); }); } } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); } finally { appReady = true; }
 }
 if (tok) start(); else { authView(); appReady = true; }
 </script>
