@@ -949,7 +949,7 @@ const handler = async (req, res) => {
       u.coins -= CAR_COST; u.car = c;
     } else if (b.action === 'racelb') {
       const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], w = raceWeek();
-      const pw = racePrevWeek(), real = list.filter((v) => v && !v.bot && v.pseudo !== OP_NAME && !banOf(v));
+      const pw = racePrevWeek(), real = list.filter((v) => v && !v.bot && (v.pseudo !== OP_NAME || u.pseudo === OP_NAME) && !banOf(v));
       const all = real.map((v) => { const r = v.rc && v.rc.w === w ? v.rc : null; return { pseudo: v.pseudo, pos: r ? r.pos : 0, tt: (r && r.tt) || 0, car: v.car || null, pf: v.pf || null }; })
         .sort((a, c) => c.pos - a.pos || (a.tt || 9e15) - (c.tt || 9e15) || a.pseudo.localeCompare(c.pseudo)) // le plus loin devant ; à égalité, celui qui y est arrivé le premier
         .map((x, i) => ({ ...x, rank: i + 1 }));
