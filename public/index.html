@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#10141c;--panel:#1a202c;--line:#2b3446;--txt:#e8ecf3;--dim:#8b95a8;--cb:#141923;--c:#9aa0a6;--r:#3fb950;--e:#a371f7;--l:#f5c518}
-:root[data-th=light]{--bg:#f3f5f9;--panel:#fff;--line:#d5dbe6;--txt:#161b26;--dim:#5b6577;--cb:#eef1f7;--c:#6b7280;--r:#1a9a3a;--e:#7c3aed;--l:#c99700}
+:root{--bg:#10141c;--panel:#1a202c;--line:#2b3446;--txt:#e8ecf3;--dim:#8b95a8;--cb:#141923;--c:#9aa0a6;--r:#3fb950;--e:#a371f7;--l:#f5c518;--lo:#f85149;--or:#f0883e;--sn-a:#202a3d;--sn-b:#161d2c;--sn-w:#46536e}
+:root[data-th=light]{--bg:#f3f5f9;--panel:#fff;--line:#d5dbe6;--txt:#161b26;--dim:#5b6577;--cb:#eef1f7;--c:#6b7280;--r:#1a9a3a;--e:#7c3aed;--l:#c99700;--lo:#d1242f;--or:#c2570c;--sn-a:#e3e8f2;--sn-b:#d3dbe8;--sn-w:#98a5ba}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.4 Barlow,system-ui,sans-serif}
 h1,h2,.ct{font-family:'Barlow Condensed',Impact,sans-serif}
@@ -197,6 +197,32 @@ details.lvc{border-color:#58a6ff}details.lvc>summary{color:#58a6ff}
 @media(prefers-reduced-motion:reduce){.car{transition:none}.car.mv svg,.car.mv .wh{animation:none}}
 .pf{width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-left:6px}
 details.fvb{border-color:var(--l)}details.fvb>summary{color:var(--l)}
+/* Snake : habillage carte Cardex */
+.card.x{--rc:var(--lo);--rg:transparent}.card.o{--rc:var(--or);--rg:transparent}
+.sn{max-width:440px;margin:3vh auto}
+.snh{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.snh h2{margin:0;font-size:26px}
+.card.sk{width:100%;max-width:min(400px,50vh);margin:0 auto;border-width:3px;border-radius:12px;transition:border-color .3s}
+.card.sk .ct{font-size:22px;min-height:0;padding:8px 8px 2px}
+.card.sk .rn{font-size:15px;padding:0 8px 8px}
+.card.sk::after{content:none}
+.snv{position:relative;line-height:0}
+.snv canvas{display:block;width:100%;aspect-ratio:1/1;background:var(--sn-a)}
+.snv canvas:focus-visible{outline:2px solid var(--l);outline-offset:-2px}
+.snt{position:absolute;left:8px;right:8px;bottom:8px;line-height:1.3;text-align:center;font-size:14px;padding:6px 10px;border-radius:8px;background:var(--panel);color:var(--txt);border:1px solid var(--line);pointer-events:none}
+.snb{position:absolute;top:8px;left:50%;transform:translateX(-50%);line-height:1.2;padding:4px 14px;border-radius:6px;font:700 18px 'Barlow Condensed',Impact,sans-serif;white-space:nowrap;opacity:0;pointer-events:none}
+.snb.on{opacity:1;animation:snp 1.5s ease forwards}
+@keyframes snp{0%{opacity:0}12%{opacity:1}75%{opacity:1}100%{opacity:0}}
+.sns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-width:min(400px,50vh);margin:10px auto}
+.sns>div{background:var(--cb);border:1px solid var(--line);border-radius:10px;padding:6px 8px;text-align:center}
+.sns small{display:block;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.sns b{font:700 22px 'Barlow Condensed',Impact,sans-serif;font-variant-numeric:tabular-nums}
+.sn .pos,.snw .pos{color:var(--r)}.sn .neg,.snw .neg{color:var(--lo)}.sn .zero,.snw .zero{color:var(--dim)}
+.sdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.snl{display:flex;flex-direction:column;gap:3px;font-size:14px;margin-top:6px}
+.sntb{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0}
+.sntb th,.sntb td{padding:5px 6px;text-align:left;border-top:1px solid var(--line)}
+.sntb th{color:var(--dim);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+@media(prefers-reduced-motion:reduce){.card.sk{transition:none}.snb.on{animation:none}}
 </style>
 </head>
 <body><main id="app"></main>
@@ -523,7 +549,7 @@ function jeuHTML() {
   return '<div class="box"><h2>Jeux d\'argent</h2><p>Mise entre 10 et 500 coins. Repère : un sachet coûte 100 coins. Sur téléphone, glisse le doigt sur le jeu (Tetris : touche = tourner, glisser vers le bas = chute).</p><div class="row"><input id="bet" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button data-g="snake">🐍 Snake</button><button data-g="tetris">🧱 Tetris</button></div></div>' +
     '<div class="box"><h2>🎡 Roulette</h2><p>Mise de 10 à 500 coins. Rouge, noir, pair, impair : gain ×2,5. Douzaine (1-12, 13-24, 25-36) : ×3,7. Numéro exact (0 à 36) : ×43. Le 0 fait perdre tous les paris sauf celui sur le numéro 0. Bien plus généreux que Snake et Tetris. Limite : 10 tours par jour, avec 30 s entre deux tours.</p><div class="row"><input id="rb" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise roulette"></div><div class="row" style="margin-top:8px"><button data-rk="red">🔴 Rouge</button><button data-rk="black">⚫ Noir</button><button data-rk="even">Pair</button><button data-rk="odd">Impair</button></div><div class="row" style="margin-top:8px"><button data-rk="dozen" data-rv="0">1-12</button><button data-rk="dozen" data-rv="1">13-24</button><button data-rk="dozen" data-rv="2">25-36</button><input id="rn" type="number" min="0" max="36" placeholder="N°" style="width:80px" aria-label="Numéro"><button data-rk="num">Numéro</button></div><div style="text-align:center;margin-top:10px"><canvas id="rc" width="260" height="260" style="max-width:100%"></canvas></div><div id="rw" style="text-align:center;font-size:40px;min-height:80px"></div><div id="rt" style="text-align:center;font-size:14px;opacity:.8;margin-top:6px"></div></div>' +
     '<div class="box"><h2>🎰 Machine à sous</h2><p>5 rouleaux : il faut au moins 3 symboles identiques (peu importe l’endroit). Gains pour 3 / 4 / 5 identiques : 🚲 ⚽ ×2 / ×6 / ×30 · 🤾 ×2,5 / ×8 / ×40 · 🦁 ×3,5 / ×12 / ×60 · 🏛️ ×5 / ×20 / ×120 · 🚀 ×10 / ×50 / ×400. Limite : 15 parties par jour.</p><div class="row"><input id="sl-b" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button id="sl-go">Lancer</button></div><div id="sl-out" style="text-align:center;font-size:34px;min-height:56px;margin-top:8px"></div><div id="sl-r" style="text-align:center"></div><div id="ml-slots" class="mgl" style="text-align:center;font-size:13px;opacity:.8"></div></div><div class="box"><h2>🪙 Pile ou face / Double ou rien</h2><p>Choisis pile ou face : 48 % de chance, gain ×2. Après une victoire, encaisse ou double (×4, ×8, jusqu’à ×16 ; une défaite fait tout perdre). Limite : 15 parties par jour.</p><div class="row"><input id="fl-b" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button data-fp="pile">Pile</button><button data-fp="face">Face</button></div><div id="fl-out" style="text-align:center;margin-top:8px"></div><div id="ml-flip" class="mgl" style="text-align:center;font-size:13px;opacity:.8"></div></div><div class="box"><h2>🎟️ Ticket à gratter</h2><p>Ticket à 50 🪙. Trouve 3 montants identiques pour gagner ce montant : 50, 100, 200, 500, 2 500 ou 5 000 🪙. Limite : 10 tickets par jour.</p><div class="row"><button id="tk-go">Acheter un ticket (50 🪙)</button><button id="tk-all" disabled>Tout gratter</button></div><div id="tk-g" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:300px;margin:10px auto"></div><div id="tk-r" style="text-align:center;font-size:18px;min-height:28px"></div><div id="ml-scratch" class="mgl" style="text-align:center;font-size:13px;opacity:.8"></div></div><div class="box"><h2>⚔️ Bataille de raretés</h2><p>Toi et l’adversaire tirez une carte au hasard : la plus rare gagne ×1,85 la mise. Égalité : on relance (5 fois max, puis la mise est rendue). Tu ne perds jamais de carte, seulement des coins. Limite : 10 batailles par jour.</p><div class="row"><input id="bt-b" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button id="bt-go">⚔️ Combattre</button></div><div id="bt-out" style="margin-top:10px"></div><div id="bt-r" style="text-align:center;font-size:18px;min-height:28px"></div><div id="ml-battle" class="mgl" style="text-align:center;font-size:13px;opacity:.8"></div></div>' +
-    '<div class="box"><b>Gains</b><p>🐍 Snake (pommes mangées) : gain = mise × (pommes − 5) ÷ 10, maximum ×4. Avec 100 coins : 15 pommes rendent 100, 45 pommes rendent 400.</p><p>🧱 Tetris (lignes) : gain = mise × (lignes − 3) ÷ 6, maximum ×4. Avec 100 coins : 9 lignes rendent 100, 27 lignes rendent 400. Moins de 5 pommes ou 3 lignes : tu perds ta mise.</p></div>';
+    '<div class="box"><b>Gains</b><p>🐍 Snake (cartes ramassées) : gain = mise × (cartes − 5) ÷ 10, maximum ×4. Avec 100 coins : 15 cartes rendent 100, 45 cartes rendent 400. Le serpent change de couleur selon ton gain en direct :</p>' + snLegend() + '<p>🧱 Tetris (lignes) : gain = mise × (lignes − 3) ÷ 6, maximum ×4. Avec 100 coins : 9 lignes rendent 100, 27 lignes rendent 400. 5 cartes ou moins (Snake), 3 lignes ou moins (Tetris) : tu perds ta mise.</p></div>';
 }
 let rkN = 10;
 function rankHTML() {
@@ -1175,19 +1201,261 @@ function dailyPopup(after) {
 async function refresh() { const j = await api('me'); setS(j.state); playerView(); if (j.notifs && j.notifs.length) notify(j.notifs); }
 
 // --- Jeux d'argent
-function snake(cv, sc, over) {
-  const N = 20, C = 16; cv.width = cv.height = N * C; const x = cv.getContext('2d');
-  let s = [[10, 10], [9, 10], [8, 10]], d = [1, 0], nd = d, f = [5, 5], n = 0;
-  const place = () => { do f = [Math.random() * N | 0, Math.random() * N | 0]; while (s.some((p) => p[0] == f[0] && p[1] == f[1])); };
-  const draw = () => { x.fillStyle = '#0b0f16'; x.fillRect(0, 0, N * C, N * C); x.fillStyle = '#f85149'; x.fillRect(f[0] * C, f[1] * C, C - 1, C - 1); x.fillStyle = '#3fb950'; s.forEach((p) => x.fillRect(p[0] * C, p[1] * C, C - 1, C - 1)); };
-  const step = () => {
-    d = nd; const h = [s[0][0] + d[0], s[0][1] + d[1]];
-    if (h[0] < 0 || h[1] < 0 || h[0] >= N || h[1] >= N || s.some((p) => p[0] == h[0] && p[1] == h[1])) { clearInterval(t); over(n); return; }
-    s.unshift(h); if (h[0] == f[0] && h[1] == f[1]) { n++; sc(n); place(); } else s.pop(); draw();
+// --- Snake : graphismes Cardex (serpent lisse, cartes à ramasser, couleur = gain en direct)
+// Règles inchangées : grille 20×20, un pas toutes les 120 ms, murs et corps = perdu, gain calculé par le serveur (betend).
+const SN_N = 20, SN_STEP = 120;
+const SN_T = [[0, 'x'], [15, 'o'], [20, 'c'], [30, 'r'], [38, 'e'], [45, 'l']]; // nombre de cartes à partir duquel chaque couleur apparaît (affichage seulement)
+const SN_NAME = { x: 'Perte', o: 'Mise rendue', c: 'Commune', r: 'Rare', e: 'Épique', l: 'Légendaire' };
+const SN_HINT = { x: 'tu perds des coins', o: 'tu récupères ta mise', c: 'petit gain', r: 'beau gain', e: 'gros gain', l: 'gain maximum' };
+const SN_VAR = { x: '--lo', o: '--or', c: '--c', r: '--r', e: '--e', l: '--l' };
+const SN_K = { ArrowLeft: 'L', ArrowRight: 'R', ArrowUp: 'U', ArrowDown: 'D', a: 'L', q: 'L', d: 'R', w: 'U', z: 'U', s: 'D' };
+const snTier = (n) => { let k = 'x'; SN_T.forEach(([m, t]) => { if (n >= m) k = t; }); return k; };
+const snMult = (n) => Math.min(4, Math.max(0, (n - 5) / 10)); // même formule que le serveur
+const snMin = (k) => SN_T.find((t) => t[1] === k)[0];
+const snMax = (k) => { const i = SN_T.findIndex((t) => t[1] === k); return i + 1 < SN_T.length ? SN_T[i + 1][0] - 1 : null; };
+const snRange = (k) => { const a = snMin(k), b = snMax(k); return b == null ? a + '+' : b > a ? a + '–' + b : String(a); };
+const snF = (x) => String(x).replace('.', ',');
+const snNet = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v) + ' 🪙';
+const snCls = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero');
+const snRgb = (h) => {
+  h = String(h).trim();
+  if (h[0] === '#') { if (h.length === 4) h = '#' + [...h.slice(1)].map((c) => c + c).join(''); return [1, 3, 5].map((i) => parseInt(h.substr(i, 2), 16)); }
+  const m = h.match(/\d+/g); return m ? m.slice(0, 3).map(Number) : [128, 128, 128];
+};
+
+function snakeGame(cv, o) {
+  const N = SN_N, ctx = cv.getContext('2d'), bgc = document.createElement('canvas'), cs = getComputedStyle(document.documentElement), V = (k) => cs.getPropertyValue(k).trim();
+  const TC = {}; Object.keys(SN_VAR).forEach((k) => (TC[k] = snRgb(V(SN_VAR[k]))));
+  const TH = { a: V('--sn-a'), b: V('--sn-b'), w: V('--sn-w'), face: V('--panel'), edge: V('--dim'), img: V('--line') };
+  const rgb = (c) => 'rgb(' + c.map(Math.round).join(',') + ')', dim = (c) => c.map((v) => v * 0.6);
+  const occ = new Uint8Array(N * N), px = new Float32Array(N * N + 2), py = new Float32Array(N * N + 2), PAL = [];
+  let cell = 20, dpr = 1, cw = 0, s, prv, d, q, f, n = 0, run = false, wait = true, dead = false, gone = false, acc = 0, last = 0, raf = 0, flash = 0, ov = null, lk = 'x';
+  let cH = TC.x.slice(), cT = dim(TC.x);
+  const want = () => ov || snTier(n);
+  const pal = () => { for (let i = 0; i <= 16; i++) { const t = i / 16; PAL[i] = 'rgb(' + [0, 1, 2].map((j) => Math.round(cH[j] + (cT[j] - cH[j]) * t)).join(',') + ')'; } };
+  pal();
+
+  const bg = () => {
+    const W = cv.width; bgc.width = bgc.height = W; const c = bgc.getContext('2d');
+    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) { c.fillStyle = (x + y) % 2 ? TH.a : TH.b; c.fillRect(x * cell, y * cell, cell + 0.5, cell + 0.5); }
+    c.strokeStyle = TH.w; c.lineWidth = 2 * dpr; c.strokeRect(dpr, dpr, W - 2 * dpr, W - 2 * dpr);
   };
-  const t = setInterval(step, 120); draw();
-  return { cmd: (k) => { const m = { L: [-1, 0], R: [1, 0], U: [0, -1], D: [0, 1] }[k]; if (m && (m[0] + d[0] || m[1] + d[1])) nd = m; }, stop: () => clearInterval(t) };
+  const size = () => {
+    const w = cv.clientWidth, r = Math.min(window.devicePixelRatio || 1, 3);
+    if (!w || (w === cw && r === dpr)) return;
+    cw = w; dpr = r; cv.width = cv.height = Math.round(w * r); cell = cv.width / N; bg(); kick();
+  };
+  const ro = window.ResizeObserver ? new ResizeObserver(size) : null;
+  if (ro) ro.observe(cv); else window.addEventListener('resize', size);
+
+  function place() {
+    const fr = []; for (let i = 0; i < N * N; i++) if (!occ[i]) fr.push(i);
+    if (!fr.length) { f = null; return; }
+    const v = fr[(Math.random() * fr.length) | 0];
+    f = { x: v % N, y: (v / N) | 0 };
+  }
+  function reset() {
+    s = [[10, 10], [9, 10], [8, 10]]; prv = s.map((p) => p.slice()); d = [1, 0]; q = []; n = 0; lk = 'x';
+    occ.fill(0); s.forEach((p) => (occ[p[1] * N + p[0]] = 1));
+    run = false; wait = true; dead = false; acc = 0; flash = 0; place();
+    if (o.onScore) o.onScore(0);
+    kick();
+  }
+  function die() { if (dead) return; run = false; dead = true; flash = 1; kick(); if (o.onOver) o.onOver(n); }
+  function step() {
+    prv = s.map((p) => p.slice());
+    if (q.length) d = q.shift();
+    const h = [s[0][0] + d[0], s[0][1] + d[1]];
+    if (h[0] < 0 || h[1] < 0 || h[0] >= N || h[1] >= N || occ[h[1] * N + h[0]]) return die();
+    const eat = f && h[0] === f.x && h[1] === f.y;
+    s.unshift(h); occ[h[1] * N + h[0]] = 1;
+    if (eat) {
+      n++; place();
+      if (o.onScore) o.onScore(n);
+      const k = snTier(n); if (k !== lk) { lk = k; if (o.onTier) o.onTier(k); }
+      if (!f) die();
+    } else { const t = s.pop(); occ[t[1] * N + t[0]] = 0; }
+  }
+  function cmd(k) {
+    if (dead || gone) return;
+    const m = { L: [-1, 0], R: [1, 0], U: [0, -1], D: [0, 1] }[k]; if (!m) return;
+    const r = q.length ? q[q.length - 1] : d;
+    if (m[0] === -r[0] && m[1] === -r[1]) return; // pas de demi-tour
+    if (wait) { wait = false; run = true; acc = 0; if (o.onStart) o.onStart(); }
+    if (m[0] === r[0] && m[1] === r[1]) { kick(); return; }
+    if (q.length < 2) q.push(m);
+    kick();
+  }
+
+  function rr(x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function draw() {
+    if (!cw || !s) return;
+    ctx.drawImage(bgc, 0, 0);
+    if (f) { // mini carte Cardex : bordure de rareté, image, titre
+      const w = cell * 0.76, h = cell * 0.98, ix = -w / 2 + cell * 0.1, iy = -h / 2 + cell * 0.1, iw = w - cell * 0.2, ih = h * 0.5, rc = rgb(TC.l);
+      ctx.save(); ctx.translate((f.x + 0.5) * cell, (f.y + 0.5) * cell); ctx.rotate(-0.1);
+      rr(-w / 2, -h / 2, w, h, cell * 0.12); ctx.fillStyle = TH.face; ctx.fill();
+      ctx.lineWidth = Math.max(2, cell * 0.11); ctx.strokeStyle = rc; ctx.stroke();
+      ctx.fillStyle = rc; ctx.globalAlpha = 0.35; ctx.fillRect(ix, iy, iw, ih); ctx.globalAlpha = 1;
+      ctx.fillStyle = TH.edge; ctx.fillRect(ix, iy + ih + cell * 0.1, iw, cell * 0.07);
+      ctx.fillStyle = rc; ctx.fillRect(ix, h / 2 - cell * 0.24, iw * 0.55, cell * 0.07);
+      ctx.restore();
+    }
+    // serpent : on glisse d'une case à l'autre entre deux pas pour que le mouvement soit fluide
+    const L = s.length, a = run ? Math.min(acc / SN_STEP, 1) : 1, den = L > 1 ? L - 1 : 1, pl = prv.length;
+    for (let i = 0; i < L; i++) {
+      const c = s[i], p = prv[i < pl ? i : pl - 1];
+      px[i] = (p[0] + (c[0] - p[0]) * a + 0.5) * cell; py[i] = (p[1] + (c[1] - p[1]) * a + 0.5) * cell;
+    }
+    ctx.lineCap = 'round';
+    for (let i = L - 1; i > 0; i--) {
+      const t = i / den;
+      ctx.strokeStyle = PAL[(t * 16) | 0]; ctx.lineWidth = cell * (0.8 - 0.24 * t);
+      ctx.beginPath(); ctx.moveTo(px[i], py[i]); ctx.lineTo(px[i - 1], py[i - 1]); ctx.stroke();
+    }
+    ctx.fillStyle = PAL[0]; ctx.beginPath(); ctx.arc(px[0], py[0], cell * 0.46, 0, Math.PI * 2); ctx.fill();
+    const ex = -d[1], ey = d[0];
+    for (let sd = -1; sd <= 1; sd += 2) {
+      const x1 = px[0] + d[0] * cell * 0.13 + ex * sd * cell * 0.2, y1 = py[0] + d[1] * cell * 0.13 + ey * sd * cell * 0.2;
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x1, y1, cell * 0.14, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#14181b'; ctx.beginPath(); ctx.arc(x1 + d[0] * cell * 0.045, y1 + d[1] * cell * 0.045, cell * 0.07, 0, Math.PI * 2); ctx.fill();
+    }
+    if (flash > 0) { ctx.fillStyle = 'rgba(248,81,73,' + flash * 0.35 + ')'; ctx.fillRect(0, 0, cv.width, cv.width); }
+  }
+  function colors(dt) { // la couleur glisse en douceur vers celle du gain en cours
+    const t = TC[want()], tt = dim(t); let m = 0;
+    for (let j = 0; j < 3; j++) m = Math.max(m, Math.abs(t[j] - cH[j]), Math.abs(tt[j] - cT[j]));
+    if (m < 0.01) return false;
+    const k = 1 - Math.exp(-dt * 9), snap = m < 0.6;
+    for (let j = 0; j < 3; j++) { cH[j] = snap ? t[j] : cH[j] + (t[j] - cH[j]) * k; cT[j] = snap ? tt[j] : cT[j] + (tt[j] - cT[j]) * k; }
+    pal(); return !snap;
+  }
+  function frame(now) {
+    raf = 0;
+    if (gone) return;
+    if (!cv.isConnected) { api0.destroy(); return; }
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.1)); last = now;
+    if (run) { acc += dt * 1000; while (acc >= SN_STEP && run) { acc -= SN_STEP; step(); } }
+    const mv = colors(dt); if (flash > 0) flash = Math.max(0, flash - dt * 2);
+    draw();
+    if (run || mv || flash > 0) raf = requestAnimationFrame(frame);
+  }
+  function kick() { if (!raf && !gone) { last = performance.now(); raf = requestAnimationFrame(frame); } }
+
+  const api0 = {
+    cmd,
+    stop: () => { run = false; dead = true; kick(); },
+    destroy: () => { gone = true; run = false; if (raf) cancelAnimationFrame(raf); raf = 0; if (ro) ro.disconnect(); else window.removeEventListener('resize', size); },
+    preview: (k) => { ov = k || null; kick(); }, // aperçu d'une couleur (espace opérateur)
+    restart: () => reset(),
+  };
+  reset(); size();
+  return api0;
 }
+
+// --- Habillage commun (carte Cardex + stats + croix) : même rendu pour le joueur et pour l'opérateur
+const snCard = () => '<div class="card sk x"><div class="snv"><canvas tabindex="0" aria-label="Plateau de Snake"></canvas><div class="snb"></div><div class="snt">Glisse le doigt ou touche une flèche pour démarrer</div></div><div class="ct">Snake</div><div class="rn"></div></div>';
+const snStats = () => '<div class="sns"><div><small>Cartes</small><b data-sc>0</b></div><div><small>Paiement</small><b data-mu>×0</b></div><div><small>Gain</small><b data-gn>0 🪙</b></div></div>';
+const snPad = () => '<div class="pad row" style="justify-content:center;margin:10px 0"><button class="g" data-k="L" aria-label="Gauche">◀</button><button class="g" data-k="U" aria-label="Haut">▲</button><button class="g" data-k="D" aria-label="Bas">▼</button><button class="g" data-k="R" aria-label="Droite">▶</button></div>';
+function snView(root, n, bet, ov) { // met à jour la carte, la couleur du cadre et les chiffres ; ov = couleur forcée (aperçu opérateur)
+  const k = ov || snTier(n), nn = ov ? snMin(k) : n, m = snMult(nn), net = Math.floor(bet * m) - bet;
+  root.querySelector('.sk').className = 'card sk ' + k;
+  root.querySelector('.sk .rn').textContent = SN_NAME[k] + ' · ' + SN_HINT[k];
+  root.querySelector('[data-sc]').textContent = nn;
+  root.querySelector('[data-mu]').textContent = '×' + snF(m);
+  const g = root.querySelector('[data-gn]'); g.textContent = snNet(net); g.className = snCls(net);
+}
+function snBanner(root, k, n) {
+  const b = root.querySelector('.snb'), c = snRgb(getComputedStyle(root).getPropertyValue(SN_VAR[k]));
+  b.textContent = SN_NAME[k] + ' · ×' + snF(snMult(n));
+  b.style.background = 'rgb(' + c.join(',') + ')'; b.style.color = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2] > 150 ? '#10141c' : '#fff';
+  b.classList.remove('on'); void b.offsetWidth; b.classList.add('on');
+  clearTimeout(b._t); b._t = setTimeout(() => b.classList.remove('on'), 1600);
+}
+function snSwipe(cvs, cmd) { // glisser le doigt sur le plateau
+  let ts = null;
+  cvs.addEventListener('touchstart', (e) => { const t = e.touches[0]; ts = [t.clientX, t.clientY]; e.preventDefault(); }, { passive: false });
+  cvs.addEventListener('touchmove', (e) => {
+    if (!ts) return; const t = e.touches[0], dx = t.clientX - ts[0], dy = t.clientY - ts[1];
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
+    cmd(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'R' : 'L') : (dy > 0 ? 'D' : 'U')); ts = [t.clientX, t.clientY]; e.preventDefault();
+  }, { passive: false });
+  cvs.addEventListener('touchend', () => { ts = null; });
+}
+const snLegend = () => '<div class="snl">' + SN_T.map(([, k]) => '<span><i class="sdot" style="background:var(' + SN_VAR[k] + ')"></i><b>' + SN_NAME[k] + '</b> · ' + snRange(k) + ' cartes : ' + SN_HINT[k] + '</span>').join('') + '</div>';
+
+// --- Espace JOUEUR : vraie partie (mise débitée et gain versé par le serveur)
+function playSnake(gid, bet) {
+  const ov = overlay('<div class="box sn"><div class="snh"><h2>🐍 Snake</h2><span class="pill">Mise ' + bet + ' 🪙</span></div>' + snCard() + snStats() + snPad() + '<button class="g" id="ab" style="width:100%">Arrêter et encaisser</button><div id="rs"></div></div>');
+  const root = ov.querySelector('.sn'), cvs = ov.querySelector('canvas'), hint = ov.querySelector('.snt');
+  let cur = 0, done = false, g;
+  const kd = (e) => { const k = SN_K[e.key] || SN_K[String(e.key).toLowerCase()]; if (k) { e.preventDefault(); g.cmd(k); } };
+  const over = async (n) => {
+    if (done) return; done = true; g.stop(); document.removeEventListener('keydown', kd);
+    ov.querySelector('.pad').remove(); ov.querySelector('#ab').remove(); hint.style.display = 'none';
+    const rs = ov.querySelector('#rs');
+    try {
+      const j = await api('betend', { gid, score: n }); setS(j.state); cur = j.score; snView(root, cur, bet);
+      const net = j.gain - bet;
+      rs.innerHTML = '<p style="text-align:center">' + j.score + ' carte' + (j.score > 1 ? 's' : '') + ' ramassée' + (j.score > 1 ? 's' : '') + ' → <b class="' + snCls(net) + '">' + snNet(net) + '</b><br><small>' + j.gain + ' 🪙 rendus sur ' + bet + ' misés</small></p><button id="ok" style="width:100%">Fermer</button>';
+    } catch (e) { rs.innerHTML = '<p class="err">' + esc(e.message) + '</p><button id="ok" style="width:100%">Fermer</button>'; }
+    ov.querySelector('#ok').onclick = () => { ov.remove(); g.destroy(); playerView(); };
+  };
+  g = snakeGame(cvs, {
+    onScore: (n) => { cur = n; snView(root, n, bet); },
+    onTier: (k) => snBanner(root, k, cur),
+    onStart: () => { hint.style.display = 'none'; },
+    onOver: over,
+  });
+  document.addEventListener('keydown', kd);
+  snSwipe(cvs, (k) => { if (!done) g.cmd(k); });
+  ov.querySelectorAll('[data-k]').forEach((b) => (b.onclick = () => g.cmd(b.dataset.k)));
+  ov.querySelector('#ab').onclick = () => over(cur);
+}
+
+// --- Espace OPÉRATEUR : bac à sable (aucune pièce, aucun appel au serveur), invisible pour les joueurs
+const snOpHTML = () => '<div class="box snw" id="snop"><h2>🐍 Snake — essai opérateur</h2><p>Bac à sable : aucune pièce n’est dépensée ni gagnée et rien n’est envoyé au serveur. Les joueurs ne voient pas cet espace. Pour jouer avec de vrais coins, passe en « 🎮 Espace joueur ».</p>'
+  + '<div class="row" style="margin-bottom:12px"><label class="row" style="gap:8px">Mise test <input id="snbt" type="number" min="10" max="500" value="100" style="width:96px"></label><button class="g" id="snrs">↺ Nouvelle partie</button></div>'
+  + '<div class="grid2"><div>' + snCard() + snStats() + snPad() + '<p id="snm" style="text-align:center;min-height:1.4em"></p></div>'
+  + '<div><b>Aperçu des couleurs</b><p><small>Touche une couleur pour la voir sur le serpent. Retouche-la pour revenir au jeu.</small></p><div class="pills" id="snpv">' + SN_T.map(([, k]) => '<button class="pill" data-pv="' + k + '"><i class="sdot" style="background:var(' + SN_VAR[k] + ')"></i>' + SN_NAME[k] + '</button>').join('') + '</div>'
+  + '<table class="sntb"><thead><tr><th>Couleur</th><th>Cartes</th><th id="snth">Rend</th></tr></thead><tbody id="sntb"></tbody></table><p><small>Les seuils de couleur sont seulement visuels : le gain reste calculé par le serveur (mise × (cartes − 5) ÷ 10, maximum ×4).</small></p></div></div></div>';
+let snOpG = null;
+function snOp() {
+  const root = $('#snop'); if (!root) return;
+  if (snOpG) snOpG.destroy();
+  const cvs = root.querySelector('canvas'), hint = root.querySelector('.snt'), msg = root.querySelector('#snm'), bi = root.querySelector('#snbt');
+  const bet = () => Math.min(500, Math.max(10, parseInt(bi.value, 10) || 100));
+  let pv = null, n = 0;
+  const view = () => snView(root, n, bet(), pv);
+  const tbl = () => {
+    const b = bet(); root.querySelector('#snth').textContent = 'Rend (mise ' + b + ')';
+    root.querySelector('#sntb').innerHTML = SN_T.map(([m, k]) => { const x = snMax(k), lo = Math.floor(b * snMult(m)), hi = x == null ? lo : Math.floor(b * snMult(x)); return '<tr><td><i class="sdot" style="background:var(' + SN_VAR[k] + ')"></i>' + SN_NAME[k] + '</td><td>' + snRange(k) + '</td><td>' + (lo === hi ? lo : lo + ' à ' + hi) + ' 🪙</td></tr>'; }).join('');
+  };
+  hint.textContent = 'Clique ici puis utilise les flèches (ou les boutons) pour démarrer';
+  snOpG = snakeGame(cvs, {
+    onScore: (x) => { n = x; view(); },
+    onTier: (k) => { if (!pv) snBanner(root, k, n); },
+    onStart: () => { hint.style.display = 'none'; msg.textContent = ''; },
+    onOver: (x) => { const b = bet(), net = Math.floor(b * snMult(x)) - b; msg.innerHTML = 'Fin de partie : ' + x + ' carte' + (x > 1 ? 's' : '') + ' → <b class="' + snCls(net) + '">' + snNet(net) + '</b> <small>(essai, aucune pièce touchée)</small>'; },
+  });
+  cvs.onclick = () => cvs.focus();
+  cvs.onkeydown = (e) => { const k = SN_K[e.key] || SN_K[String(e.key).toLowerCase()]; if (k) { e.preventDefault(); snOpG.cmd(k); } };
+  snSwipe(cvs, (k) => snOpG.cmd(k));
+  root.querySelectorAll('[data-k]').forEach((b) => (b.onclick = () => snOpG.cmd(b.dataset.k)));
+  root.querySelectorAll('[data-pv]').forEach((b) => (b.onclick = () => {
+    pv = pv === b.dataset.pv ? null : b.dataset.pv; snOpG.preview(pv); view();
+    root.querySelectorAll('[data-pv]').forEach((x) => x.classList.toggle('on', x.dataset.pv === pv));
+    snBanner(root, pv || snTier(n), pv ? snMin(pv) : n);
+  }));
+  root.querySelector('#snrs').onclick = () => { snOpG.restart(); hint.style.display = ''; msg.textContent = ''; cvs.focus(); };
+  bi.oninput = () => { view(); tbl(); };
+  view(); tbl();
+}
+
 function tetris(cv, sc, over) {
   const W = 10, H = 20, C = 20; cv.width = W * C; cv.height = H * C; const x = cv.getContext('2d');
   const P = [[[1, 1, 1, 1]], [[1, 1], [1, 1]], [[0, 1, 0], [1, 1, 1]], [[1, 0, 0], [1, 1, 1]], [[0, 0, 1], [1, 1, 1]], [[0, 1, 1], [1, 1, 0]], [[1, 1, 0], [0, 1, 1]]];
@@ -1244,7 +1512,8 @@ function wheel(cv, n, done, still) {
   requestAnimationFrame(frame);
 }
 function play(kind, gid, bet) {
-  const sn = kind === 'snake';
+  if (kind === 'snake') return playSnake(gid, bet);
+  const sn = false;
   const ov = overlay('<div style="text-align:center"><h2>' + (sn ? '🐍 Snake' : '🧱 Tetris') + ' — mise ' + bet + ' 🪙</h2><p>' + (sn ? 'Pommes' : 'Lignes') + ' : <b id="sc">0</b></p><canvas id="cv" style="max-width:100%;max-height:50vh;width:auto;border:2px solid var(--line)"></canvas><div class="pad row" style="justify-content:center;margin:10px 0"><button class="g" data-k="L">◀</button><button class="g" data-k="U">' + (sn ? '▲' : '⟳') + '</button><button class="g" data-k="D">▼</button><button class="g" data-k="R">▶</button>' + (sn ? '' : '<button class="g" data-k="X">⤓</button>') + '</div><button class="g" id="ab">Abandonner</button><div id="rs"></div></div>');
   let cur = 0, done = false, g;
   const sc = (n) => { cur = n; ov.querySelector('#sc').textContent = n; };
@@ -1259,7 +1528,7 @@ function play(kind, gid, bet) {
     } catch (e) { rs.innerHTML = '<p class="err">' + esc(e.message) + '</p><button id="ok">Fermer</button>'; }
     ov.querySelector('#ok').onclick = () => { ov.remove(); playerView(); };
   };
-  g = (sn ? snake : tetris)(ov.querySelector('#cv'), sc, over);
+  g = tetris(ov.querySelector('#cv'), sc, over);
   document.addEventListener('keydown', kd);
   const cvs = ov.querySelector('#cv'); let ts;
   cvs.addEventListener('touchstart', (e) => { const t = e.touches[0]; ts = [t.clientX, t.clientY]; e.preventDefault(); }, { passive: false });
@@ -1321,6 +1590,7 @@ async function opView(m) {
     '<form class="box" id="fo" style="display:grid;gap:10px"><h2>Objet en boutique</h2><input id="on" placeholder="Nom de la carte (titre Wikipédia)" required><select id="or"><option value="c">Commune</option><option value="r">Rare</option><option value="e">Épique</option><option value="l">Légendaire</option></select><input id="op" type="number" min="1" placeholder="Prix en coins" required><input id="os" type="number" min="1" placeholder="Quantité disponible (vide = illimité)"><button>Ajouter</button><div class="err" id="e4"></div>' + objs + '</form></div>' +
     '<div class="box" id="pbox"><h2>Joueurs (' + users.length + ')</h2><div id="plist"><input id="pq" placeholder="🔎 Taper le nom d\'un joueur" style="width:100%;margin-bottom:8px" autocomplete="off"><div id="pls">' + list + '</div></div><div id="pf" class="opf"></div></div>' +
     mkbox +
+    snOpHTML() +
     pfbox +
     '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + ' — 🪙 ' + u.coins + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="ca" multiple size="6" aria-label="Cartes"></select><small id="ch"></small><button>Valider</button><div class="err" id="e"></div></form>' +
     '<form class="box" id="fm" style="display:grid;gap:10px"><h2>Envoyer une notification</h2><select id="mt"><option value="*">Tous les joueurs</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="mx" maxlength="200" placeholder="Message" required><button>Envoyer</button><div class="err" id="e5"></div></form>' +
@@ -1493,7 +1763,7 @@ async function opView(m) {
   $('#fr').onsubmit = act('e6', () => api('rename', { pseudo: $('#ru').value, name: $('#rnn').value }), 'Pseudo changé');
   app.querySelectorAll('[data-du]').forEach((b) => (b.onclick = (e) => { if (confirm('Supprimer définitivement le compte ' + b.dataset.du + ' ?')) act('e', () => api('deluser', { pseudo: b.dataset.du }), 'Compte supprimé')(e); }));
   // --- Catégories (au lieu d'une seule longue page) : 5 onglets qui tiennent sur 2 lignes maximum, sans glisser
-  const OC = [['b', '🛒 Boutique', ['Boutique', 'Collection provisoire', 'Objet en boutique']], ['j', '👥 Joueurs', ['Joueurs', 'Photos de profil', 'Donner ou retirer', 'Changer le pseudo']], ['m', '✉️ Messages', ['Envoyer une notification']], ['s', '🚩 Signalements', ['Signalements']], ['c', '🎴 Cartes', ['Panneau Cartes']], ['k', '🏪 Marché', ['Marché']], ['x', '🔧 Maintenance', ['Maintenance']]];
+  const OC = [['b', '🛒 Boutique', ['Boutique', 'Collection provisoire', 'Objet en boutique']], ['j', '👥 Joueurs', ['Joueurs', 'Photos de profil', 'Donner ou retirer', 'Changer le pseudo']], ['m', '✉️ Messages', ['Envoyer une notification']], ['s', '🚩 Signalements', ['Signalements']], ['c', '🎴 Cartes', ['Panneau Cartes']], ['k', '🏪 Marché', ['Marché']], ['x', '🔧 Maintenance', ['Maintenance']], ['n', '🐍 Snake', ['Snake']]];
   const bar = app.querySelector('.bar'), dmBox = document.createElement('div');
   dmBox.className = 'box'; dmBox.id = 'opdm'; dmBox.innerHTML = '<h2>👁️ Voir les messages des joueurs</h2><div id="opdl">Chargement…</div><div id="opdt"></div>';
   app.append(dmBox);
@@ -1530,6 +1800,7 @@ async function opView(m) {
     } catch (er) { box.textContent = er.message; }
   };
   showOc();
+  snOp();
   opOn = true; opBell().catch(() => {});
   if (m) { const [i, t] = m.split('|'), el = $('#' + i); el.style.color = '#3fb950'; el.textContent = t; }
 }
