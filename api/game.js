@@ -12,7 +12,21 @@ const TK = [[6095, 0], [2100, 1], [1200, 2], [500, 4], [80, 10], [20, 50], [5, 1
 const mgInfo = (u) => { const m = u.mg && u.mg.d === parisDay() ? u.mg : {}; return Object.fromEntries(Object.entries(MG_MAX).map(([k, n]) => [k, Math.max(0, n - (m[k] || 0))])); };
 const mgUse = (u, k) => { if (!u.mg || u.mg.d !== parisDay()) u.mg = { d: parisDay() }; if ((u.mg[k] || 0) >= MG_MAX[k]) return 'Limite du jour atteinte : ' + MG_MAX[k] + ' parties par jour pour ce jeu. Reviens demain !'; u.mg[k] = (u.mg[k] || 0) + 1; };
 const shuf = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-const DAY = 864e5, MAXP = 10, PRICE = 100, PACK = 5;
+const DAY = 864e5, MAXP = 10, PRICE = 100, PACK = 5, OPEN_MAX = 50;
+// Connexion quotidienne : jour 1 à 7 (heure de Paris). Un jour raté remet la série à zéro ; après le jour 7 on repart au jour 1.
+const DAILY = [10, 20, 30, 40, 50, 60, 200];
+const prevDay = (d) => new Date(Date.parse(d + 'T12:00:00Z') - DAY).toISOString().slice(0, 10);
+const dyInfo = (u) => { if (u.bot || u.pseudo === OP_NAME) return null; const t = parisDay(), s = u.ds, claimed = !!(s && s.d === t); return { day: claimed ? s.n : s && s.d === prevDay(t) ? (s.n % 7) + 1 : 1, claimed, rew: DAILY }; };
+// Favorites gardées après une renaissance (livret Favoris) : leur valeur monte progressivement jusqu'à ×5 en 7 jours
+// Course de la semaine : 1 pack de course par heure (non cumulable), chaque pack fait avancer la voiture de +1, +2, +5 ou +10 (de plus en plus rare)
+const RACE_HOUR = 36e5, CAR_COST = 200; // pas de ligne d'arrivée : celui qui est le plus loin à la fin de la semaine gagne
+const raceWeek = () => { const d = new Date(parisDay() + 'T12:00:00Z'); return new Date(d - ((d.getUTCDay() + 6) % 7) * DAY).toISOString().slice(0, 10); }; // lundi (Paris) de la semaine en cours
+const raceEnd = () => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(new Date()).map((x) => [x.type, x.value])), dow = (new Date(parisDay() + 'T12:00:00Z').getUTCDay() + 6) % 7; return Date.now() + ((6 - dow) * 86400 + 86400 - ((+p.hour % 24) * 3600 + +p.minute * 60 + +p.second)) * 1000; };
+const raceView = (u) => { if (u.bot || u.pseudo === OP_NAME) return null; const w = raceWeek(), r = u.rc && u.rc.w === w ? u.rc : null, next = (u.rcT || 0) + RACE_HOUR; return { w, pos: r ? r.pos : 0, car: u.car || null, next, ready: Date.now() >= next, end: raceEnd(), cost: CAR_COST }; };
+const racePrevWeek = () => new Date(Date.parse(raceWeek() + 'T12:00:00Z') - 7 * DAY).toISOString().slice(0, 10);
+const PFP_COST = 500; // photo de profil : 1re gratuite, 2e payante, 3e et + vérifiées par l'opérateur
+const FK_DAYS = 7, FK_MAX = 5;
+const fkMult = (u, id) => { const t = (u.fk || {})[id]; return t ? 1 + (FK_MAX - 1) * Math.min(1, (Date.now() - t) / (FK_DAYS * DAY)) : 1; };
 const stepOf = (k) => Math.round((10 + (4 * k) / 9) * 60000); // 10 min pour le 1er sachet, 14 min pour le 10e (total 2 h)
 const pend = [];
 async function vapid() {
@@ -41,6 +55,7 @@ async function bcast(text, except) {
     note(v, text); await redis.set(key(v.pseudo), v);
   }
 }
+const pfpList = async () => { const q = (await redis.get('pfpq')) || [], out = []; for (const p of q) { const v = await redis.get(key(p)); if (v && v.pfpReq) out.push({ pseudo: v.pseudo, img: v.pfpReq.img, t: v.pfpReq.t, n: v.pfpN || 0 }); } return out; };
 const OP_ID = (process.env.OPERATOR_ID || 'operateur').toLowerCase();
 const OP_NAME = 'Noln_mry';
 // --- IP (hachée avec une clé secrète : on ne stocke jamais l'adresse en clair) et bannissements
@@ -122,15 +137,16 @@ const val = (u, id, cat, cu) => {
   const r = rarOf(cat, id); if (!r) return 0;
   const b = (cu.vals && cu.vals[id]) || defBase(id, r, cu);
   const d = Math.min(100, Math.floor((Date.now() - ((u.since || {})[id] || Date.now())) / DAY));
-  return Math.max(1, Math.round(b * (1 + d / 100)));
+  return Math.max(1, Math.round(b * (1 + d / 100) * fkMult(u, id)));
 };
 const add = (u, id, n) => { if (!u.cards[id]) u.since[id] = Date.now(); u.cards[id] = (u.cards[id] || 0) + n; };
-const rm = (u, id, n) => { u.cards[id] -= n; if (u.cards[id] <= 0) { delete u.cards[id]; delete u.since[id]; u.fav = u.fav.filter((x) => x !== id); } };
+const rm = (u, id, n) => { u.cards[id] -= n; if (u.cards[id] <= 0) { delete u.cards[id]; delete u.since[id]; if (u.fk) delete u.fk[id]; u.fav = u.fav.filter((x) => x !== id); } };
 
 // =================== DÉFIS ===================
 // Cartes jouables : collections de niveau II à V, ou n'importe quelle collection dont le joueur a déjà fait une renaissance ; objets seulement si l'opérateur leur a donné des stats.
 const CH = { fee: 5, max: 5000, ttl: 48 * 36e5, day: 10, vs: 3, sent: 5 };
 const HP0 = { c: [20, 5], r: [30, 8], e: [45, 12], l: [70, 18] }, LVM = [1, 1.2, 1.4, 1.6, 1.8], COST = { c: 1, r: 3, e: 8, l: 20 };
+const csFrom = (H, p) => H.reduce((c, h) => { if (h.a === p || h.b === p) { const m = h.w * (h.a === p ? 1 : -1); if (m > 0) c.w++; else if (m < 0) c.l++; else c.d++; } return c; }, { w: 0, l: 0, d: 0 }); // victoires / défaites / égalités en défi
 const rbTot = (u) => Object.values((u && u.rb) || {}).reduce((a, x) => a + x, 0);
 const statsOf = (id, cat, cu, raw) => {
   const o = !raw && (cu.stats || {})[id];
@@ -150,8 +166,8 @@ const playable = (u, id, cat, cu) => {
 const dlInfo = (u) => { const d = u.dl && u.dl.d === parisDay() ? u.dl : { n: 0, o: {} }, max = u.dlMax != null ? u.dlMax : CH.day; return { left: Math.max(0, max - d.n), max, o: d.o || {} }; };
 const dlUse = (u, opp) => { if (!u.dl || u.dl.d !== parisDay()) u.dl = { d: parisDay(), n: 0, o: {} }; u.dl.n++; const k = opp.toLowerCase(); u.dl.o[k] = (u.dl.o[k] || 0) + 1; };
 // Cartes engagées : sorties de la collection du joueur (donc bloquées partout) puis rendues ou transférées au résultat
-const lock = (u, ids) => ids.map((id) => { const x = { id, since: (u.since || {})[id] || Date.now(), fav: u.fav.includes(id) }; rm(u, id, 1); return x; });
-const unlock = (u, xs) => xs.forEach((x) => { const had = u.cards[x.id]; add(u, x.id, 1); if (!had) { u.since[x.id] = x.since; if (x.fav && !u.fav.includes(x.id)) u.fav.push(x.id); } });
+const lock = (u, ids) => ids.map((id) => { const x = { id, since: (u.since || {})[id] || Date.now(), fav: u.fav.includes(id), fk: (u.fk || {})[id] }; rm(u, id, 1); return x; });
+const unlock = (u, xs) => xs.forEach((x) => { const had = u.cards[x.id]; add(u, x.id, 1); if (!had) { u.since[x.id] = x.since; if (x.fav && !u.fav.includes(x.id)) u.fav.push(x.id); if (x.fk) (u.fk ||= {})[x.id] = x.fk; } });
 const refundCh = (A, x, text) => { if (x.mode === 'war') A.coins += x.s; unlock(A, x.c); note(A, text); };
 function pickCards(u, ids, fmt, stake, mode, cat, cu) {
   if (!Array.isArray(ids) || ids.length !== fmt) return 'Choisis exactement ' + fmt + ' carte' + (fmt > 1 ? 's' : '');
@@ -188,6 +204,7 @@ async function settle(A, B, x, sb, cb, cat, cu) {
     const k = crypto.randomInt(cl.length); h.got = cl[k].id;
     cl.forEach((c, i) => { if (i === k) add(W, c.id, 1); else unlock(Lo, [c]); });
   }
+  { const H0 = (await redis.get('chh')) || []; for (const [P, m] of [[A, w], [B, -w]]) { const c = P.cs || (P.cs = csFrom(H0, P.pseudo)); if (m > 0) c.w++; else if (m < 0) c.l++; else c.d++; } }
   dlUse(A, B.pseudo); dlUse(B, A.pseudo);
   const say = (P, O) => {
     const m = (P === A ? 1 : -1) * w, ms = P === A ? sa : sb;
@@ -263,7 +280,7 @@ const price = (sh, t, cat) => Math.round((PRICE * 2 ** (lvOf(cat, t) - 1) * (100
 const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t), ob = cat[t]; if (ob && ob.until != null && !ob.base && ((u.rb || {})[t] || 0) >= 1) return false; return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
 const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => x.seller === u.pseudo || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))), inbox: u.inbox || [],
-  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, coins: u.coins, packs: u.packs, bought: u.bought || {},
+  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, pf: u.pf || null, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
   next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), cards: u.cards, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
   shop: Object.fromEntries(Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s, t, cat), full: PRICE * 2 ** (lvOf(cat, t) - 1), lvl: lvOf(cat, t) }])), lv: Object.fromEntries(LINES.map((b) => [b, lineLv(u, b)])), lvn: Object.fromEntries(LINES.map((b) => [b, (cat[b + (lineLv(u, b) + 1)] || {}).name || null])),
@@ -489,8 +506,8 @@ const handler = async (req, res) => {
       if (b.action === 'users') {
         const names = (await redis.smembers('users')).sort();
         const list = names.length ? await redis.mget(...names.map(key)) : [];
-        const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u) }; });
-        return ok({ maint: !!(await redis.get('maint')), maintinfo: (await redis.get('maintinfo')) || { presets: [], msg: '' }, maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], themes: cat });
+        const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u), pf: !!u.pf }; });
+        return ok({ maint: !!(await redis.get('maint')), maintinfo: (await redis.get('maintinfo')) || { presets: [], msg: '' }, maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
       }
       if (b.action === 'shop') {
         if (!cat[b.theme] || b.theme === 'obj') return fail('Thème inconnu');
@@ -703,6 +720,53 @@ const handler = async (req, res) => {
         await redis.set('custom', cu);
         return ok({ done: true });
       }
+      if (b.action === 'mkret' || b.action === 'mkretall') { // rendre une annonce (ou toutes les annonces anciennes) à son vendeur
+        const mk0 = (await redis.get('market')) || [], now = Date.now(), days = Math.max(0, +b.days || 0);
+        const hit = mk0.filter((x) => (b.action === 'mkret' ? x.id === b.id : !days || now - x.t >= days * DAY));
+        if (!hit.length) return fail(b.action === 'mkret' ? 'Annonce introuvable' : 'Aucune annonce à rendre');
+        const cache = {}, got = {};
+        for (const x of hit) {
+          if (x.staff) continue; // annonce du staff : rien à rendre à personne
+          const v = cache[x.seller] || (cache[x.seller] = await redis.get(key(x.seller)));
+          if (!v) continue;
+          v.fav ||= []; v.since ||= {}; v.cards ||= {};
+          add(v, x.card, 1); (got[x.seller] ||= []).push(cn(x.card));
+        }
+        for (const [p, names] of Object.entries(got)) { note(cache[p], '↩️ Le staff t\'a rendu ' + names.length + ' carte' + (names.length > 1 ? 's' : '') + ' du Marché : ' + [...new Set(names)].slice(0, 5).join(', ') + (names.length > 5 ? '…' : '')); await redis.set(key(p), cache[p]); }
+        await redis.set('market', mk0.filter((x) => !hit.includes(x)));
+        return ok({ done: true, n: hit.length });
+      }
+      if (b.action === 'mkprice') {
+        const mk0 = (await redis.get('market')) || [], x = mk0.find((y) => y.id === b.id && !y.want), pr = int(b.price, 1e6);
+        if (!x) return fail("Annonce introuvable (ou c'est une offre d'échange)");
+        if (pr < 1) return fail('Prix invalide');
+        x.price = pr; await redis.set('market', mk0);
+        return ok({ done: true });
+      }
+      if (b.action === 'mkadd') { // le staff met lui-même des cartes en vente
+        const id = String(b.card || ''), pr = int(b.price, 1e6), q = Math.max(1, Math.min(20, int(b.qty, 20) || 1));
+        if (!rarOf(cat, id)) return fail('Carte inconnue');
+        if (pr < 1) return fail('Prix invalide');
+        const mk0 = (await redis.get('market')) || [];
+        for (let i = 0; i < q; i++) mk0.push({ id: crypto.randomBytes(6).toString('hex'), seller: OP_NAME, card: id, price: pr, t: Date.now(), staff: true });
+        await redis.set('market', mk0);
+        if (b.notify) await bcast('🏷️ Nouvelle carte au Marché : ' + cn(id) + ' (' + pr + ' 🪙)', OP_NAME);
+        return ok({ done: true });
+      }
+      if (b.action === 'pfpok' || b.action === 'pfpno' || b.action === 'pfpdel') {
+        const u = await redis.get(key(String(b.pseudo || '')));
+        if (!u) return fail('Joueur introuvable');
+        if (b.action === 'pfpdel') { if (!u.pf) return fail("Ce joueur n'a pas de photo"); delete u.pf; note(u, '🖼️ Le staff a retiré ta photo de profil'); }
+        else {
+          if (!u.pfpReq) return fail('Aucune demande en attente pour ce joueur');
+          if (b.action === 'pfpok') { u.pf = u.pfpReq.img; u.pfpN = (u.pfpN || 0) + 1; note(u, '✅ Ta nouvelle photo de profil a été validée'); }
+          else note(u, '❌ Ta demande de changement de photo de profil a été refusée');
+          delete u.pfpReq;
+          await redis.set('pfpq', ((await redis.get('pfpq')) || []).filter((x) => x !== u.pseudo));
+        }
+        await redis.set(key(u.pseudo), u);
+        return ok({ done: true });
+      }
       if (b.action === 'delreport') {
         await redis.set('reports', ((await redis.get('reports')) || []).filter((x) => x.id !== b.id));
         return ok({ done: true });
@@ -720,7 +784,7 @@ const handler = async (req, res) => {
     const banned = !!banOf(u);
     if (banned && !['me', 'report', 'settings', 'delnote'].includes(b.action)) return fail('⛔ Compte banni : seuls les Réglages sont accessibles');
     const maintOn = !!(await redis.get('maint')) && u.pseudo !== OP_NAME;
-    if (maintOn && !['me', 'report', 'settings'].includes(b.action)) return fail('🔧 Maintenance : une mise à jour arrive bientôt');
+    if (maintOn && !['me', 'report', 'settings', 'rank', 'chrank'].includes(b.action)) return fail('🔧 Maintenance : une mise à jour arrive bientôt');
     const shAll = await shopOf(cat), sh = visShop(u, shAll, cat);
     let mk = (await redis.get('market')) || [];
     let extra = {};
@@ -740,12 +804,13 @@ const handler = async (req, res) => {
       u.bought[b.theme] = (u.bought[b.theme] || 0) + 1;
     } else if (b.action === 'open') {
       const e = pack(); if (e) return fail(e);
-      if (u.bought[b.theme] > 0) u.bought[b.theme] -= 1;
-      else if (u.packs > 0) u.packs -= 1;
-      else return fail('Aucun sachet disponible');
-      const drawn = Array.from({ length: PACK }, () => draw(cat[b.theme], b.theme, lvOf(cat, b.theme)));
+      const have = (u.bought[b.theme] || 0) + u.packs;
+      if (have < 1) return fail('Aucun sachet disponible');
+      const n = Math.min(have, OPEN_MAX, b.all ? OPEN_MAX : Math.max(1, int(b.n, OPEN_MAX) || 1)); // plusieurs sachets de la même collection d'un coup
+      for (let i = 0; i < n; i++) { if (u.bought[b.theme] > 0) u.bought[b.theme] -= 1; else u.packs -= 1; }
+      const drawn = Array.from({ length: PACK * n }, () => draw(cat[b.theme], b.theme, lvOf(cat, b.theme)));
       drawn.forEach((id) => add(u, id, 1));
-      extra = { drawn };
+      extra = { drawn, n };
     } else if (b.action === 'buyobj') {
       const x = cu.objs.find((o) => !o.gone && 'obj:' + o.name === b.id);
       if (!x) return fail('Objet indisponible');
@@ -754,15 +819,20 @@ const handler = async (req, res) => {
       u.coins -= x.price; add(u, b.id, 1);
       if (x.stock != null) { x.stock -= 1; await redis.set('custom', cu); }
     } else if (b.action === 'sell') {
-      const list = b.mode === 'dupes'
-        ? Object.entries(u.cards).filter(([id, n]) => n > 1 && !u.fav.includes(id) && (!b.theme || id.startsWith(b.theme + ':'))).map(([id, n]) => [id, n - 1])
-        : [[String(b.card), 1]];
+      let list;
+      if (b.mode === 'dupes') list = Object.entries(u.cards).filter(([id, n]) => n > 1 && !u.fav.includes(id) && (!b.theme || id.startsWith(b.theme + ':'))).map(([id, n]) => [id, n - 1]);
+      else if (b.mode === 'all') { // collection terminée : tout part, même le 1er exemplaire ; seules les favorites restent (livret Favoris)
+        const oc = cat[b.theme];
+        if (!oc || b.theme === 'obj') return fail('Collection inconnue');
+        if (!(oc.until != null && !oc.base && oc.until <= Date.now())) return fail('« Tout vendre » est réservé aux collections terminées');
+        list = Object.entries(u.cards).filter(([id]) => id.startsWith(b.theme + ':') && !u.fav.includes(id)).map(([id, n]) => [id, n]);
+      } else list = [[String(b.card), 1]];
       let gain = 0, cnt = 0;
       for (const [id, n] of list) {
         const k = Math.min(n, u.cards[id] || 0); if (k < 1) continue;
         gain += val(u, id, cat, cu) * k; cnt += k; rm(u, id, k);
       }
-      if (!cnt) return fail('Rien à vendre (les favoris et le 1er exemplaire sont gardés)');
+      if (!cnt) return fail('Rien à vendre (les favoris ⭐' + (b.mode === 'dupes' ? ' et le 1er exemplaire' : '') + ' sont gardés)');
       u.coins += gain; extra = { gain, cnt };
     } else if (b.action === 'fav') {
       if (!u.cards[b.card]) return fail('Carte non possédée');
@@ -770,10 +840,10 @@ const handler = async (req, res) => {
     } else if (b.action === 'report') {
       const text = String(b.text || '').trim().slice(0, 500);
       if (text.length < 5) return fail('Décris le problème (5 caractères minimum)');
-      const r = (await redis.get('reports')) || [];
-      r.unshift({ id: Date.now(), pseudo: u.pseudo, text: (banned ? '⛔ [Banni] ' : '') + (maintOn ? '🔧 [Maintenance] ' : '') + text, t: Date.now() });
+      const idea = b.cat === 'idea', r = (await redis.get('reports')) || [];
+      r.unshift({ id: Date.now(), pseudo: u.pseudo, cat: idea ? 'idea' : 'bug', text: (idea ? '💡 [Idée] ' : '') + (banned ? '⛔ [Banni] ' : '') + (maintOn ? '🔧 [Maintenance] ' : '') + text, t: Date.now() });
       await redis.set('reports', r.slice(0, 100));
-      await opNote('🚩 ' + (banned ? '[Banni] ' : '') + u.pseudo + ' au staff : ' + (text.length > 140 ? text.slice(0, 140) + '…' : text), u);
+      await opNote((idea ? '💡 [Idée] ' : '🚩 ') + (banned ? '[Banni] ' : '') + u.pseudo + ' au staff : ' + (text.length > 140 ? text.slice(0, 140) + '…' : text), u);
       return ok({ done: true });
     } else if (b.action === 'settings') {
       if (b.theme) u.theme = b.theme === 'light' ? 'light' : 'dark';
@@ -863,6 +933,51 @@ const handler = async (req, res) => {
       const m = sn ? Math.min(4, Math.max(0, (sc - 5) / 10)) : Math.min(4, Math.max(0, (sc - 3) / 6));
       const gain = Math.floor(g.bet * m);
       u.coins += gain; extra = { gain, score: sc };
+    } else if (b.action === 'racepack') {
+      const v = raceView(u);
+      if (!v) return fail('La course est réservée aux joueurs');
+      if (!v.ready) return fail('Ton prochain pack de course arrive dans ' + Math.ceil((v.next - Date.now()) / 6e4) + ' min');
+      const x = crypto.randomInt(100), gain = x < 55 ? 1 : x < 85 ? 2 : x < 97 ? 5 : 10, to = v.pos + gain, now = Date.now();
+      if (u.rc && u.rc.w !== v.w) u.rcPrev = u.rc; // on garde le score de la semaine précédente pour désigner le vainqueur
+      u.rc = { w: v.w, pos: to, tt: now }; u.rcT = now;
+      extra = { gain, from: v.pos, to, rar: { 1: 'c', 2: 'r', 5: 'e', 10: 'l' }[gain] };
+    } else if (b.action === 'carcolor') {
+      const c = String(b.color || '').toLowerCase();
+      if (!/^#[0-9a-f]{6}$/.test(c)) return fail('Couleur invalide');
+      if (u.car === c) return fail('Ta voiture a déjà cette couleur');
+      if (u.coins < CAR_COST) return fail('Pas assez de coins : ' + CAR_COST + ' 🪙 pour repeindre ta voiture');
+      u.coins -= CAR_COST; u.car = c;
+    } else if (b.action === 'racelb') {
+      const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], w = raceWeek();
+      const pw = racePrevWeek(), real = list.filter((v) => v && !v.bot && v.pseudo !== OP_NAME && !banOf(v));
+      const all = real.map((v) => { const r = v.rc && v.rc.w === w ? v.rc : null; return { pseudo: v.pseudo, pos: r ? r.pos : 0, tt: (r && r.tt) || 0, car: v.car || null, pf: v.pf || null }; })
+        .sort((a, c) => c.pos - a.pos || (a.tt || 9e15) - (c.tt || 9e15) || a.pseudo.localeCompare(c.pseudo)) // le plus loin devant ; à égalité, celui qui y est arrivé le premier
+        .map((x, i) => ({ ...x, rank: i + 1 }));
+      const last = real.map((v) => { const r = v.rc && v.rc.w === pw ? v.rc : v.rcPrev && v.rcPrev.w === pw ? v.rcPrev : null; return r && r.pos > 0 ? { pseudo: v.pseudo, pos: r.pos, tt: r.tt || 9e15 } : null; }).filter(Boolean).sort((a, c) => c.pos - a.pos || a.tt - c.tt)[0] || null;
+      const n = [5, 10].includes(+b.n) ? +b.n : 200, rows = all.slice(0, n), me = all.find((x) => x.pseudo === u.pseudo);
+      if (me && !rows.includes(me)) rows.push(me);
+      extra = { race: { rows: rows.map((x, i) => (i < 10 || x === me ? x : { ...x, pf: null })), total: all.length, end: raceEnd(), last: last && { pseudo: last.pseudo, pos: last.pos } } };
+    } else if (b.action === 'pfp') {
+      if (u.pseudo === OP_NAME) return fail("L'opérateur n'a pas de photo de profil");
+      const img = String(b.img || '');
+      if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(img) || img.length > 24000) return fail('Image invalide ou trop lourde : choisis une autre photo');
+      const n = u.pfpN || 0;
+      if (n >= 2) { // 3e changement et suivants : l'opérateur vérifie avant d'afficher
+        if (u.pfpReq) return fail('Une demande est déjà en attente de vérification');
+        u.pfpReq = { img, t: Date.now() };
+        const q = (await redis.get('pfpq')) || []; if (!q.includes(u.pseudo)) { q.push(u.pseudo); await redis.set('pfpq', q); }
+        await opNote('🖼️ ' + u.pseudo + ' demande à changer sa photo de profil : à vérifier dans Opérateur → Joueurs → Photos de profil');
+        extra = { pending: true };
+      } else {
+        if (n === 1) { if (u.coins < PFP_COST) return fail('Pas assez de coins : ' + PFP_COST + ' 🪙 pour ce changement'); u.coins -= PFP_COST; }
+        u.pf = img; u.pfpN = n + 1; extra = { applied: true };
+      }
+    } else if (b.action === 'daily') {
+      const d = dyInfo(u);
+      if (!d) return fail('Pas de récompense quotidienne pour ce compte');
+      if (d.claimed) return fail('Récompense du jour déjà récupérée : reviens demain');
+      const gain = DAILY[d.day - 1]; u.coins += gain; u.ds = { d: parisDay(), n: d.day };
+      extra = { gain, day: d.day };
     } else if (b.action === 'rename') {
       const nn = String(b.name || '').trim();
       if (u.pseudo.toLowerCase() === OP_NAME.toLowerCase()) return fail("Le pseudo de l'opérateur ne change pas");
@@ -878,19 +993,28 @@ const handler = async (req, res) => {
       if (o.until != null && !o.base && ((u.rb || {})[t] || 0) >= 1) return fail('Cette collection provisoire a déjà fait sa renaissance (une seule fois)');
       if (!ids.length || ids.some((id) => !u.cards[id])) return fail('Collection incomplète');
       const gain = Math.floor(ids.reduce((a, id) => a + val(u, id, cat, cu), 0) / 5);
-      for (const id of Object.keys(u.cards)) if (id.startsWith(t + ':')) rm(u, id, u.cards[id]);
+      let kept = 0;
+      for (const id of Object.keys(u.cards)) if (id.startsWith(t + ':')) {
+        if (u.fav.includes(id)) { if (u.cards[id] > 1) rm(u, id, u.cards[id] - 1); (u.fk ||= {})[id] = Date.now(); kept++; } // favorite : gardée (1 exemplaire) dans le livret Favoris, sa valeur monte jusqu'à ×5 en 7 jours
+        else rm(u, id, u.cards[id]);
+      }
       const L0 = lineLv(u, baseOf(cat, t)), rb0 = rbTot(u);
       (u.rb ||= {})[t] = (u.rb[t] || 0) + 1; u.coins += gain;
       if (o.until != null && !o.base && u.bought[t] > 0) { u.packs += u.bought[t]; delete u.bought[t]; } // collection provisoire : les sachets restants deviennent des sachets gratuits
       const L1 = lineLv(u, baseOf(cat, t)), nt = L1 > L0 ? (L1 > 1 ? baseOf(cat, t) + L1 : baseOf(cat, t)) : null;
-      extra = { chUnlock: rb0 === 0, gain, lv: L1, unlocked: nt && cat[nt] ? cat[nt].name : null };
+      extra = { chUnlock: rb0 === 0, gain, lv: L1, kept, unlocked: nt && cat[nt] ? cat[nt].name : null };
     } else if (b.action === 'rank') {
       const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
       extra = { rank: list.filter(Boolean).map((v) => {
         const n = { l: 0, e: 0, r: 0, c: 0 };
         for (const [id, q] of Object.entries(v.cards || {})) { const r = rarOf(cat, id); if (n[r] != null && !id.startsWith('obj:')) n[r] += r === 'l' ? q : 1; } // légendaires : chaque exemplaire compte (2 fois la même = 2 légendaires)
-        return { pseudo: v.pseudo, ...n, rb: Object.values(v.rb || {}).reduce((a, x) => a + x, 0), coins: v.coins };
-      }).sort((a, b) => b.rb - a.rb || b.l - a.l || b.e - a.e || b.r - a.r || b.c - a.c || b.coins - a.coins).slice(0, [5, 10].includes(+b.n) ? +b.n : 10000) };
+        return { pseudo: v.pseudo, ...n, rb: Object.values(v.rb || {}).reduce((a, x) => a + x, 0), coins: v.coins, pf: v.pf || null };
+      }).sort((a, b) => b.rb - a.rb || b.l - a.l || b.e - a.e || b.r - a.r || b.c - a.c || b.coins - a.coins).slice(0, [5, 10].includes(+b.n) ? +b.n : 10000).map((x, i) => (i < 10 ? x : { ...x, pf: null })) };
+    } else if (b.action === 'chrank') { // classement des défis : ouvert à tous, même vide
+      const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], H = (await redis.get('chh')) || [];
+      const rows = list.filter((v) => v && !v.bot && v.pseudo !== OP_NAME && !banOf(v)).map((v) => { const c = v.cs || csFrom(H, v.pseudo); return { pseudo: v.pseudo, w: c.w, l: c.l, d: c.d, n: c.w + c.l + c.d, pf: v.pf || null }; })
+        .filter((r) => r.n > 0).sort((x, y) => y.w - x.w || y.w / y.n - x.w / x.n || y.n - x.n || x.pseudo.localeCompare(y.pseudo));
+      extra = { chrank: rows.slice(0, [5, 10].includes(+b.n) ? +b.n : 10000).map((x, i) => (i < 10 ? x : { ...x, pf: null })) };
     } else if (b.action === 'vapid') {
       extra = { key: (await vapid()).pub };
     } else if (b.action === 'subscribe') {
