@@ -102,6 +102,8 @@ main{padding:8px 8px calc(84px + env(safe-area-inset-bottom))}
 #splash .sb i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#2a5bd7,#5aa0ff);transition:width .3s linear}
 #splash .tip{min-height:70px;max-width:320px;font-size:16px;line-height:1.45;color:var(--dim);transition:opacity .35s}
 #splash .tip.f{opacity:0}
+#splash .cr{position:absolute;left:16px;bottom:calc(14px + env(safe-area-inset-bottom,0px));font-size:13px;color:var(--dim)}
+.mkc{display:flex;flex-direction:column}
 /* Renaissance : animation */
 #rbo{position:fixed;inset:0;z-index:30;background:#000c;display:flex;align-items:center;justify-content:center;padding:12px;color:#e6edf3;animation:rbIn .25s both}
 @keyframes rbIn{from{opacity:0}}
@@ -162,6 +164,39 @@ main{padding:8px 8px calc(84px + env(safe-area-inset-bottom))}
 details.lvc{border-color:#58a6ff}details.lvc>summary{color:#58a6ff}
 .opf .row{margin:8px 0}.opf label{display:flex;align-items:center;gap:6px}.opf input[type=number]{width:96px}.opf table{width:100%;border-collapse:collapse}.opf td{padding:3px 4px;border-top:1px solid var(--line)}.opf td:last-child{text-align:right;white-space:nowrap}
 .stt{padding:0 8px 6px;text-align:center;font-size:13px;color:var(--dim)}.hpb{height:8px;background:var(--line);border-radius:4px;overflow:hidden}.hpb i{display:block;height:100%;background:#3fb950;transition:width .45s}.csel{outline:3px solid var(--l);outline-offset:-3px}.dmgf{height:24px;font-weight:700;color:#f85149;font-size:18px}
+
+/* Connexion quotidienne + livret Favoris */
+.dyn{max-width:420px;margin:8vh auto 0;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;color:var(--txt);animation:dysl .55s cubic-bezier(.2,.8,.2,1) both}
+@keyframes dysl{from{transform:translateY(-36px);opacity:0}}
+@keyframes dyup{from{transform:translateY(10px);opacity:0}}
+@keyframes dypl{50%{border-color:#1b3a82}}
+@keyframes dypo{40%{transform:scale(1.07)}}
+@keyframes dyfl{to{transform:translateY(-26px);opacity:0}}
+.dyh{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.dyh>b{font-size:18px}
+.dyb{position:relative;font-weight:500}.dyf{position:absolute;right:10px;top:-8px;font-size:13px;font-weight:500;color:#3fb950}
+.dyc{display:flex;align-items:center;gap:12px}.dyi{width:40px;height:40px;border-radius:50%;background:#2a5bd7;display:flex;align-items:center;justify-content:center;font-size:20px}
+.dyc small{display:block;color:var(--dim)}
+.dyg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}
+.dyt{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--cb);font-size:14px;color:var(--dim);animation:dyup .4s both}
+.dyt.done{border-color:#238636;color:#3fb950}
+.dyt.now{border:2px solid #2a5bd7;color:var(--txt);animation:dyup .4s both,dypl 1.4s ease-in-out infinite}
+.dyt.big{grid-column:1/-1;border-color:#6f4fc4;color:#a371f7}.dyt.big.now{color:var(--txt)}
+.dyt.dyp{animation:dypo .45s}
+@media(prefers-reduced-motion:reduce){.dyn,.dyt,.dyt.now,.dyf{animation:none!important}}
+/* Course */
+.rl{margin-bottom:6px}.rl .ln{display:flex;justify-content:space-between;font-size:13px}.rl.me .ln b{color:var(--l)}
+.trk{position:relative;height:40px;border-bottom:2px dashed var(--line);margin:16px 0 10px}
+.trk .fl{position:absolute;right:0;top:0;bottom:0;width:8px;background:repeating-conic-gradient(#000 0 25%,#fff 0 50%) 0 0/8px 8px;opacity:.85}
+.car{position:absolute;bottom:2px;left:0;width:56px;transition:left 1.8s cubic-bezier(.3,.7,.2,1)}
+.car svg{display:block}
+.car .ph{position:absolute;left:18px;top:-17px;width:20px;height:20px;border-radius:50%;border:2px solid #fff;object-fit:cover;background:var(--c);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;margin:0;box-sizing:content-box}
+.car .wh{transform-box:fill-box;transform-origin:center}
+.car.mv svg{animation:cbob .25s ease-in-out infinite}.car.mv .wh{animation:cspin .35s linear infinite}
+.cgain{position:absolute;left:22px;top:-34px;font-weight:600;color:#3fb950;animation:cgo 1.6s ease-out forwards;white-space:nowrap}
+@keyframes cbob{50%{transform:translateY(-1px)}}@keyframes cspin{to{transform:rotate(360deg)}}@keyframes cgo{to{transform:translateY(-22px);opacity:0}}
+@media(prefers-reduced-motion:reduce){.car{transition:none}.car.mv svg,.car.mv .wh{animation:none}}
+.pf{width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-left:6px}
+details.fvb{border-color:var(--l)}details.fvb>summary{color:var(--l)}
 </style>
 </head>
 <body><main id="app"></main>
@@ -169,6 +204,7 @@ details.lvc{border-color:#58a6ff}details.lvc>summary{color:#58a6ff}
 const $ = (s) => document.querySelector(s), app = $('#app');
 const RN = { c: 'Commune', r: 'Rare', e: 'Épique', l: 'Légendaire' };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const pfImg = (p) => (p ? '<img class="pf" src="' + p + '" alt="">' : '');
 let tok = localStorage.tok, isOp = localStorage.op === '1', asP = localStorage.asp === '1', S, CAT = {}, RAR = {}, tab = 'shop', timer, sort = 'def', openT = new Set();
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
@@ -251,14 +287,14 @@ function authView(msg) {
 // --- Joueur
 const packsOf = (t) => (S.bought[t] || 0) + S.packs;
 function head() {
-  return '<div class="bar"><b style="display:flex;align-items:center;gap:6px"><img class="lg" src="/icon-192.png" alt="">' + S.pseudo + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">📦 ' + S.packs + '/10</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button></span></div><div class="tabs">' +
-    (S.ban ? [['set', 'Réglages']] : S.maint ? [['col', 'Collection'], ['set', 'Réglages']] : [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Social' + (dmUnread() ? ' 💬' + dmUnread() : '')], ['set', 'Réglages']]).map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
+  return '<div class="bar"><b style="display:flex;align-items:center;gap:6px"><img class="lg" src="/icon-192.png" alt="">' + S.pseudo + pfImg(S.pf) + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">📦 ' + S.packs + '/10</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button></span></div><div class="tabs">' +
+    (S.ban ? [['set', 'Réglages']] : S.maint ? [['col', 'Collection'], ['rk', 'Classement'], ['set', 'Réglages']] : [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Social' + (dmUnread() ? ' 💬' + dmUnread() : '')], ['set', 'Réglages']]).map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
 }
 function shopHTML() {
   const packs = Object.entries(S.shop).map(([t, sh]) => {
     const o = CAT[t];
     const pr = sh.nobuy ? '<b>Ancien niveau</b> : plus en vente, tu peux ouvrir ceux qu\'il te reste' : sh.blocked ? '<b class="err">Indisponible pour le moment</b>' : sh.discount ? '<s>' + sh.full + '</s> <b>' + sh.price + ' coins</b> <span class="pill">-' + sh.discount + '%</span>' : '<b>' + sh.price + ' coins</b>';
-    return '<div class="box"><div class="pk" style="--pc:' + o.color + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (sh.lvl > 1 ? ' <span class="pill">Niveau ' + sh.lvl + '/5</span>' : '') + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes' + (sh.lvl > 1 ? ' d\'une collection différente à chaque niveau' : '') + '. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || sh.nobuy || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button></div></div>';
+    return '<div class="box"><div class="pk" style="--pc:' + o.color + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (sh.lvl > 1 ? ' <span class="pill">Niveau ' + sh.lvl + '/5</span>' : '') + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes' + (sh.lvl > 1 ? ' d\'une collection différente à chaque niveau' : '') + '. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || sh.nobuy || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button>' + (packsOf(t) >= 2 && !sh.blocked ? '<input type="number" inputmode="numeric" data-nn="' + t + '" min="1" max="' + Math.min(50, packsOf(t)) + '" value="' + Math.min(5, packsOf(t)) + '" style="width:72px" aria-label="Nombre de sachets à ouvrir"><button class="g" data-om="' + t + '">Ouvrir ce nombre</button><button class="g" data-oa="' + t + '">Tout ouvrir (' + Math.min(50, packsOf(t)) + ')</button>' : '') + '</div></div>';
   }).join('');
   const objs = S.objs.length ? '<h2>Objets</h2><div class="grid2">' + S.objs.map((x) => '<div class="box"><b style="color:var(--' + x.r + ')">' + esc(x.name) + '</b> — ' + RN[x.r] + '<p>' + x.price + ' coins' + (x.stock != null ? (x.stock > 0 ? ' · Reste ' + x.stock : ' · Épuisé') : '') + '</p><button data-ob="' + esc('obj:' + x.name) + '"' + (S.coins < x.price || (x.stock != null && x.stock <= 0) ? ' disabled' : '') + '>Acheter</button></div>').join('') + '</div>' : '';
   return '<div class="box"><p>Un sachet gratuit toutes les 10 à 14 minutes (10 maximum, 2 h pour tout remplir). Sachets gratuits : <b>' + S.packs + '/10</b>. <span id="cd"></span></p></div><div class="grid2">' + packs + '</div>' + objs;
@@ -317,7 +353,7 @@ function colBlock(t, o, book) {
   const ids = idsOf(t), tot = ids.length, n = ids.filter((id) => S.cards[id]).length, rb = (S.rb || {})[t] || 0, tmp = isTmp(o);
   return '<details data-d="' + t + '"' + (openT.has(t) ? ' open' : '') + '><summary>' + o.icon + ' ' + esc(o.name) + ' — ' + n + '/' + tot + (book ? ' · terminée le ' + new Date(o.until).toLocaleDateString('fr-FR') : '') + '</summary>'
     + (n === tot && tot && t !== 'obj' && !(tmp && rb >= 1) ? '<button class="g" data-rb="' + t + '" style="margin:8px 0">♻️ Renaissance : la collection se vide, tu gagnes 1/5 de sa valeur' + (tmp ? ' (une seule renaissance possible pour une collection provisoire)' : ((S.lv || {})[o.base || t] || 9) < 5 ? ' · débloque le sachet ' + ((S.lvn || {})[o.base || t] || 'suivant') + ' (nouvelles cartes, prix ×2)' : '') + '</button>' : '')
-    + (book && n < tot ? '<button class="g" data-bm="' + t + '" style="margin:8px 0">🛒 Chercher les cartes manquantes au Marché</button> <button class="g" data-sa="' + t + '" style="margin:8px 0">💰 Tout vendre</button>' : '')
+    + (book ? (n < tot ? '<button class="g" data-bm="' + t + '" style="margin:8px 0">🛒 Chercher les cartes manquantes au Marché</button> ' : '') + '<button class="g" data-sa="' + t + '" style="margin:8px 0">💰 Tout vendre</button>' : '')
     + '<div class="grid" id="g-' + t + '"></div></details>';
 }
 function colHTML() {
@@ -328,14 +364,22 @@ function colHTML() {
     (isEnd(o) ? book : vis).push(colBlock(t, o, isEnd(o)));
   });
   if (!vis.length && !book.length) return '<div class="box"><p>🗂️ Ta collection est vide pour le moment. Ouvre un sachet dans la Boutique pour recevoir tes premières cartes !</p></div>' + rbBook();
-  return '<div class="row" style="margin-bottom:12px"><select id="so"><option value="def">Tri : normal</option><option value="rar">Tri : rareté</option><option value="fav">Tri : favoris</option></select><button class="g" id="dup">Vendre tous les doublons</button></div><small>Les favoris ⭐ et le 1er exemplaire de chaque carte ne sont jamais vendus en masse. Les cartes prennent +1 % de valeur par jour (max ×2).</small>' + rbBook()
-    + (book.length ? '<div class="bkw"><h2>📚 Livre des collections</h2><small>Les collections provisoires terminées (plus de sachets en vente) sont rangées ici. Tu peux toujours vendre tes cartes et chercher celles qui te manquent au Marché.</small><details class="lvc" data-d="book"' + (openT.has('book') ? ' open' : '') + '><summary>📚 ' + book.length + ' collection' + (book.length > 1 ? 's' : '') + ' terminée' + (book.length > 1 ? 's' : '') + '</summary>' + book.join('') + '</details></div>' : '')
+  const hasLivre = book.length > 0 || S.fav.some((id) => S.cards[id] && RAR[id]);
+  if (colSub === 'l' && !hasLivre) colSub = 'c';
+  const pills = hasLivre ? '<div class="pills">' + [['c', '🗂️ Collections'], ['l', '📚 Livre des collections' + (book.length ? ' (' + book.length + ')' : '')]].map(([k, l]) => '<button class="pill' + (colSub === k ? ' on' : '') + '" data-cs="' + k + '">' + l + '</button>').join('') + '</div>' : '';
+  if (colSub === 'l') return pills + '<div class="bkw"><h2>📚 Livre des collections</h2><small>Les collections provisoires terminées (plus de sachets en vente) sont rangées ici, avec ton livret de cartes favorites ⭐. Tu peux toujours vendre tes cartes et chercher celles qui te manquent au Marché.</small></div>' + (book.join('') || '<p><small>Aucune collection terminée pour le moment.</small></p>') + favBook();
+  return pills + '<div class="row" style="margin-bottom:12px"><select id="so"><option value="def">Tri : normal</option><option value="rar">Tri : rareté</option><option value="fav">Tri : favoris</option></select><button class="g" id="dup">Vendre tous les doublons</button></div><small>Les favoris ⭐ et le 1er exemplaire de chaque carte ne sont jamais vendus en masse. Les cartes prennent +1 % de valeur par jour (max ×2).</small>' + rbBook()
     + vis.join('');
+}
+function favBook() {
+  const ids = S.fav.filter((id) => S.cards[id] && RAR[id]);
+  if (!ids.length) return '';
+  return '<details class="fvb" data-d="fav"' + (openT.has('fav') ? ' open' : '') + '><summary>⭐ Favoris — ' + ids.length + ' carte' + (ids.length > 1 ? 's' : '') + '</summary><small>Tes cartes favorites de toutes les collections. Celles gardées après une renaissance ♻️ gagnent de la valeur chaque jour : jusqu’à ×5 au bout de 7 jours.</small><div class="grid" id="g-fav"></div></details>';
 }
 const msg = (t, good) => { const e = $('#e'); if (!e) return; e.style.color = good ? '#3fb950' : ''; e.textContent = t; };
 const run = async (fn) => { try { await fn(); } catch (e) { msg(e.message); } };
 const mf = { t: '', r: '', s: 'new', n: false };
-let mkSub = 'v', tradePre = null, opTab = 'b';
+let mkSub = 'v', tradePre = null, opTab = 'b', colSub = 'c', opMk = { q: '', s: 'old', f: 'all', n: 40 };
 function mkHTML() {
   return '<div class="pills">' + [['v', '🏷️ Ventes'], ['t', '🔁 Échange'], ['g', '🎁 Offre']].map(([k, l]) => '<button class="pill' + (mkSub === k ? ' on' : '') + '" data-ms="' + k + '">' + l + '</button>').join('') + '</div>' + (mkSub === 't' ? tradeHTML() : mkSub === 'g' ? giftHTML() : mkSales());
 }
@@ -626,9 +670,100 @@ function chUnlockOv() {
   const ov = overlay('<div class="box" style="max-width:420px;margin:12vh auto;text-align:center"><div class="pk big shake" style="--pc:#f85149;margin:0 auto 12px">⚔️</div><h2>Défis débloqués !</h2><p>Grâce à ta première renaissance, tu peux maintenant défier les autres joueurs avec tes cartes de niveau II à V (et celles des collections dont tu as fait la renaissance). Rendez-vous dans <b>Social → Défis</b>.</p><button id="cuo">Super !</button></div>');
   ov.querySelector('#cuo').onclick = () => { ov.remove(); tab = 'rk'; rkSub = 'd'; playerView(); };
 }
+const rkPills = () => '<div class="pills">' + [[5, 'Top 5'], [10, 'Top 10'], [0, 'Tout']].map(([n, l]) => '<button class="pill' + (rkN === n ? ' on' : '') + '" data-n="' + n + '">' + l + '</button>').join('') + '</div>';
+function chRankHTML() {
+  return rkPills() + '<div class="box" style="padding:8px"><div id="ck">Chargement…</div></div><small>Classé par victoires en défi, puis par taux de victoire. V = victoires, N = nuls, D = défaites. Tout le monde peut le consulter ; les défis eux-mêmes se débloquent à la première renaissance.</small>';
+}
+function chRankInit() {
+  api('chrank', { n: rkN }).then((j) => {
+    const el = $('#ck'); if (!el) return;
+    el.innerHTML = j.chrank.length ? '<table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th>V</th><th>N</th><th>D</th><th>%</th></tr>' + j.chrank.map((x, i) => '<tr' + (x.pseudo === S.pseudo ? ' class="me"' : '') + '><td>' + (i + 1) + '</td><td class="pn">' + esc(x.pseudo) + pfImg(x.pf) + '</td><td>' + x.w + '</td><td>' + x.d + '</td><td>' + x.l + '</td><td>' + Math.round((100 * x.w) / x.n) + '%</td></tr>').join('') + '</table>' : '<p>⚔️ Aucun défi n’a encore été joué : le classement apparaîtra dès le premier combat.</p>';
+  }).catch((e) => msg(e.message));
+}
+// ================= COURSE DE LA SEMAINE =================
+let RC = null, raceN = 10, raceTk = null, carPick = null;
+const fmtT = (ms) => { const t = Math.ceil(ms / 1000), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), x = t % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
+const carSVG = (col, pf, nm) => '<div class="car" style="--c:' + col + '"><svg viewBox="0 0 56 28" width="56" height="28" aria-hidden="true"><path d="M3 21v-6c0-2 1.5-3.5 4-4l9-1.5 5-6c.8-1 1.8-1.5 3-1.5h11c1.3 0 2.4.6 3.2 1.6L44 9.5l6 1.3c2.2.5 3.5 2 3.5 4.2V21z" fill="' + col + '"/><path d="M22.5 9.5l3.2-4h10.4l3.6 4z" fill="#d6ecff"/><g class="wh"><circle cx="14" cy="21" r="5.5" fill="#1b1b1b"/><circle cx="14" cy="21" r="2" fill="#999"/><path d="M14 16v10M9 21h10" stroke="#777" stroke-width="1"/></g><g class="wh"><circle cx="43" cy="21" r="5.5" fill="#1b1b1b"/><circle cx="43" cy="21" r="2" fill="#999"/><path d="M43 16v10M38 21h10" stroke="#777" stroke-width="1"/></g></svg>' + (pf ? '<img class="ph" src="' + pf + '" alt="">' : '<span class="ph">' + esc([...nm][0].toUpperCase()) + '</span>') + '</div>';
+function raceHTML() {
+  if (!S.rc) return '<div class="box"><p>🏁 La course est réservée aux joueurs.</p></div>';
+  return '<div class="box"><h2>🏁 Course de la semaine</h2><div id="rhd"></div></div>'
+    + '<div class="box" style="padding:10px"><div class="pills">' + [[5, 'Top 5'], [10, 'Top 10'], [0, 'Tous']].map(([n, l]) => '<button class="pill' + (raceN === n ? ' on' : '') + '" data-rn="' + n + '">' + l + '</button>').join('') + '</div><div id="rtk">Chargement…</div></div>'
+    + '<div class="box"><h2>🎨 Ma voiture</h2><div id="rcar"></div><div class="err" id="e"></div></div>';
+}
+function raceHead() {
+  const el = $('#rhd'), r = S.rc; if (!el || !r) return;
+  const left = Math.max(0, r.end - Date.now()), d = Math.floor(left / 864e5), h = Math.floor((left % 864e5) / 36e5), wait = Math.max(0, r.next - Date.now());
+  const me = RC && RC.rows.find((x) => x.pseudo === S.pseudo);
+  el.innerHTML = '<p style="margin:0 0 8px"><b>Le plus loin à la fin de la semaine gagne !</b> Fin de la course dans <b>' + (d ? d + ' j ' : '') + h + ' h</b> · ta voiture : <b>' + r.pos + ' point' + (r.pos > 1 ? 's' : '') + '</b>' + (me ? ' · ' + (me.rank === 1 ? '👑 1er' : me.rank + 'e') + ' sur ' + RC.total : '') + '</p>'
+    + (RC && RC.last ? '<p style="margin:0 0 8px">🏆 Gagnant de la semaine dernière : <b>' + esc(RC.last.pseudo) + '</b> (' + RC.last.pos + ' points)</p>' : '')
+    + (wait > 0 ? '<button id="rpk" disabled>⏳ Prochain pack dans <span id="rcd">' + fmtT(wait) + '</span></button>' : '<button id="rpk">🎁 Ouvrir mon pack de course</button>')
+    + '<p style="margin:8px 0 0"><small>1 pack par heure (il ne s’accumule pas). Chaque pack contient une carte qui fait avancer ta voiture de +1, +2, +5 ou +10 points : plus le bonus est gros, plus il est rare. Une course par semaine, remise à zéro chaque lundi.</small></p>';
+  if ($('#rpk')) $('#rpk').onclick = () => run(async () => {
+    const old = RC ? Object.fromEntries(RC.rows.map((x) => [x.pseudo, x.pos])) : {};
+    const j = await api('racepack'); setS(j.state); old[S.pseudo] = j.from;
+    await racePackReveal(j); raceHead();
+    const lb = await api('racelb', { n: raceN }); setS(lb.state); RC = lb.race; drawRace(old, j.gain); raceHead(); updHead();
+  });
+}
+function racePackReveal(j) {
+  return new Promise((res) => {
+    const ov = overlay('<div class="pk big shake" style="--pc:#2a5bd7">🏁</div>');
+    setTimeout(() => {
+      ov.innerHTML = '<div style="text-align:center;margin-top:12vh"><div class="card ' + j.rar + ' pop" style="margin:0 auto;width:170px;--i:0"><div class="ct" style="font-size:56px;min-height:0;padding:34px 0 10px">+' + j.gain + '</div><div class="rn" style="padding-bottom:12px;font-size:17px">' + RN[j.rar] + '</div></div><p style="font-size:18px;margin:18px 8px 14px">' + (j.gain >= 10 ? '🔥 Turbo ! ' : '') + 'Ta voiture avance de ' + j.gain + ' point' + (j.gain > 1 ? 's' : '') + ' (' + j.to + ' au total)</p><button id="rpc">Voir la course</button></div>';
+      ov.querySelector('#rpc').onclick = () => { ov.remove(); res(); };
+    }, 1100);
+  });
+}
+function drawRace(prev, gain) {
+  const el = $('#rtk'); if (!el || !RC) return;
+  const T = Math.max(50, Math.ceil((Math.max(0, ...RC.rows.map((x) => x.pos)) + 1) / 50) * 50), pT = drawRace.pT || T; drawRace.pT = T; // la piste s’allonge quand le leader avance
+  el.innerHTML = RC.rows.map((x) => {
+    const me = x.pseudo === S.pseudo;
+    return '<div class="rl' + (me ? ' me' : '') + '"><div class="ln"><span>' + (x.rank === 1 ? '👑' : x.rank + '.') + ' <b>' + esc(x.pseudo) + '</b></span><small>' + x.pos + '/' + T + '</small></div><div class="trk">' + carSVG(x.car || avCol(x.pseudo), me ? S.pf || x.pf : x.pf, x.pseudo) + '</div></div>';
+  }).join('') + '<small>Piste : de 0 à ' + T + ' points (elle s’allonge quand le leader avance)' + (RC.total > RC.rows.length ? ' · ' + RC.total + ' pilotes au total' : '') + '.</small>';
+  const lanes = [...el.querySelectorAll('.rl')], left = (f) => 'calc((100% - 56px) * ' + Math.min(1, f) + ')';
+  const from = (x) => (prev && prev[x.pseudo] != null ? prev[x.pseudo] / pT : 0);
+  lanes.forEach((l, i) => { const c = l.querySelector('.car'); c.style.transition = 'none'; c.style.left = left(from(RC.rows[i])); });
+  void el.offsetWidth;
+  lanes.forEach((l, i) => {
+    const x = RC.rows[i], c = l.querySelector('.car'); c.style.transition = ''; c.style.transitionDelay = i * 0.08 + 's';
+    if (Math.abs(from(x) - x.pos / T) > 1e-6) { c.classList.add('mv'); c.addEventListener('transitionend', () => c.classList.remove('mv'), { once: true }); }
+    c.style.left = left(x.pos / T);
+    if (gain && x.pseudo === S.pseudo) c.insertAdjacentHTML('beforeend', '<span class="cgain">+' + gain + '</span>');
+  });
+}
+function raceCarBox() {
+  const el = $('#rcar'); if (!el || !S.rc) return;
+  const col = carPick || S.rc.car || avCol(S.pseudo), hex = /^#[0-9a-f]{6}$/i.test(col) ? col : '#2a5bd7';
+  const sw = ['#e11d48', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#0ea5e9', '#2a5bd7', '#7c3aed', '#d946ef', '#ec4899', '#64748b', '#111827'];
+  el.innerHTML = '<div class="trk" style="margin:22px 0 12px">' + carSVG(col, S.pf, S.pseudo) + '</div><div class="row" style="margin-bottom:10px">' + sw.map((c) => '<button type="button" data-cc="' + c + '" style="background:' + c + ';width:32px;height:32px;min-height:0;padding:0;border-radius:50%;border:2px solid ' + (hex.toLowerCase() === c ? '#fff' : 'transparent') + '" aria-label="Couleur ' + c + '"></button>').join('') + '<input type="color" id="ccu" value="' + hex + '" aria-label="Couleur personnalisée" style="width:44px;height:32px;padding:2px"></div><button id="ccb">Repeindre ma voiture (' + S.rc.cost + ' 🪙)</button>';
+  el.querySelectorAll('[data-cc]').forEach((b) => (b.onclick = () => { carPick = b.dataset.cc; raceCarBox(); }));
+  $('#ccu').onchange = (e) => { carPick = e.target.value.toLowerCase(); raceCarBox(); };
+  $('#ccb').onclick = () => run(async () => {
+    if (!carPick) throw new Error('Choisis d’abord une couleur');
+    if (!confirm('Repeindre ta voiture coûte ' + S.rc.cost + ' 🪙. Continuer ?')) return;
+    const j = await api('carcolor', { color: carPick }); setS(j.state); carPick = null; updHead(); raceCarBox(); raceInit(); msg('Voiture repeinte !', true);
+  });
+}
+function raceInit() {
+  clearInterval(raceTk);
+  let first = true, n = 0;
+  const load = () => api('racelb', { n: raceN }).then((j) => {
+    const old = RC ? Object.fromEntries(RC.rows.map((x) => [x.pseudo, x.pos])) : null;
+    setS(j.state); RC = j.race; drawRace(old); raceHead(); if (first) { first = false; raceCarBox(); }
+  }).catch((e) => msg(e.message));
+  load();
+  raceTk = setInterval(() => {
+    if (!$('#rtk')) return clearInterval(raceTk);
+    n++; const r = S.rc;
+    if (r) { const w = r.next - Date.now(), c = $('#rcd'); if (c) { if (w > 0) c.textContent = fmtT(w); else raceHead(); } }
+    if (n % 15 === 0 && !document.querySelector('.ov')) load();
+  }, 1000);
+}
 function rkHTML() {
   const un = dmUnread();
-  return '<div class="pills">' + [['r', '🏆 Classement'], ['d', '⚔️ Défis'], ['m', '💬 Messages' + (un ? ' (' + un + ')' : '')]].map(([k, l]) => '<button class="pill' + (rkSub === k ? ' on' : '') + '" data-rs="' + k + '">' + l + '</button>').join('') + '</div>' + (rkSub === 'm' ? dmHTML() : rkSub === 'd' ? chHTML() : rankHTML());
+  if (S.maint && rkSub !== 'r' && rkSub !== 'k') rkSub = 'r';
+  return '<div class="pills">' + [['r', '🏆 Classement'], ['k', '🏅 Classement défis'], ['c', '🏁 Course'], ['d', '⚔️ Défis'], ['m', '💬 Messages' + (un ? ' (' + un + ')' : '')]].filter(([k]) => !S.maint || k === 'r' || k === 'k').map(([k, l]) => '<button class="pill' + (rkSub === k ? ' on' : '') + '" data-rs="' + k + '">' + l + '</button>').join('') + '</div>' + (rkSub === 'm' ? dmHTML() : rkSub === 'd' ? chHTML() : rkSub === 'k' ? chRankHTML() : rkSub === 'c' ? raceHTML() : rankHTML());
 }
 function dmHTML() {
   if (dmWith) return '<div class="box"><div class="row" style="margin-bottom:8px"><button class="g" id="dmb">← Retour</button>' + avEl(dmWith) + '<b>' + esc(dmWith) + '</b><button class="g" id="dmch" style="margin-left:auto">⚔️ Défier</button></div><div id="dmt"></div><div class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="dmx" maxlength="500" placeholder="Écrire un message…" style="flex:1;min-width:0"><button id="dms">Envoyer</button></div></div>';
@@ -677,13 +812,25 @@ function dmInit() {
     $('#dms').onclick = send; $('#dmx').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } };
   }
 }
+const shrink = (f) => new Promise((res, rej) => {
+  const u = URL.createObjectURL(f), im = new Image();
+  im.onload = () => { const c = document.createElement('canvas'); c.width = c.height = 96; const m = Math.min(im.width, im.height); c.getContext('2d').drawImage(im, (im.width - m) / 2, (im.height - m) / 2, m, m, 0, 0, 96, 96); URL.revokeObjectURL(u); res(c.toDataURL('image/jpeg', 0.7)); };
+  im.onerror = () => { URL.revokeObjectURL(u); rej(new Error('Image illisible : essaie une autre photo')); }; im.src = u;
+});
+function pfpBox() {
+  if (S.maint || S.ban) return '';
+  const n = S.pfn || 0, cur = S.pf ? '<img class="pf" style="width:64px;height:64px;margin:0" src="' + S.pf + '" alt="Ta photo">' : '<span class="av" style="background:' + avCol(S.pseudo) + ';width:64px;height:64px;font-size:26px">' + esc([...S.pseudo][0].toUpperCase()) + '</span>';
+  const txt = S.pfq ? '⏳ Ta demande est en attente de vérification par l’opérateur.' : n === 0 ? 'Ta première photo est gratuite. Elle s’affichera à droite de ton pseudo.' : n === 1 ? 'Ton 2e changement coûte 500 🪙.' : 'À partir du 3e changement, ta photo est envoyée à l’opérateur, qui la vérifie avant de l’afficher.';
+  return '<div class="box"><h2>Photo de profil</h2><div class="row">' + cur + '<div style="flex:1;min-width:200px"><p style="margin:0 0 8px">' + txt + '</p><input type="file" id="pff" accept="image/*"> <button id="pfb"' + (S.pfq ? ' disabled' : '') + '>' + (n >= 2 ? 'Envoyer pour vérification' : n === 1 ? 'Changer (500 🪙)' : 'Choisir ma photo') + '</button></div></div></div>';
+}
 function setHTML() {
   const th = document.documentElement.dataset.th;
   return (pushOn || S.maint || S.ban ? '' : '<div class="box"><h2>🔔 Notifications</h2><p>Messages du staff, nouveaux objets et nouvelles cartes au Marché, même app fermée. <b>Sur iPhone</b> : ajoute d\'abord le site à l\'écran d\'accueil (Partager → « Sur l\'écran d\'accueil »), ouvre-le depuis l\'icône, puis appuie ici.</p><button id="pn2">Activer</button></div>') +
     '<div class="box"><h2>Apparence</h2><select id="tsel"><option value="dark"' + (th === 'dark' ? ' selected' : '') + '>Sombre</option><option value="light"' + (th === 'light' ? ' selected' : '') + '>Clair</option></select></div>' +
+    pfpBox() +
     (S.maint || S.ban ? '' : '<form class="box" id="frn" style="display:grid;gap:10px;max-width:400px"><h2>Pseudo</h2>' + (S.renames ? '<p>Tu as utilisé ton changement gratuit. Pour changer à nouveau, fais une demande au staff (« Contacter un staff » ci-dessous).</p>' : '<p>Tu as un changement de pseudo gratuit. Ensuite, il faudra le demander au staff.</p><input id="rn2" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button>') + '</form>') +
     '<form class="box" id="fpw" style="display:grid;gap:10px;max-width:400px"><h2>Mot de passe</h2><input id="po" type="password" placeholder="Ancien mot de passe" autocomplete="current-password" required><input id="pn" type="password" placeholder="Nouveau mot de passe" autocomplete="new-password" required><button>Changer</button></form>' +
-    '<form class="box" id="frp" style="display:grid;gap:10px"><h2>Contacter un staff</h2><textarea id="rt" rows="4" maxlength="500" placeholder="Signale un problème, un bug ou un joueur" required></textarea><button>Envoyer le signalement</button></form>' +
+    '<form class="box" id="frp" style="display:grid;gap:10px"><h2>Contacter un staff</h2><select id="rc" aria-label="Catégorie"><option value="bug">🚩 Signalement (problème, bug, joueur)</option><option value="idea">💡 Idée (mise à jour, amélioration…)</option></select><textarea id="rt" rows="4" maxlength="500" placeholder="Décris ton signalement ou ton idée" required></textarea><button>Envoyer</button></form>' +
     '<div class="box"><h2>Compte</h2><p>Tu seras déconnecté de ton compte sur cet appareil.</p><button class="g" id="lo">Quitter</button></div>';
 }
 function rebirthFlow(t) {
@@ -692,7 +839,7 @@ function rebirthFlow(t) {
   let tm = [], iv, fin = false;
   const ov = document.createElement('div'); ov.id = 'rbo';
   const close = () => { clearInterval(iv); tm.forEach(clearTimeout); ov.remove(); };
-  ov.innerHTML = '<div class="dlg"><h3>♻️ Faire renaissance ?</h3><p>Toutes tes cartes ' + esc(o.name) + ' (favorites comprises) seront supprimées. Tu gagnes 1/5 de la valeur de la collection' + (nx ? ' et le sachet ' + esc(nx) + ' est débloqué.' : '.') + (isTmp(o) ? ' Une collection provisoire ne peut faire renaissance qu\'une seule fois : elle disparaîtra ensuite de ta Collection.' : '') + '</p><div class="bts"><button class="g" data-x>Annuler</button><button data-ok style="background:#f5c518;border-color:#f5c518;color:#0d1117">Confirmer</button></div></div>';
+  ov.innerHTML = '<div class="dlg"><h3>♻️ Faire renaissance ?</h3><p>Toutes tes cartes ' + esc(o.name) + ' seront supprimées, sauf tes favorites ⭐ qui restent dans le livret Favoris (leur valeur monte jusqu’à ×5 en 7 jours). Tu gagnes 1/5 de la valeur de la collection' + (nx ? ' et le sachet ' + esc(nx) + ' est débloqué.' : '.') + (isTmp(o) ? ' Une collection provisoire ne peut faire renaissance qu\'une seule fois : elle disparaîtra ensuite de ta Collection.' : '') + '</p><div class="bts"><button class="g" data-x>Annuler</button><button data-ok style="background:#f5c518;border-color:#f5c518;color:#0d1117">Confirmer</button></div></div>';
   document.body.appendChild(ov);
   ov.querySelector('[data-x]').onclick = close;
   ov.querySelector('[data-ok]').onclick = async (e) => {
@@ -700,7 +847,7 @@ function rebirthFlow(t) {
     try { const j = await api('rebirth', { t }); setS(j.state); play(j); } catch (er) { close(); msg(er.message); }
   };
   function play(j) {
-    const done = () => { if (fin) return; fin = true; close(); playerView(); msg('Renaissance ! +' + j.gain + ' 🪙' + (j.unlocked ? ' · Sachet ' + j.unlocked + ' débloqué (niveau ' + j.lv + ') !' : ''), true); if (j.chUnlock) chUnlockOv(); };
+    const done = () => { if (fin) return; fin = true; close(); playerView(); msg('Renaissance ! +' + j.gain + ' 🪙' + (j.kept ? ' · ' + j.kept + ' favorite' + (j.kept > 1 ? 's' : '') + ' gardée' + (j.kept > 1 ? 's' : '') + ' ⭐' : '') + (j.unlocked ? ' · Sachet ' + j.unlocked + ' débloqué (niveau ' + j.lv + ') !' : ''), true); if (j.chUnlock) chUnlockOv(); };
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return done();
     const P = ['#f5c518', '#2f81f7', '#a371f7', '#3fb950', '#ff7b72', '#39c5cf'], CR = ['#8b949e', '#3fb950', '#a371f7', '#f5c518'];
     let h = '';
@@ -729,9 +876,21 @@ function rebirthFlow(t) {
     tm.push(setTimeout(() => { const t0 = Date.now(); iv = setInterval(() => { const k = Math.min(1, (Date.now() - t0) / 1200), c = $('#rbc'); if (c) c.textContent = '+' + Math.round(j.gain * k); if (k >= 1) clearInterval(iv); }, 30); }, 3000));
   }
 }
+function ownedEl(id) {
+  const el = cardEl(id, S.cards[id]);
+  { const s = stk(id); if (s) { el.querySelector('.rn').insertAdjacentHTML('afterend', '<div class="stt"' + (s[2] ? '' : ' title="Non jouable en défi : collection niveau I sans renaissance" style="opacity:.6"') + '>❤️ ' + s[0] + ' · ⚔️ ' + s[1] + (s[2] ? '' : ' 🔒') + '</div>'); } }
+  el.insertAdjacentHTML('beforeend', '<div class="ac"><button class="g" data-f aria-label="Favori">' + (S.fav.includes(id) ? '⭐' : '☆') + '</button><button class="g" data-m title="Mettre à la boutique">🏷️</button><button class="g" data-s>Vendre 1 · ' + S.vals[id] + '🪙</button></div>');
+  el.querySelector('[data-f]').onclick = () => run(async () => { setS((await api('fav', { card: id })).state); playerView(); });
+  el.querySelector('[data-s]').onclick = () => run(async () => { const j = await api('sell', { card: id }); setS(j.state); playerView(); msg('Vendue : +' + j.gain + ' 🪙', true); });
+  el.querySelector('[data-m]').onclick = () => run(async () => {
+    const pr = prompt('Prix en boutique (coins) ? Vente directe : ' + S.vals[id] + ' 🪙', S.vals[id] * 4); if (!pr) return;
+    setS((await api('list', { card: id, price: pr })).state); playerView(); msg('Carte mise en vente au Marché', true);
+  });
+  return el;
+}
 function playerView() {
   clearInterval(timer);
-  if (S.ban) tab = 'set'; else if (S.maint && tab !== 'col' && tab !== 'set') tab = 'col';
+  if (S.ban) tab = 'set'; else if (S.maint && tab !== 'col' && tab !== 'set' && tab !== 'rk') tab = 'col';
   app.classList.toggle('mt', !!(S.maint || S.ban));
   app.innerHTML = head() + (S.ban ? banBox() : S.maint ? maintBox() : '') + { shop: shopHTML, col: colHTML, mk: mkHTML, jeu: jeuHTML, rk: rkHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
   $('#th').onclick = flip; if ($('#lo')) $('#lo').onclick = logout;
@@ -744,15 +903,19 @@ function playerView() {
     app.querySelectorAll('[data-b]').forEach((b) => (b.onclick = () => run(async () => { setS((await api('buy', { theme: b.dataset.b })).state); playerView(); })));
     app.querySelectorAll('[data-ob]').forEach((b) => (b.onclick = () => run(async () => { setS((await api('buyobj', { id: b.dataset.ob })).state); playerView(); msg('Objet ajouté à ta collection', true); })));
     app.querySelectorAll('[data-o]').forEach((b) => (b.onclick = () => run(async () => { const j = await api('open', { theme: b.dataset.o }); setS(j.state); reveal(j.drawn, b.dataset.o); })));
+    const openN = (t, n, all) => run(async () => { const j = await api('open', { theme: t, ...(all ? { all: 1 } : { n }) }); setS(j.state); reveal(j.drawn, t, j.n); });
+    app.querySelectorAll('[data-om]').forEach((b) => (b.onclick = () => { const i = app.querySelector('[data-nn="' + b.dataset.om + '"]'); openN(b.dataset.om, Math.max(1, Math.min(50, parseInt(i && i.value, 10) || 1))); }));
+    app.querySelectorAll('[data-oa]').forEach((b) => (b.onclick = () => openN(b.dataset.oa, 0, true)));
     if (S.next) {
       const tk = () => { const s = Math.ceil((S.next - Date.now()) / 1000); if (s <= 0) { clearInterval(timer); refresh(); return; } $('#cd').textContent = 'Prochain dans ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
       tk(); timer = setInterval(tk, 1000);
     } else $('#cd').textContent = 'Stock plein : ouvre un sachet pour relancer le compteur.';
   } else if (tab === 'col') {
     app.querySelectorAll('[data-rb]').forEach((b) => (b.onclick = () => rebirthFlow(b.dataset.rb)));
+    app.querySelectorAll('[data-cs]').forEach((b) => (b.onclick = () => { colSub = b.dataset.cs; playerView(); }));
     app.querySelectorAll('[data-sa]').forEach((b) => (b.onclick = () => run(async () => {
       const o = CAT[b.dataset.sa];
-      if (!confirm('Vendre toutes les cartes de « ' + o.name + ' » (favoris ⭐ exceptés) ? Cette vente est définitive.')) return;
+      if (!confirm('Vendre toutes les cartes de « ' + o.name + ' », même les premiers exemplaires ? Tes favoris ⭐ ne sont pas vendus : ils restent dans le livret Favoris. Cette vente est définitive.')) return;
       const j = await api('sell', { mode: 'all', theme: b.dataset.sa }); setS(j.state); playerView(); msg(j.cnt + ' carte(s) vendue(s) : +' + j.gain + ' 🪙', true);
     })));
     app.querySelectorAll('[data-bm]').forEach((b) => (b.onclick = () => { mf.t = b.dataset.bm; mf.r = ''; mf.n = true; mkSub = 'v'; tab = 'mk'; playerView(); }));
@@ -767,16 +930,16 @@ function playerView() {
       const g = $('#g-' + t); if (!g) continue;
       idsOf(t).forEach((id) => {
         if (!S.cards[id]) { if (!o.hidden) g.insertAdjacentHTML('beforeend', '<div class="card lock"><div class="im">?</div><div class="ct">???</div><div class="rn">&nbsp;</div></div>'); return; }
-        const el = cardEl(id, S.cards[id]);
-        { const s = stk(id); if (s) { el.querySelector('.rn').insertAdjacentHTML('afterend', '<div class="stt"' + (s[2] ? '' : ' title="Non jouable en défi : collection niveau I sans renaissance" style="opacity:.6"') + '>❤️ ' + s[0] + ' · ⚔️ ' + s[1] + (s[2] ? '' : ' 🔒') + '</div>'); } }
-        el.insertAdjacentHTML('beforeend', '<div class="ac"><button class="g" data-f aria-label="Favori">' + (S.fav.includes(id) ? '⭐' : '☆') + '</button><button class="g" data-m title="Mettre à la boutique">🏷️</button><button class="g" data-s>Vendre 1 · ' + S.vals[id] + '🪙</button></div>');
-        el.querySelector('[data-f]').onclick = () => run(async () => { setS((await api('fav', { card: id })).state); playerView(); });
-        el.querySelector('[data-s]').onclick = () => run(async () => { const j = await api('sell', { card: id }); setS(j.state); playerView(); msg('Vendue : +' + j.gain + ' 🪙', true); });
-        el.querySelector('[data-m]').onclick = () => run(async () => {
-          const pr = prompt('Prix en boutique (coins) ? Vente directe : ' + S.vals[id] + ' 🪙', S.vals[id] * 4); if (!pr) return;
-          setS((await api('list', { card: id, price: pr })).state); playerView(); msg('Carte mise en vente au Marché', true);
-        });
-        g.append(el);
+        g.append(ownedEl(id));
+      });
+    }
+    const gf = $('#g-fav');
+    if (gf) {
+      const RO = { l: 0, e: 1, r: 2, c: 3 };
+      S.fav.filter((id) => S.cards[id] && RAR[id]).sort((x, y) => RO[RAR[x]] - RO[RAR[y]]).forEach((id) => {
+        const el = ownedEl(id), f = (S.fk || {})[id];
+        if (f) { const m = 1 + 4 * Math.min(1, (Date.now() - f) / (7 * 864e5)); el.querySelector('.rn').insertAdjacentHTML('afterend', '<div class="stt" style="color:var(--l)">♻️ ×' + m.toFixed(1) + (m < 4.995 ? ' → ×5' : ' (max)') + '</div>'); }
+        gf.append(el);
       });
     }
   } else if (tab === 'mk') {
@@ -785,12 +948,15 @@ function playerView() {
   } else if (tab === 'rk') {
     app.querySelectorAll('[data-rs]').forEach((b) => (b.onclick = () => { rkSub = b.dataset.rs; dmWith = null; dmNew = false; chForm = null; playerView(); }));
     app.querySelectorAll('[data-n]').forEach((b) => (b.onclick = () => { rkN = +b.dataset.n; playerView(); }));
+    app.querySelectorAll('[data-rn]').forEach((b) => (b.onclick = () => { raceN = +b.dataset.rn; RC = null; playerView(); }));
     if (rkSub === 'm') dmInit();
     else if (rkSub === 'd') chInit();
+    else if (rkSub === 'k') chRankInit();
+    else if (rkSub === 'c') raceInit();
     else api('rank', { n: rkN }).then((j) => {
       const el = $('#rl'); if (!el) return;
       const col = { l: 'l', e: 'e', r: 'r', c: 'c' };
-      el.innerHTML = j.rank.length ? '<table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th>♻️</th>' + [...'ler'].concat('c').map((k) => '<th style="color:var(--' + k + ')">' + k.toUpperCase() + '</th>').join('') + '<th>🪙</th></tr>' + j.rank.map((x, i) => '<tr' + (x.pseudo === S.pseudo ? ' class="me"' : '') + '><td>' + (i + 1) + '</td><td class="pn">' + esc(x.pseudo) + '</td><td>' + x.rb + '</td>' + [...'lerc'].map((k) => '<td style="color:var(--' + k + ')">' + x[k] + '</td>').join('') + '<td>' + x.coins + '</td></tr>').join('') + '</table>' : 'Aucun joueur pour le moment.';
+      el.innerHTML = j.rank.length ? '<table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th>♻️</th>' + [...'ler'].concat('c').map((k) => '<th style="color:var(--' + k + ')">' + k.toUpperCase() + '</th>').join('') + '<th>🪙</th></tr>' + j.rank.map((x, i) => '<tr' + (x.pseudo === S.pseudo ? ' class="me"' : '') + '><td>' + (i + 1) + '</td><td class="pn">' + esc(x.pseudo) + pfImg(x.pf) + '</td><td>' + x.rb + '</td>' + [...'lerc'].map((k) => '<td style="color:var(--' + k + ')">' + x[k] + '</td>').join('') + '<td>' + x.coins + '</td></tr>').join('') + '</table>' : 'Aucun joueur pour le moment.';
     }).catch((e) => msg(e.message));
   } else if (tab === 'jeu') {
     wheel($('#rc'), 0, () => {}, true);
@@ -868,18 +1034,32 @@ function playerView() {
     app.querySelectorAll('[data-g]').forEach((b) => (b.onclick = () => run(async () => { const j = await api('bet', { game: b.dataset.g, amount: $('#bet').value }); setS(j.state); play(b.dataset.g, j.gid, +$('#bet').value); })));
   } else {
     if ($('#pn2')) $('#pn2').onclick = () => run(async () => { await enablePush(); playerView(); msg('Notifications activées', true); });
+    if ($('#pfb')) $('#pfb').onclick = () => run(async () => {
+      const f = $('#pff').files[0]; if (!f) throw new Error('Choisis d’abord une image');
+      const n = S.pfn || 0;
+      if (n === 1 && !confirm('Ce changement de photo coûte 500 🪙. Continuer ?')) return;
+      if (n >= 2 && !confirm('Ta photo sera envoyée à l’opérateur pour vérification. Continuer ?')) return;
+      const j = await api('pfp', { img: await shrink(f) }); setS(j.state); playerView(); msg(j.pending ? 'Demande envoyée à l’opérateur : tu seras prévenu de sa décision' : 'Photo de profil changée', true);
+    });
     $('#tsel').onchange = (e) => run(async () => { setTheme(e.target.value); await api('settings', { theme: e.target.value }); });
     if ($('#frn')) $('#frn').onsubmit = (e) => { e.preventDefault(); if (!$('#rn2') || !confirm('Un seul changement gratuit. Continuer ?')) return; run(async () => { setS((await api('rename', { name: $('#rn2').value })).state); playerView(); msg('Pseudo changé', true); }); };
     $('#fpw').onsubmit = (e) => { e.preventDefault(); run(async () => { await api('settings', { old: $('#po').value, pw: $('#pn').value }); msg('Mot de passe changé', true); $('#fpw').reset(); }); };
-    $('#frp').onsubmit = (e) => { e.preventDefault(); run(async () => { await api('report', { text: $('#rt').value }); msg('Signalement envoyé au staff', true); $('#frp').reset(); }); };
+    $('#frp').onsubmit = (e) => { e.preventDefault(); run(async () => { const idea = $('#rc').value === 'idea'; await api('report', { text: $('#rt').value, cat: idea ? 'idea' : 'bug' }); msg(idea ? 'Idée envoyée au staff, merci !' : 'Signalement envoyé au staff', true); $('#frp').reset(); }); };
   }
 }
 function overlay(html) { const ov = document.createElement('div'); ov.className = 'ov'; ov.innerHTML = html; document.body.append(ov); return ov; }
-function reveal(ids, t) {
-  const o = CAT[t], ov = overlay('<div class="pk big shake" style="--pc:' + o.color + '">' + o.icon + '</div>');
+function reveal(ids, t, n) {
+  const o = CAT[t], ov = overlay('<div class="pk big shake" style="--pc:' + o.color + '">' + o.icon + '</div>'), multi = (n || 1) > 1;
   setTimeout(() => {
     ov.innerHTML = ''; const g = document.createElement('div'); g.className = 'grid';
-    ids.forEach((id, i) => g.append(cardEl(id, 1, i)));
+    let list = ids.map((id) => [id, 1]);
+    if (multi) {
+      const RO = { l: 0, e: 1, r: 2, c: 3 }, m = new Map(); ids.forEach((id) => m.set(id, (m.get(id) || 0) + 1));
+      list = [...m].sort((a, b) => RO[RAR[a[0]] || 'c'] - RO[RAR[b[0]] || 'c']);
+      const h = document.createElement('div'); h.style.cssText = 'text-align:center;margin-top:6vh;font-size:18px'; h.textContent = '📦 ' + n + ' sachets ouverts · ' + ids.length + ' cartes'; ov.append(h); g.style.marginTop = '12px';
+    }
+    const k = list.length > 5 ? Math.min(1, 1.6 / (list.length * 0.3)) : 1;
+    list.forEach(([id, c], i) => g.append(cardEl(id, c, i * k)));
     const b = document.createElement('button'); b.textContent = 'Continuer'; b.style.cssText = 'display:block;margin:0 auto';
     b.onclick = () => { ov.remove(); playerView(); };
     ov.append(g, b);
@@ -960,6 +1140,37 @@ function nudge() {
     const nn = ov.querySelector('#nn'); if (nn) nn.onclick = async () => { try { await enablePush(); render(); if (tab === 'set') playerView(); } catch (e) { ov.querySelector('#ne').textContent = e.message; } };
   };
   render();
+}
+// --- Connexion quotidienne (jour 1 à 7) : popup animée à la première ouverture du jour
+let dyAsked = '';
+function dailyPopup(after) {
+  const d = S && S.dy;
+  if (!d || d.claimed || !tok || (isOp && !asP) || S.maint || S.ban || document.querySelector('.ov,#rbo')) return false;
+  dyAsked = new Date().toDateString();
+  const R = d.rew, ov = overlay(''), start0 = S.coins;
+  const close = () => { ov.remove(); if (after) after(); };
+  const tiles = R.map((g, i) => {
+    const n = i + 1, st = n < d.day ? 'done' : n === d.day ? 'now' : 'lock', ic = st === 'done' ? '✅' : n === d.day || n === 7 ? '🎁' : '🔒';
+    return '<div class="dyt ' + st + (n === 7 ? ' big' : '') + '" data-dy="' + n + '" style="animation-delay:' + (0.25 + n * 0.07).toFixed(2) + 's' + (st === 'now' ? ',0.9s' : '') + '"><span>' + ic + ' Jour ' + n + (n === 7 ? ' · bonus' : '') + '</span><b>+' + g + ' 🪙</b></div>';
+  }).join('');
+  ov.innerHTML = '<div class="dyn"><div class="dyh"><b>Cardex</b><span class="pill dyb">🪙 <span id="dyv">' + start0 + '</span><span class="dyf" id="dyf"></span></span></div>'
+    + '<div class="dyc"><div class="dyi">📅</div><div><b>Connexion quotidienne</b><small>Jour ' + d.day + ' sur 7 · série en cours</small></div></div>'
+    + '<div class="dyg">' + tiles + '</div><div id="dyft"><button id="dyok" style="width:100%">Récupérer ' + R[d.day - 1] + ' 🪙</button><div style="text-align:center;margin-top:8px"><button class="g" id="dyx">Plus tard</button></div></div><div class="err" id="dye"></div></div>';
+  ov.querySelector('#dyx').onclick = close;
+  ov.querySelector('#dyok').onclick = async (e) => {
+    e.target.disabled = true;
+    try {
+      const j = await api('daily'); setS(j.state); updHead();
+      const t = ov.querySelector('[data-dy="' + d.day + '"]'); t.className = 'dyt done dyp' + (d.day === 7 ? ' big' : ''); t.style.animation = ''; t.firstChild.textContent = '✅ Jour ' + d.day + (d.day === 7 ? ' · bonus' : '');
+      const f = ov.querySelector('#dyf'); f.textContent = '+' + j.gain; f.style.animation = 'dyfl 1s ease-out forwards';
+      const v = ov.querySelector('#dyv'), to = S.coins; let t0 = 0;
+      const step = (ts) => { if (!t0) t0 = ts; const p = Math.min((ts - t0) / 900, 1); v.textContent = Math.round(start0 + (to - start0) * p); if (p < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+      ov.querySelector('#dyft').innerHTML = '<div style="text-align:center;color:var(--dim);margin-bottom:10px">Prochaine récompense demain : +' + R[d.day % 7] + ' 🪙' + (d.day === 7 ? ' (retour au jour 1)' : '') + '</div><div style="text-align:center;font-size:13px;color:var(--dim);margin-bottom:10px">Un jour raté et la série repart du jour 1.</div><button id="dyc2" style="width:100%">Fermer</button>';
+      ov.querySelector('#dyc2').onclick = () => { close(); if (tab === 'shop' || tab === 'col') playerView(); };
+    } catch (er) { e.target.disabled = false; ov.querySelector('#dye').textContent = er.message; }
+  };
+  return true;
 }
 async function refresh() { const j = await api('me'); setS(j.state); playerView(); if (j.notifs && j.notifs.length) notify(j.notifs); }
 
@@ -1096,17 +1307,27 @@ async function opView(m) {
   const cols = custom.cols.filter((c) => c.until > now).map((c) => '<div class="row">' + c.icon + ' <b>' + esc(c.name) + '</b> jusqu\'au ' + new Date(c.until).toLocaleDateString('fr-FR') + ' <input type="date" data-ed="' + c.key + '" value="' + dstr(c.until) + '" min="' + dstr(Date.now() + 864e5) + '"> <button class="g" data-ee="' + c.key + '">Changer la fin</button> <button class="g" data-ec="' + c.key + '">Terminer maintenant</button></div>').join('');
   const objs = custom.objs.filter((o) => !o.gone).map((o) => '<div class="row">🎁 <b>' + esc(o.name) + '</b> ' + RN[o.r] + ' — ' + o.price + ' coins' + (o.stock != null ? ' (reste ' + o.stock + ')' : '') + ' <button class="g" data-do="' + esc(o.name) + '">Retirer</button></div>').join('');
   const reps = reports.map((r) => '<div class="row" style="border-top:1px solid var(--line);padding:8px 0"><div style="flex:1"><b>' + esc(r.pseudo) + '</b> <small>' + new Date(r.t).toLocaleString('fr-FR') + '</small><br><span class="rt"></span></div><button class="g" data-dr="' + r.id + '">Supprimer</button></div>').join('') || '<p>Aucun signalement.</p>';
+  const mkl = j.market || [], optSel = (v, a) => (v === a ? ' selected' : '');
+  const mkbox = '<div class="box" id="mkop"><h2>🏪 Marché (' + mkl.length + ' annonce' + (mkl.length > 1 ? 's' : '') + ')</h2><div id="mkst" style="margin-bottom:8px"></div>'
+    + '<div class="row" style="margin-bottom:8px"><input id="mkq" placeholder="🔎 Carte ou joueur" value="' + esc(opMk.q) + '" style="flex:1;min-width:140px"><select id="mkf" aria-label="Filtre"><option value="all"' + optSel(opMk.f, 'all') + '>Tout</option><option value="sale"' + optSel(opMk.f, 'sale') + '>Ventes</option><option value="trade"' + optSel(opMk.f, 'trade') + '>Échanges</option><option value="staff"' + optSel(opMk.f, 'staff') + '>Mises par le staff</option><option value="old"' + optSel(opMk.f, 'old') + '>Invendues (+7 jours)</option></select><select id="mks" aria-label="Tri"><option value="old"' + optSel(opMk.s, 'old') + '>Plus anciennes</option><option value="new"' + optSel(opMk.s, 'new') + '>Plus récentes</option><option value="pa"' + optSel(opMk.s, 'pa') + '>Prix croissant</option><option value="pd"' + optSel(opMk.s, 'pd') + '>Prix décroissant</option><option value="rar"' + optSel(opMk.s, 'rar') + '>Rareté</option></select></div>'
+    + '<div class="row" style="margin-bottom:10px"><label>Rendre les annonces de plus de <input id="mkd" type="number" min="1" value="7" style="width:64px"> jours</label><button class="g" id="mkra">Rendre ces annonces</button><button class="g" id="mkrb">Tout rendre</button></div>'
+    + '<div id="mkg" class="grid"></div><div id="mkm" style="text-align:center;margin:8px 0"></div>'
+    + '<form id="mkf2" style="display:grid;gap:8px;margin-top:12px;border-top:1px solid var(--line);padding-top:12px"><b>➕ Mettre des cartes en vente (toutes les cartes du jeu)</b><input id="mkas" placeholder="🔎 Chercher une carte par son nom" autocomplete="off"><div class="row"><select id="mkaz" aria-label="Collection"><option value="">Toutes les collections</option>' + Object.entries(CAT).map(([t, o]) => '<option value="' + esc(t) + '">' + esc(o.icon + ' ' + o.name) + '</option>').join('') + '</select><select id="mkar" aria-label="Rareté"><option value="">Toutes raretés</option>' + [...'crel'].map((r) => '<option value="' + r + '">' + RN[r] + '</option>').join('') + '</select></div><div id="mkpg" class="grid"></div><div id="mkpm" style="text-align:center"></div><div id="mkps" style="font-size:14px"></div><div class="row"><input id="mkap" type="number" min="1" placeholder="Prix en coins" required style="width:140px"><input id="mkaq" type="number" min="1" max="20" value="1" style="width:90px" aria-label="Quantité"><label><input type="checkbox" id="mkan"> prévenir les joueurs</label></div><button>Mettre en vente</button></form><div class="err" id="e9"></div></div>';
+  const pq = j.pfpq || [];
+  const pfbox = '<div class="box"><h2>Photos de profil (' + pq.length + ' à vérifier)</h2>' + (pq.map((r) => '<div class="row" style="border-top:1px solid var(--line);padding:8px 0"><img class="pf" style="width:64px;height:64px;margin:0" src="' + r.img + '" alt=""><div style="flex:1;min-width:140px"><b>' + esc(r.pseudo) + '</b><br><small>' + r.n + ' changement(s) · ' + new Date(r.t).toLocaleString('fr-FR') + '</small></div><button data-po="' + esc(r.pseudo) + '">Accepter</button><button class="g" data-pn2="' + esc(r.pseudo) + '">Refuser</button></div>').join('') || '<p>Aucune demande en attente.</p>') + '<div class="row" style="margin-top:8px"><select id="pdu"><option value="">Retirer la photo de…</option>' + users.filter((u) => u.pf).map((u) => '<option value="' + esc(u.pseudo) + '">' + esc(u.pseudo) + '</option>').join('') + '</select><button class="g" id="pdb">Retirer</button></div><div class="err" id="e8"></div></div>';
   app.innerHTML = '<div class="bar"><b>Espace opérateur</b><span class="row"><button class="g" id="obl" aria-label="Notifications">🔔' + (opInb.length ? ' ' + opInb.length : '') + '</button><button class="g" id="pv">🎮 Espace joueur</button><button class="g" id="th">🌓</button><button class="g" id="lo">Quitter</button></span></div>' +
     '<div class="box"><h2>Boutique</h2><div class="grid2">' + Object.keys(shop).filter((t) => !CAT[t].base).map((t) => '<div class="row"><b>' + CAT[t].icon + ' ' + esc(CAT[t].name) + '</b><input type="number" min="0" max="90" value="' + shop[t].discount + '" id="d-' + t + '" style="width:80px" aria-label="Réduction en %"> %<label><input type="checkbox" id="b-' + t + '"' + (shop[t].blocked ? ' checked' : '') + '> bloqué</label><button data-sv="' + t + '">Enregistrer</button></div>').join('') + '</div><div class="err" id="e2"></div></div>' +
     '<div class="grid2"><form class="box" id="fc" style="display:grid;gap:10px"><h2>Collection provisoire</h2><input id="cn" placeholder="Nom" required><input id="ci" placeholder="Emoji (ex : 🎃)" maxlength="4"><label class="row" style="gap:8px">Date de fin <input id="cd" type="date" required min="' + dstr(Date.now() + 864e5) + '" value="' + dstr(Date.now() + 7 * 864e5) + '"></label><label class="row" style="gap:8px">Couleur du fond <input id="cc" type="color" value="#0ea5e9" style="width:60px;height:36px;padding:2px"></label><textarea id="cl" rows="6" placeholder="Une carte par ligne (titre Wikipédia). Préfixe r: e: l: pour la rareté, sans préfixe = commune"></textarea><button>Créer</button><div class="err" id="e3"></div>' + cols + '</form>' +
     '<form class="box" id="fo" style="display:grid;gap:10px"><h2>Objet en boutique</h2><input id="on" placeholder="Nom de la carte (titre Wikipédia)" required><select id="or"><option value="c">Commune</option><option value="r">Rare</option><option value="e">Épique</option><option value="l">Légendaire</option></select><input id="op" type="number" min="1" placeholder="Prix en coins" required><input id="os" type="number" min="1" placeholder="Quantité disponible (vide = illimité)"><button>Ajouter</button><div class="err" id="e4"></div>' + objs + '</form></div>' +
     '<div class="box" id="pbox"><h2>Joueurs (' + users.length + ')</h2><div id="plist"><input id="pq" placeholder="🔎 Taper le nom d\'un joueur" style="width:100%;margin-bottom:8px" autocomplete="off"><div id="pls">' + list + '</div></div><div id="pf" class="opf"></div></div>' +
+    mkbox +
+    pfbox +
     '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + ' — 🪙 ' + u.coins + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="ca" multiple size="6" aria-label="Cartes"></select><small id="ch"></small><button>Valider</button><div class="err" id="e"></div></form>' +
     '<form class="box" id="fm" style="display:grid;gap:10px"><h2>Envoyer une notification</h2><select id="mt"><option value="*">Tous les joueurs</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="mx" maxlength="200" placeholder="Message" required><button>Envoyer</button><div class="err" id="e5"></div></form>' +
     '<div class="box"><h2>🔧 Maintenance</h2><p>' + (j.maint ? 'ACTIVE : les joueurs voient « maintenance », peuvent seulement regarder leurs cartes, aller dans Réglages et te contacter.' : 'Désactivée.') + '</p><p><small>Explication montrée aux joueurs (facultatif, plusieurs choix possibles) :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible">' + j.maintPresets.map((p) => '<button type="button" class="pill mp' + ((j.maintinfo.presets || []).includes(p.k) ? ' on' : '') + '" data-mp="' + p.k + '">' + p.label + '</button>').join('') + '</div><textarea id="mmsg" rows="2" maxlength="300" placeholder="Message du staff (facultatif)" style="margin:8px 0"></textarea><div class="row"><button id="mnt" class="' + (j.maint ? '' : 'g') + '">' + (j.maint ? 'Désactiver la maintenance' : 'Activer la maintenance (tout verrouiller)') + '</button>' + (j.maint ? '<button class="g" id="mnu">Mettre à jour le message</button>' : '') + '</div><div class="err" id="e7"></div></div>' +
     '<form class="box" id="fr" style="display:grid;gap:10px"><h2>Changer le pseudo d\'un joueur</h2><select id="ru" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="rnn" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button><div class="err" id="e6"></div></form>' +
     '<div class="box" id="cpn"><h2>🎴 Panneau Cartes</h2><input id="cq" placeholder="🔎 Nom d\'une carte (objets compris)" style="width:100%;margin-bottom:8px" autocomplete="off"><div id="cres"></div><div id="cinf"></div></div>' +
-    '<div class="box"><h2>Signalements (' + reports.length + ')</h2>' + reps + '</div>';
+    '<div class="box"><h2>Signalements (' + reports.length + (reports.some((r) => r.cat === 'idea') ? ' dont ' + reports.filter((r) => r.cat === 'idea').length + ' idée(s)' : '') + ')</h2>' + reps + '</div>';
   app.querySelectorAll('.rt').forEach((el, i) => (el.textContent = reports[i].text));
   $('#pv').onclick = () => { asP = true; localStorage.asp = '1'; start(); };
   const fillCards = () => {
@@ -1201,6 +1422,64 @@ async function opView(m) {
   app.querySelectorAll('[data-ee]').forEach((b) => (b.onclick = act('e3', () => api('extcol', { key: b.dataset.ee, until: endOf(app.querySelector('[data-ed="' + b.dataset.ee + '"]').value) }), 'Date de fin modifiée')));
   app.querySelectorAll('[data-ec]').forEach((b) => (b.onclick = act('e3', () => api('endcol', { key: b.dataset.ec }), 'Collection terminée')));
   app.querySelectorAll('[data-do]').forEach((b) => (b.onclick = act('e4', () => api('delobj', { name: b.dataset.do }), 'Objet retiré')));
+  // --- Marché (opérateur) : présentation en cartes, filtres, rendre / modifier le prix / mettre en vente
+  const RORD = { l: 0, e: 1, r: 2, c: 3 }, WEEK = 7 * 864e5, cn2 = (id) => id.slice(id.indexOf(':') + 1);
+  const drawMk = () => {
+    const q = opMk.q.trim().toLowerCase(), now = Date.now();
+    const L = mkl.filter((x) => (!q || x.card.toLowerCase().includes(q) || x.seller.toLowerCase().includes(q) || (x.want || '').toLowerCase().includes(q))
+      && (opMk.f === 'all' || (opMk.f === 'sale' && !x.want) || (opMk.f === 'trade' && x.want) || (opMk.f === 'staff' && x.staff) || (opMk.f === 'old' && now - x.t >= WEEK)));
+    L.sort((a, b) => opMk.s === 'new' ? b.t - a.t : opMk.s === 'pa' ? a.price - b.price : opMk.s === 'pd' ? b.price - a.price : opMk.s === 'rar' ? (RORD[RAR[a.card]] ?? 4) - (RORD[RAR[b.card]] ?? 4) || a.t - b.t : a.t - b.t);
+    const sales = mkl.filter((x) => !x.want), old = mkl.filter((x) => now - x.t >= WEEK).length;
+    $('#mkst').innerHTML = '<small>' + sales.length + ' vente' + (sales.length > 1 ? 's' : '') + ' · ' + (mkl.length - sales.length) + ' échange' + (mkl.length - sales.length > 1 ? 's' : '') + ' · valeur des ventes ' + sales.reduce((a, x) => a + x.price, 0) + ' 🪙 · ' + old + ' invendue' + (old > 1 ? 's' : '') + ' depuis plus de 7 jours</small>';
+    const g = $('#mkg'); g.innerHTML = '';
+    L.slice(0, opMk.n).forEach((x) => {
+      const w = document.createElement('div'); w.className = 'mkc'; w.append(cardEl(x.card));
+      const stale = now - x.t >= WEEK, ag = ago(x.t);
+      const info = document.createElement('div'); info.style.cssText = 'font-size:13px;margin:6px 0;line-height:1.4';
+      info.innerHTML = '<div>' + (x.staff ? '🛠️ Staff' : '👤 ' + esc(x.seller)) + '</div><div>' + (x.want ? '🔁 contre <b>' + esc(cn2(x.want)) + '</b>' + (x.to ? ' · pour ' + esc(x.to) : '') + (x.ask ? ' · +' + x.ask + ' 🪙' : '') : '🏷️ <b>' + x.price + ' 🪙</b>') + '</div><div style="color:' + (stale ? '#d29922' : 'var(--dim)') + '">' + (stale ? '⚠️ ' : '') + (ag === "à l'instant" ? ag : 'depuis ' + ag) + '</div>';
+      const bt = document.createElement('div'); bt.className = 'row';
+      bt.innerHTML = '<button class="g" data-r="1">' + (x.staff ? '🗑️ Retirer' : '↩️ Rendre') + '</button>' + (x.want ? '' : '<button class="g" data-e="1">✏️ Prix</button>');
+      bt.querySelector('[data-r]').onclick = act('e9', () => api('mkret', { id: x.id }), x.staff ? 'Annonce retirée' : 'Carte rendue à ' + x.seller);
+      const pe = bt.querySelector('[data-e]'); if (pe) pe.onclick = () => { const p = prompt('Nouveau prix de « ' + cn2(x.card) + ' » (coins)', x.price); if (p === null) return; act('e9', () => api('mkprice', { id: x.id, price: p }), 'Prix modifié')(); };
+      w.append(info, bt); g.append(w);
+    });
+    $('#mkm').innerHTML = L.length > opMk.n ? '<button class="g" id="mkmore">Voir plus (' + (L.length - opMk.n) + ' restantes)</button>' : L.length ? '' : '<small>Aucune annonce ne correspond.</small>';
+    if ($('#mkmore')) $('#mkmore').onclick = () => { opMk.n += 40; drawMk(); };
+  };
+  $('#mkq').oninput = (e) => { opMk.q = e.target.value; opMk.n = 40; drawMk(); };
+  $('#mkf').onchange = (e) => { opMk.f = e.target.value; opMk.n = 40; drawMk(); };
+  $('#mks').onchange = (e) => { opMk.s = e.target.value; drawMk(); };
+  $('#mkra').onclick = () => {
+    const d = +$('#mkd').value, n = d > 0 ? mkl.filter((x) => Date.now() - x.t >= d * 864e5).length : 0;
+    if (!n) { $('#e9').style.color = ''; $('#e9').textContent = 'Aucune annonce aussi ancienne'; return; }
+    if (confirm('Rendre ' + n + ' annonce' + (n > 1 ? 's' : '') + ' de plus de ' + d + ' jour' + (d > 1 ? 's' : '') + ' à leurs vendeurs ?')) act('e9', () => api('mkretall', { days: d }), n + ' annonce(s) rendue(s)')();
+  };
+  $('#mkrb').onclick = () => { if (!mkl.length) return; if (confirm('Rendre TOUTES les annonces (' + mkl.length + ') à leurs vendeurs ? Les offres d\'échange sont annulées aussi.')) act('e9', () => api('mkretall', { days: 0 }), 'Marché vidé : toutes les cartes sont rendues')(); };
+  // --- Sélecteur visuel : toutes les cartes du jeu (recherche + collection + rareté)
+  let pick = null, pickN = 24;
+  const drawPick = () => {
+    const q = $('#mkas').value.trim().toLowerCase(), z = $('#mkaz').value, r = $('#mkar').value, g = $('#mkpg');
+    g.innerHTML = '';
+    if (!q && !z && !r) { $('#mkpm').innerHTML = '<small>Tape un nom de carte ou choisis une collection / une rareté.</small>'; return; }
+    const L = allIds.filter((id) => (!q || cn2(id).toLowerCase().includes(q)) && (!z || id.startsWith(z + ':')) && (!r || RAR[id] === r));
+    L.slice(0, pickN).forEach((id) => {
+      const w = document.createElement('div'); w.className = 'mkc'; w.style.cursor = 'pointer'; w.style.borderRadius = '10px';
+      if (id === pick) w.style.outline = '3px solid #2a5bd7';
+      w.append(cardEl(id));
+      w.onclick = () => { pick = id; [...g.children].forEach((c) => (c.style.outline = '')); w.style.outline = '3px solid #2a5bd7'; $('#mkps').innerHTML = '✅ Carte choisie : <b>' + esc(cn2(id)) + '</b> (' + RN[RAR[id]] + ' · ' + esc((CAT[id.slice(0, id.indexOf(':'))] || {}).name || '?') + ')'; };
+      g.append(w);
+    });
+    $('#mkpm').innerHTML = L.length > pickN ? '<button type="button" class="g" id="mkpmore">Voir plus (' + (L.length - pickN) + ' autres cartes)</button>' : L.length ? '' : '<small>Aucune carte trouvée.</small>';
+    if ($('#mkpmore')) $('#mkpmore').onclick = () => { pickN += 24; drawPick(); };
+  };
+  ['#mkas'].forEach((i) => ($(i).oninput = () => { pickN = 24; drawPick(); }));
+  ['#mkaz', '#mkar'].forEach((i) => ($(i).onchange = () => { pickN = 24; drawPick(); }));
+  drawPick();
+  $('#mkf2').onsubmit = (e) => { e.preventDefault(); if (!pick) { $('#e9').style.color = ''; $('#e9').textContent = 'Choisis d’abord une carte dans la liste'; return; } act('e9', () => api('mkadd', { card: pick, price: $('#mkap').value, qty: $('#mkaq').value, notify: $('#mkan').checked }), 'Cartes mises en vente')(); };
+  drawMk();
+  app.querySelectorAll('[data-po]').forEach((b) => (b.onclick = act('e8', () => api('pfpok', { pseudo: b.dataset.po }), 'Photo acceptée')));
+  app.querySelectorAll('[data-pn2]').forEach((b) => (b.onclick = act('e8', () => api('pfpno', { pseudo: b.dataset.pn2 }), 'Photo refusée')));
+  $('#pdb').onclick = act('e8', () => { if (!$('#pdu').value) throw new Error('Choisis un joueur'); return api('pfpdel', { pseudo: $('#pdu').value }); }, 'Photo retirée');
   app.querySelectorAll('[data-dr]').forEach((b) => (b.onclick = act('e2', () => api('delreport', { id: +b.dataset.dr }), 'Signalement supprimé')));
   $('#fc').onsubmit = act('e3', () => api('addcol', { name: $('#cn').value, icon: $('#ci').value, color: $('#cc').value, until: endOf($('#cd').value), cards: $('#cl').value }), 'Collection créée');
   $('#fo').onsubmit = act('e4', () => api('addobj', { name: $('#on').value, rarity: $('#or').value, price: $('#op').value, stock: $('#os').value }), 'Objet ajouté à la boutique');
@@ -1214,7 +1493,7 @@ async function opView(m) {
   $('#fr').onsubmit = act('e6', () => api('rename', { pseudo: $('#ru').value, name: $('#rnn').value }), 'Pseudo changé');
   app.querySelectorAll('[data-du]').forEach((b) => (b.onclick = (e) => { if (confirm('Supprimer définitivement le compte ' + b.dataset.du + ' ?')) act('e', () => api('deluser', { pseudo: b.dataset.du }), 'Compte supprimé')(e); }));
   // --- Catégories (au lieu d'une seule longue page) : 5 onglets qui tiennent sur 2 lignes maximum, sans glisser
-  const OC = [['b', '🛒 Boutique', ['Boutique', 'Collection provisoire', 'Objet en boutique']], ['j', '👥 Joueurs', ['Joueurs', 'Donner ou retirer', 'Changer le pseudo']], ['m', '✉️ Messages', ['Envoyer une notification']], ['s', '🚩 Signalements', ['Signalements']], ['c', '🎴 Cartes', ['Panneau Cartes']], ['x', '🔧 Maintenance', ['Maintenance']]];
+  const OC = [['b', '🛒 Boutique', ['Boutique', 'Collection provisoire', 'Objet en boutique']], ['j', '👥 Joueurs', ['Joueurs', 'Photos de profil', 'Donner ou retirer', 'Changer le pseudo']], ['m', '✉️ Messages', ['Envoyer une notification']], ['s', '🚩 Signalements', ['Signalements']], ['c', '🎴 Cartes', ['Panneau Cartes']], ['k', '🏪 Marché', ['Marché']], ['x', '🔧 Maintenance', ['Maintenance']]];
   const bar = app.querySelector('.bar'), dmBox = document.createElement('div');
   dmBox.className = 'box'; dmBox.id = 'opdm'; dmBox.innerHTML = '<h2>👁️ Voir les messages des joueurs</h2><div id="opdl">Chargement…</div><div id="opdt"></div>';
   app.append(dmBox);
@@ -1263,6 +1542,7 @@ async function poll() {
     if (was !== !!S.maint || wb !== !!S.ban) { if (j.notifs && j.notifs.length) notify(j.notifs); return playerView(); }
     updHead();
     updTabBadge();
+    if (S.dy && !S.dy.claimed && dyAsked !== new Date().toDateString() && tab !== 'jeu' && !document.getElementById('splash')) dailyPopup();
     if (tab === 'rk' && rkSub === 'm' && dmWith) { if (j.notifs && j.notifs.length) notify(j.notifs); dmLoad(false).catch(() => {}); return; }
     if (j.notifs && j.notifs.length) { notify(j.notifs); if (!document.querySelector('.ov') && tab !== 'jeu' && tab !== 'set' && !(tab === 'rk' && rkSub === 'd' && chForm)) playerView(); }
   } catch {}
@@ -1287,24 +1567,48 @@ const TIPS = [
   "🎯 Dans Échange, le symbole 🎯 repère la carte qu'un joueur a et que tu n'as pas.",
   "🤝 Dans Offre, le symbole 🤝 repère la carte que tu as et que l'autre joueur n'a pas encore.",
   "🎮 Un petit tour dans l'onglet Jeux ? Mise raisonnablement !",
+  "📅 Connecte-toi chaque jour : la récompense monte jusqu'au jour 7 (200 🪙). Un jour raté et la série repart de zéro.",
+  "📦 Plusieurs sachets de la même collection ? Ouvre-les tous d'un coup depuis la Boutique.",
+  "📚 Tes collections terminées sont rangées dans le Livre des collections, avec ton livret de favoris ⭐.",
+  "💰 « Tout vendre » dans une collection terminée vend tout, sauf tes cartes favorites.",
+  "⭐ Après une renaissance, tes favorites prennent de la valeur : jusqu'à ×5 en 7 jours.",
+  "🖼️ Change ta photo de profil dans Réglages : la première est gratuite !",
+  "🏅 Le classement des défis est ouvert à tous, même si tu n'as pas encore combattu.",
+  "💡 Une idée pour améliorer Cardex ? Envoie-la au staff depuis Réglages → Contacter un staff.",
+  "⏳ Plus une carte reste longtemps dans ton classeur, plus elle prend de la valeur.",
+  "🎰 Les jeux d'argent comportent des risques : ne mise que ce que tu peux perdre.",
+  "🗓️ Les collections provisoires ont une date de fin : complète-les à temps !",
+  "🛒 Compare les prix du Marché avant d'acheter : ils varient d'un vendeur à l'autre.",
+  "🤫 Chuuut… une carte légendaire se cache peut-être dans ton prochain sachet.",
+  "🎴 Pour finir une collection, commence par les communes : les légendaires viendront ensuite.",
+  "🌙 Thème sombre ou clair ? Change-le dans Réglages → Apparence.",
+  "☕ Le temps d'un café, tes sachets t'attendent.",
+  "🧮 Un sachet coûte 100 coins : garde toujours de quoi en acheter un.",
+  "🔍 Dans le Marché, cherche une carte précise grâce à la barre de recherche.",
+  "🏁 Social → Course : un pack par heure fait avancer ta voiture. Le plus loin à la fin de la semaine gagne !",
+  "🚗 Repeins ta voiture de course pour 200 🪙 : ta photo de profil trône sur le toit !",
+  "🚀 Ton classeur arrive, encore un instant…",
+  "🎉 Bienvenue sur Cardex, le serveur chill où l'on collectionne tout !",
 ];
 let appReady = false;
 const splashDone = new Promise((resolve) => {
-  const t0 = Date.now(), MIN = 5000, MAX = 10000, sp = document.createElement('div');
-  sp.id = 'splash'; sp.innerHTML = '<img src="/icon.png" alt=""><h1>Cardex</h1><div class="sb"><i></i></div><div class="tip"></div>';
+  const t0 = Date.now(), MIN = 3000, MAX = 15000, sp = document.createElement('div'); // le chargement dure entre 3 et 15 s selon la connexion
+  let slow = false;
+  sp.id = 'splash'; sp.innerHTML = '<img src="/icon.png" alt=""><h1>Cardex</h1><div class="sb"><i></i></div><div class="tip"></div><div class="cr">Créé par Moury Nolan</div>';
   document.body.append(sp);
   const bar = sp.querySelector('i'), tip = sp.querySelector('.tip');
   let k = Math.floor(Math.random() * TIPS.length);
   tip.textContent = TIPS[k++ % TIPS.length];
-  const iv = setInterval(() => { tip.classList.add('f'); setTimeout(() => { tip.textContent = TIPS[k++ % TIPS.length]; tip.classList.remove('f'); }, 350); }, 3000);
+  const iv = setInterval(() => { tip.classList.add('f'); setTimeout(() => { tip.textContent = slow && k % 2 ? '⏳ Connexion un peu lente… on y est presque !' : TIPS[k % TIPS.length]; k++; tip.classList.remove('f'); }, 350); }, 3000);
   const tk = setInterval(() => {
     const el = Date.now() - t0, end = (appReady && el >= MIN) || el >= MAX;
-    bar.style.width = (end ? 100 : Math.min(90, (el / MIN) * 90)) + '%';
+    if (!appReady && el > 8000) slow = true;
+    bar.style.width = (end ? 100 : appReady ? Math.min(95, (el / MIN) * 95) : Math.min(90, 90 * (1 - Math.exp(-el / 3500)))) + '%';
     if (end) { clearInterval(tk); clearInterval(iv); setTimeout(() => { sp.classList.add('out'); setTimeout(() => { sp.remove(); resolve(); }, 450); }, 250); }
   }, 100);
 });
 async function start() {
-  try { if (isOp && !asP) { await opView(); checkPush({ as: 'player' }).catch(() => {}); } else { await refresh(); checkPush().then(() => { if (pushOn && tab === 'set') playerView(); splashDone.then(() => setTimeout(nudge, 600)); }); } } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); } finally { appReady = true; }
+  try { if (isOp && !asP) { await opView(); checkPush({ as: 'player' }).catch(() => {}); } else { await refresh(); checkPush().then(() => { if (pushOn && tab === 'set') playerView(); splashDone.then(() => setTimeout(() => { if (!dailyPopup(nudge)) nudge(); }, 600)); }); } } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); } finally { appReady = true; }
 }
 if (tok) start(); else { authView(); appReady = true; }
 </script>
