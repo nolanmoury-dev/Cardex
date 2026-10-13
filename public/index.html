@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#10141c;--panel:#1a202c;--line:#2b3446;--txt:#e8ecf3;--dim:#8b95a8;--cb:#141923;--c:#9aa0a6;--r:#3fb950;--e:#a371f7;--l:#f5c518;--lo:#f85149;--or:#f0883e;--sn-a:#202a3d;--sn-b:#161d2c;--sn-w:#46536e}
+:root{--ac:#2a5bd7;--ac2:#5aa0ff;--acf:#fff;--ske:"";--bg:#10141c;--panel:#1a202c;--line:#2b3446;--txt:#e8ecf3;--dim:#8b95a8;--cb:#141923;--c:#9aa0a6;--r:#3fb950;--e:#a371f7;--l:#f5c518;--lo:#f85149;--or:#f0883e;--sn-a:#202a3d;--sn-b:#161d2c;--sn-w:#46536e}
 :root[data-th=light]{--bg:#f3f5f9;--panel:#fff;--line:#d5dbe6;--txt:#161b26;--dim:#5b6577;--cb:#eef1f7;--c:#6b7280;--r:#1a9a3a;--e:#7c3aed;--l:#c99700;--lo:#d1242f;--or:#c2570c;--sn-a:#e3e8f2;--sn-b:#d3dbe8;--sn-w:#98a5ba}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.4 Barlow,system-ui,sans-serif}
@@ -19,7 +19,7 @@ main{max-width:1100px;margin:0 auto;padding:12px}
 .pill{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 12px}
 button,select,input,textarea{font:inherit;color:var(--txt);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
 textarea{width:100%}
-button{cursor:pointer;background:#2a5bd7;border-color:#2a5bd7;color:#fff;font-weight:500}
+button{cursor:pointer;background:var(--ac);border-color:var(--ac);color:var(--acf);font-weight:500}
 button.g{background:var(--panel);border-color:var(--line);color:var(--txt)}
 button:disabled{opacity:.4;cursor:not-allowed}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--l);outline-offset:2px}
@@ -87,7 +87,7 @@ main{padding:8px 8px calc(84px + env(safe-area-inset-bottom))}
 .un{flex:none;background:#e5484d;color:#fff;border-radius:999px;min-width:22px;padding:1px 7px;text-align:center;font-size:12px;font-weight:700}
 #dmt{display:flex;flex-direction:column;max-height:52vh;overflow-y:auto;padding:4px 2px}
 .bub{max-width:82%;padding:8px 12px;border-radius:16px;margin:3px 0;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere}
-.bub.me{align-self:flex-end;background:#2a5bd7;color:#fff;border-bottom-right-radius:4px}.bub.th{align-self:flex-start;background:var(--cb);border-bottom-left-radius:4px}
+.bub.me{align-self:flex-end;background:var(--ac);color:var(--acf);border-bottom-right-radius:4px}.bub.th{align-self:flex-start;background:var(--cb);border-bottom-left-radius:4px}
 .bub small{display:block;opacity:.7;font-size:11px;margin-top:2px}
 .sysb{align-self:center;width:92%;border:1px dashed var(--l);border-radius:12px;padding:8px 10px;margin:6px 0;font-size:14px;text-align:center;overflow-wrap:anywhere}
 .sysb button{margin-top:6px;min-height:36px;font-size:13px}
@@ -99,7 +99,7 @@ main{padding:8px 8px calc(84px + env(safe-area-inset-bottom))}
 @keyframes spl{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
 #splash h1{margin:0;font-size:28px;letter-spacing:.5px}
 #splash .sb{width:min(280px,72vw);height:8px;border-radius:99px;background:var(--line);overflow:hidden}
-#splash .sb i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#2a5bd7,#5aa0ff);transition:width .3s linear}
+#splash .sb i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--ac),var(--ac2));transition:width .3s linear}
 #splash .tip{min-height:70px;max-width:320px;font-size:16px;line-height:1.45;color:var(--dim);transition:opacity .35s}
 #splash .tip.f{opacity:0}
 #splash .cr{position:absolute;left:16px;bottom:calc(14px + env(safe-area-inset-bottom,0px));font-size:13px;color:var(--dim)}
@@ -174,12 +174,12 @@ details.lvc{border-color:#58a6ff}details.lvc>summary{color:#58a6ff}
 @keyframes dyfl{to{transform:translateY(-26px);opacity:0}}
 .dyh{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.dyh>b{font-size:18px}
 .dyb{position:relative;font-weight:500}.dyf{position:absolute;right:10px;top:-8px;font-size:13px;font-weight:500;color:#3fb950}
-.dyc{display:flex;align-items:center;gap:12px}.dyi{width:40px;height:40px;border-radius:50%;background:#2a5bd7;display:flex;align-items:center;justify-content:center;font-size:20px}
+.dyc{display:flex;align-items:center;gap:12px}.dyi{width:40px;height:40px;border-radius:50%;background:var(--ac);display:flex;align-items:center;justify-content:center;font-size:20px}
 .dyc small{display:block;color:var(--dim)}
 .dyg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}
 .dyt{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--cb);font-size:14px;color:var(--dim);animation:dyup .4s both}
 .dyt.done{border-color:#238636;color:#3fb950}
-.dyt.now{border:2px solid #2a5bd7;color:var(--txt);animation:dyup .4s both,dypl 1.4s ease-in-out infinite}
+.dyt.now{border:2px solid var(--ac);color:var(--txt);animation:dyup .4s both,dypl 1.4s ease-in-out infinite}
 .dyt.big{grid-column:1/-1;border-color:#6f4fc4;color:#a371f7}.dyt.big.now{color:var(--txt)}
 .dyt.dyp{animation:dypo .45s}
 @media(prefers-reduced-motion:reduce){.dyn,.dyt,.dyt.now,.dyf{animation:none!important}}
@@ -223,6 +223,22 @@ details.fvb{border-color:var(--l)}details.fvb>summary{color:var(--l)}
 .sntb th,.sntb td{padding:5px 6px;text-align:left;border-top:1px solid var(--line)}
 .sntb th{color:var(--dim);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
 @media(prefers-reduced-motion:reduce){.card.sk{transition:none}.snb.on{animation:none}}
+/* Thèmes de saison (choisis par l'opérateur) : seules les couleurs de l'interface changent, jamais celles des raretés */
+:root[data-sk] .bar b::after{content:var(--ske)}
+:root[data-sk=rose]{--ac:#d63384;--ac2:#ff8cc0;--acf:#fff;--ske:" 🎀"}
+:root[data-sk=rose][data-th=dark]{--bg:#1c1017;--panel:#2a1620;--line:#4b2a3b;--cb:#231219;--txt:#fbeaf2;--dim:#cf9db5}
+:root[data-sk=rose][data-th=light]{--bg:#fff0f6;--panel:#fff;--line:#f2c3d8;--cb:#ffe1ee;--txt:#3b1226;--dim:#955273}
+:root[data-sk=ete]{--ac:#ff9500;--ac2:#ffd23f;--acf:#1d1200;--ske:" 🌞"}
+:root[data-sk=ete][data-th=dark]{--bg:#06222c;--panel:#0c3445;--line:#1a5b72;--cb:#092b3a;--txt:#e9fbff;--dim:#86bccc}
+:root[data-sk=ete][data-th=light]{--bg:#fff6d6;--panel:#fffdf2;--line:#f1dc92;--cb:#ffefb8;--txt:#2b2100;--dim:#85691a}
+:root[data-sk=halloween]{--ac:#ff7a1a;--ac2:#ffb36b;--acf:#1a0a00;--ske:" 🎃"}
+:root[data-sk=halloween][data-th=dark]{--bg:#110a17;--panel:#1c1226;--line:#3b2352;--cb:#160e1f;--txt:#f4eaff;--dim:#ab93c4}
+:root[data-sk=halloween][data-th=light]{--bg:#fff0de;--panel:#fffaf2;--line:#efcfa3;--cb:#ffe4c4;--txt:#2a1300;--dim:#8a5a2b;--ac:#d9480f;--ac2:#ff9a5c;--acf:#fff}
+/* Espace opérateur : choix du thème */
+.skg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0}
+.skc{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:12px;text-align:left;min-height:0}
+.skc.on{border-color:var(--ac);box-shadow:inset 0 0 0 2px var(--ac)}
+.sw3{display:flex;gap:4px}.sw3 i{width:26px;height:26px;border-radius:6px;border:1px solid #8888}
 </style>
 </head>
 <body><main id="app"></main>
@@ -234,14 +250,24 @@ const pfImg = (p) => (p ? '<img class="pf" src="' + p + '" alt="">' : '');
 let tok = localStorage.tok, isOp = localStorage.op === '1', asP = localStorage.asp === '1', S, CAT = {}, RAR = {}, tab = 'shop', timer, sort = 'def', openT = new Set();
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-function setTheme(t) { document.documentElement.dataset.th = t; localStorage.th = t; }
+// --- Thème de saison (choisi par l'opérateur, identique pour tous) : Octobre rose, Hyper été, Halloween
+const SKINS = { rose: '🎀', ete: '🌞', halloween: '🎃' };
+function metaTheme() { const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#10141c'; }
+function setSkin(k, preview) {
+  k = SKINS[k] ? k : '';
+  if (k) document.documentElement.dataset.sk = k; else delete document.documentElement.dataset.sk;
+  if (!preview) { try { if (k) localStorage.sk = k; else localStorage.removeItem('sk'); } catch {} }
+  metaTheme();
+}
+function setTheme(t) { document.documentElement.dataset.th = t; localStorage.th = t; metaTheme(); }
 setTheme(localStorage.th || 'dark');
+setSkin(localStorage.sk);
 async function flip() {
   const t = document.documentElement.dataset.th === 'dark' ? 'light' : 'dark'; setTheme(t);
   if (!isOp) try { await api('settings', { theme: t }); } catch {}
 }
 function setCat(c) { CAT = c; RAR = {}; for (const [t, o] of Object.entries(CAT)) [...'crel'].forEach((r) => o[r].forEach((n) => (RAR[t + ':' + n] = r))); }
-function setS(s) { S = s; setCat(s.themes); if (s.theme && s.theme !== localStorage.th) setTheme(s.theme); }
+function setS(s) { S = s; setCat(s.themes); if (s.theme && s.theme !== localStorage.th) setTheme(s.theme); if (s.skin !== undefined && (s.skin || '') !== (document.documentElement.dataset.sk || '')) setSkin(s.skin); }
 
 async function api(action, d = {}) {
   const r = await fetch('/api/game', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, token: tok, ...(isOp && asP ? { as: 'player' } : {}), ...d }) });
@@ -718,11 +744,11 @@ function raceHTML() {
 }
 function raceHead() {
   const el = $('#rhd'), r = S.rc; if (!el || !r) return;
-  const left = Math.max(0, r.end - Date.now()), d = Math.floor(left / 864e5), h = Math.floor((left % 864e5) / 36e5), wait = Math.max(0, r.next - Date.now());
+  const left = Math.max(0, r.end - Date.now()), d = Math.floor(left / 864e5), h = Math.floor((left % 864e5) / 36e5), wait = Math.max(0, r.next - Date.now()), x = r.x || 0, avail = x + (wait > 0 ? 0 : 1);
   const me = RC && RC.rows.find((x) => x.pseudo === S.pseudo);
   el.innerHTML = '<p style="margin:0 0 8px"><b>Le plus loin à la fin de la semaine gagne !</b> Fin de la course dans <b>' + (d ? d + ' j ' : '') + h + ' h</b> · ta voiture : <b>' + r.pos + ' point' + (r.pos > 1 ? 's' : '') + '</b>' + (me ? ' · ' + (me.rank === 1 ? '👑 1er' : me.rank + 'e') + ' sur ' + RC.total : '') + '</p>'
     + (RC && RC.last ? '<p style="margin:0 0 8px">🏆 Gagnant de la semaine dernière : <b>' + esc(RC.last.pseudo) + '</b> (' + RC.last.pos + ' points)</p>' : '')
-    + (wait > 0 ? '<button id="rpk" disabled>⏳ Prochain pack dans <span id="rcd">' + fmtT(wait) + '</span></button>' : '<button id="rpk">🎁 Ouvrir mon pack de course</button>')
+    + (avail > 0 ? '<button id="rpk">🎁 Ouvrir mon pack de course' + (avail > 1 ? ' (' + avail + ')' : '') + '</button>' + (x > 0 ? '<p style="margin:8px 0 0"><small>🎁 Dont ' + x + ' offert' + (x > 1 ? 's' : '') + ' par le staff.' + (wait > 0 ? ' Prochain pack gratuit dans <span id="rcd">' + fmtT(wait) + '</span>.' : '') + '</small></p>' : '') : '<button id="rpk" disabled>⏳ Prochain pack dans <span id="rcd">' + fmtT(wait) + '</span></button>')
     + '<p style="margin:8px 0 0"><small>1 pack par heure (il ne s’accumule pas). Chaque pack contient une carte qui fait avancer ta voiture de +1, +2, +5 ou +10 points : plus le bonus est gros, plus il est rare. Une course par semaine, remise à zéro chaque lundi.</small></p>';
   if ($('#rpk')) $('#rpk').onclick = () => run(async () => {
     const old = RC ? Object.fromEntries(RC.rows.map((x) => [x.pseudo, x.pos])) : {};
@@ -733,7 +759,7 @@ function raceHead() {
 }
 function racePackReveal(j) {
   return new Promise((res) => {
-    const ov = overlay('<div class="pk big shake" style="--pc:#2a5bd7">🏁</div>');
+    const ov = overlay('<div class="pk big shake" style="--pc:var(--ac)">🏁</div>');
     setTimeout(() => {
       ov.innerHTML = '<div style="text-align:center;margin-top:12vh"><div class="card ' + j.rar + ' pop" style="margin:0 auto;width:170px;--i:0"><div class="ct" style="font-size:56px;min-height:0;padding:34px 0 10px">+' + j.gain + '</div><div class="rn" style="padding-bottom:12px;font-size:17px">' + RN[j.rar] + '</div></div><p style="font-size:18px;margin:18px 8px 14px">' + (j.gain >= 10 ? '🔥 Turbo ! ' : '') + 'Ta voiture avance de ' + j.gain + ' point' + (j.gain > 1 ? 's' : '') + ' (' + j.to + ' au total)</p><button id="rpc">Voir la course</button></div>';
       ov.querySelector('#rpc').onclick = () => { ov.remove(); res(); };
@@ -1456,6 +1482,28 @@ function snOp() {
   view(); tbl();
 }
 
+// --- Espace opérateur : choix du thème de l'app pour tous les joueurs
+const SK_LIST = [['', 'Normal', ['#10141c', '#1a202c', '#2a5bd7']], ['rose', 'Octobre rose', ['#1c1017', '#2a1620', '#d63384']], ['ete', 'Hyper été', ['#06222c', '#0c3445', '#ff9500']], ['halloween', 'Halloween', ['#110a17', '#1c1226', '#ff7a1a']]];
+const skinOpHTML = () => '<div class="box" id="skbox"><h2>🎨 Thème de l’app</h2><p>Change l’apparence pour <b>tous les joueurs</b> : ils la voient en quelques secondes, sans rien faire. Chacun garde son mode clair ou sombre, et les couleurs des raretés ne changent jamais.</p><p>Thème actuel : <b id="sk-cur"></b></p>'
+  + '<div class="skg">' + SK_LIST.map(([k, l, c]) => '<button type="button" class="g skc" data-sk="' + k + '"><span class="sw3">' + c.map((x) => '<i style="background:' + x + '"></i>').join('') + '</span><b>' + (SKINS[k] || '🎨') + ' ' + l + '</b></button>').join('') + '</div>'
+  + '<p><small>Un clic sur un thème te le montre sur ton écran seulement. Il n’est appliqué aux joueurs qu’avec le bouton ci-dessous.</small></p><div class="row"><button id="sk-go">Appliquer à tout le monde</button></div><div class="err" id="e10"></div></div>';
+function skinOp(cur) {
+  const root = $('#skbox'); if (!root) return;
+  let sel = SKINS[cur] ? cur : '', saved = sel;
+  const lab = (k) => (SK_LIST.find((x) => x[0] === k) || SK_LIST[0])[1];
+  const draw = () => {
+    root.querySelector('#sk-cur').textContent = (SKINS[saved] ? SKINS[saved] + ' ' : '') + lab(saved);
+    root.querySelectorAll('[data-sk]').forEach((b) => b.classList.toggle('on', b.dataset.sk === sel));
+    root.querySelector('#sk-go').disabled = sel === saved;
+  };
+  root.querySelectorAll('[data-sk]').forEach((b) => (b.onclick = () => { sel = b.dataset.sk; setSkin(sel, true); draw(); }));
+  root.querySelector('#sk-go').onclick = async () => {
+    const e = root.querySelector('#e10');
+    try { await api('skin', { skin: sel }); saved = sel; setSkin(sel); draw(); e.style.color = '#3fb950'; e.textContent = 'Thème appliqué à tout le monde'; }
+    catch (er) { e.style.color = ''; e.textContent = er.message; }
+  };
+  draw();
+}
 function tetris(cv, sc, over) {
   const W = 10, H = 20, C = 20; cv.width = W * C; cv.height = H * C; const x = cv.getContext('2d');
   const P = [[[1, 1, 1, 1]], [[1, 1], [1, 1]], [[0, 1, 0], [1, 1, 1]], [[1, 0, 0], [1, 1, 1]], [[0, 0, 1], [1, 1, 1]], [[0, 1, 1], [1, 1, 0]], [[1, 1, 0], [0, 1, 1]]];
@@ -1566,7 +1614,7 @@ function opInbox() {
   const pn = ov.querySelector('#opn'); if (pn) pn.onclick = async () => { try { await enablePush({ as: 'player' }); opInbox(); } catch (e) { ov.querySelector('#ne2').textContent = e.message; } };
 }
 async function opView(m) {
-  const j = await api('users'), { users, shop, custom, reports } = j; setCat(j.themes);
+  const j = await api('users'), { users, shop, custom, reports } = j; setCat(j.themes); setSkin(j.skin);
   const opts = Object.entries(CAT).map(([t, o]) => '<optgroup label="' + esc(o.name) + '">' + [...'crel'].flatMap((r) => o[r].map((n) => '<option value="' + esc(t + ':' + n) + '">' + RN[r] + ' — ' + esc(n) + '</option>')).join('') + '</optgroup>').join('');
   const list = users.map((u) => {
     const nb = u.packs + Object.values(u.bought).reduce((a, b) => a + b, 0);
@@ -1591,6 +1639,7 @@ async function opView(m) {
     '<div class="box" id="pbox"><h2>Joueurs (' + users.length + ')</h2><div id="plist"><input id="pq" placeholder="🔎 Taper le nom d\'un joueur" style="width:100%;margin-bottom:8px" autocomplete="off"><div id="pls">' + list + '</div></div><div id="pf" class="opf"></div></div>' +
     mkbox +
     snOpHTML() +
+    skinOpHTML() +
     pfbox +
     '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + ' — 🪙 ' + u.coins + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="ca" multiple size="6" aria-label="Cartes"></select><small id="ch"></small><button>Valider</button><div class="err" id="e"></div></form>' +
     '<form class="box" id="fm" style="display:grid;gap:10px"><h2>Envoyer une notification</h2><select id="mt"><option value="*">Tous les joueurs</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="mx" maxlength="200" placeholder="Message" required><button>Envoyer</button><div class="err" id="e5"></div></form>' +
@@ -1624,6 +1673,7 @@ async function opView(m) {
         + (p.same && p.same.length ? '<p class="err" style="min-height:0">⚠️ Même IP que : ' + p.same.map(esc).join(', ') + '</p>' : '')
         + banHtml
         + '<div class="row"><label>🪙 Coins <input type="number" min="0" id="pf-co" value="' + p.coins + '"></label><label>📦 Sachets gratuits <input type="number" min="0" id="pf-pk" value="' + p.packs + '"></label></div>'
+        + (p.race ? '<div class="row"><b>🏁 Packs de course offerts : <span id="pf-rx">' + p.rx + '</span></b><input type="number" min="1" max="50" id="pf-rn" value="5" style="width:84px" aria-label="Nombre de packs de course"><button type="button" id="pf-rg">Donner</button><button type="button" class="g" id="pf-rt">Retirer</button></div><small>Cadeau ponctuel, en plus du pack gratuit de l’heure : le joueur les ouvre quand il veut, puis tout redevient normal (1 pack par heure).</small>' : '')
         + '<div class="row"><label>⚔️ Défis par jour (limite) <input type="number" min="0" id="pf-dl" value="' + p.dl.max + '"></label><small>' + p.dl.left + ' restant' + (p.dl.left > 1 ? 's' : '') + ' aujourd\'hui</small></div>'
         + '<details><summary>🛒 Sachets achetés (' + Object.values(p.bought).reduce((a, x) => a + x, 0) + ')</summary><table>' + ths.map(([t, o]) => '<tr><td>' + o.icon + ' ' + esc(o.name) + '</td><td><input type="number" min="0" data-pb="' + esc(t) + '" value="' + (p.bought[t] || 0) + '"></td></tr>').join('') + '</table></details>'
         + '<details><summary>♻️ Renaissances (' + rbTot + ')</summary><table>' + ths.map(([t, o]) => '<tr><td>' + o.icon + ' ' + esc(o.name) + '</td><td><input type="number" min="0" data-pr="' + esc(t) + '" value="' + (p.rb[t] || 0) + '"></td></tr>').join('') + '</table></details>'
@@ -1640,6 +1690,8 @@ async function opView(m) {
       };
       if ($('#pf-ub')) $('#pf-ub').onclick = async () => { try { await api('unban', { pseudo: p.pseudo }); await banDone('Ban levé'); } catch (er) { $('#epf').style.color = ''; $('#epf').textContent = er.message; } };
       $('#pf-gm').onclick = () => pf.querySelectorAll('[data-pg]').forEach((e) => (e.value = e.dataset.max));
+      const rg = (mode) => async () => { try { await api('giverace', { pseudo: p.pseudo, n: $('#pf-rn').value, mode }); await openFiche(p.pseudo); const e2 = $('#epf'); e2.style.color = '#3fb950'; e2.textContent = mode === 'take' ? 'Packs retirés' : 'Packs de course offerts'; } catch (er) { $('#epf').style.color = ''; $('#epf').textContent = er.message; } };
+      if ($('#pf-rg')) { $('#pf-rg').onclick = rg('give'); $('#pf-rt').onclick = rg('take'); }
       $('#pf-aa').onclick = () => {
         const id = $('#pf-ac').value, n = Math.max(1, Math.floor(+$('#pf-an').value) || 1), ex = [...pf.querySelectorAll('[data-pc]')].find((e) => e.dataset.pc === id);
         if (ex) ex.value = (+ex.value || 0) + n; else $('#pf-ct').insertAdjacentHTML('afterbegin', cardRow(id, n));
@@ -1734,9 +1786,9 @@ async function opView(m) {
     const L = allIds.filter((id) => (!q || cn2(id).toLowerCase().includes(q)) && (!z || id.startsWith(z + ':')) && (!r || RAR[id] === r));
     L.slice(0, pickN).forEach((id) => {
       const w = document.createElement('div'); w.className = 'mkc'; w.style.cursor = 'pointer'; w.style.borderRadius = '10px';
-      if (id === pick) w.style.outline = '3px solid #2a5bd7';
+      if (id === pick) w.style.outline = '3px solid var(--ac)';
       w.append(cardEl(id));
-      w.onclick = () => { pick = id; [...g.children].forEach((c) => (c.style.outline = '')); w.style.outline = '3px solid #2a5bd7'; $('#mkps').innerHTML = '✅ Carte choisie : <b>' + esc(cn2(id)) + '</b> (' + RN[RAR[id]] + ' · ' + esc((CAT[id.slice(0, id.indexOf(':'))] || {}).name || '?') + ')'; };
+      w.onclick = () => { pick = id; [...g.children].forEach((c) => (c.style.outline = '')); w.style.outline = '3px solid var(--ac)'; $('#mkps').innerHTML = '✅ Carte choisie : <b>' + esc(cn2(id)) + '</b> (' + RN[RAR[id]] + ' · ' + esc((CAT[id.slice(0, id.indexOf(':'))] || {}).name || '?') + ')'; };
       g.append(w);
     });
     $('#mkpm').innerHTML = L.length > pickN ? '<button type="button" class="g" id="mkpmore">Voir plus (' + (L.length - pickN) + ' autres cartes)</button>' : L.length ? '' : '<small>Aucune carte trouvée.</small>';
@@ -1763,7 +1815,7 @@ async function opView(m) {
   $('#fr').onsubmit = act('e6', () => api('rename', { pseudo: $('#ru').value, name: $('#rnn').value }), 'Pseudo changé');
   app.querySelectorAll('[data-du]').forEach((b) => (b.onclick = (e) => { if (confirm('Supprimer définitivement le compte ' + b.dataset.du + ' ?')) act('e', () => api('deluser', { pseudo: b.dataset.du }), 'Compte supprimé')(e); }));
   // --- Catégories (au lieu d'une seule longue page) : 5 onglets qui tiennent sur 2 lignes maximum, sans glisser
-  const OC = [['b', '🛒 Boutique', ['Boutique', 'Collection provisoire', 'Objet en boutique']], ['j', '👥 Joueurs', ['Joueurs', 'Photos de profil', 'Donner ou retirer', 'Changer le pseudo']], ['m', '✉️ Messages', ['Envoyer une notification']], ['s', '🚩 Signalements', ['Signalements']], ['c', '🎴 Cartes', ['Panneau Cartes']], ['k', '🏪 Marché', ['Marché']], ['x', '🔧 Maintenance', ['Maintenance']], ['n', '🐍 Snake', ['Snake']]];
+  const OC = [['b', '🛒 Boutique', ['Boutique', 'Collection provisoire', 'Objet en boutique']], ['j', '👥 Joueurs', ['Joueurs', 'Photos de profil', 'Donner ou retirer', 'Changer le pseudo']], ['m', '✉️ Messages', ['Envoyer une notification']], ['s', '🚩 Signalements', ['Signalements']], ['c', '🎴 Cartes', ['Panneau Cartes']], ['k', '🏪 Marché', ['Marché']], ['x', '🔧 Maintenance', ['Maintenance']], ['n', '🐍 Snake', ['Snake']], ['t', '🎨 Thème', ['Thème de l']]];
   const bar = app.querySelector('.bar'), dmBox = document.createElement('div');
   dmBox.className = 'box'; dmBox.id = 'opdm'; dmBox.innerHTML = '<h2>👁️ Voir les messages des joueurs</h2><div id="opdl">Chargement…</div><div id="opdt"></div>';
   app.append(dmBox);
@@ -1801,6 +1853,7 @@ async function opView(m) {
   };
   showOc();
   snOp();
+  skinOp(j.skin);
   opOn = true; opBell().catch(() => {});
   if (m) { const [i, t] = m.split('|'), el = $('#' + i); el.style.color = '#3fb950'; el.textContent = t; }
 }
