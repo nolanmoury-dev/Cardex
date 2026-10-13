@@ -16,13 +16,14 @@ const DAY = 864e5, MAXP = 10, PRICE = 100, PACK = 5, OPEN_MAX = 50;
 // Connexion quotidienne : jour 1 à 7 (heure de Paris). Un jour raté remet la série à zéro ; après le jour 7 on repart au jour 1.
 const DAILY = [10, 20, 30, 40, 50, 60, 200];
 const prevDay = (d) => new Date(Date.parse(d + 'T12:00:00Z') - DAY).toISOString().slice(0, 10);
-const dyInfo = (u) => { if (u.bot) return null; const t = parisDay(), s = u.ds, claimed = !!(s && s.d === t); return { day: claimed ? s.n : s && s.d === prevDay(t) ? (s.n % 7) + 1 : 1, claimed, rew: DAILY }; };
+const dyInfo = (u) => { if (u.bot || u.pseudo === OP_NAME) return null; const t = parisDay(), s = u.ds, claimed = !!(s && s.d === t); return { day: claimed ? s.n : s && s.d === prevDay(t) ? (s.n % 7) + 1 : 1, claimed, rew: DAILY }; };
 // Favorites gardées après une renaissance (livret Favoris) : leur valeur monte progressivement jusqu'à ×5 en 7 jours
 // Course de la semaine : 1 pack de course par heure (non cumulable), chaque pack fait avancer la voiture de +1, +2, +5 ou +10 (de plus en plus rare)
+const SKINS = ['rose', 'ete', 'halloween']; // thèmes de saison que l'opérateur peut activer pour tout le monde
 const RACE_HOUR = 36e5, CAR_COST = 200; // pas de ligne d'arrivée : celui qui est le plus loin à la fin de la semaine gagne
 const raceWeek = () => { const d = new Date(parisDay() + 'T12:00:00Z'); return new Date(d - ((d.getUTCDay() + 6) % 7) * DAY).toISOString().slice(0, 10); }; // lundi (Paris) de la semaine en cours
 const raceEnd = () => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(new Date()).map((x) => [x.type, x.value])), dow = (new Date(parisDay() + 'T12:00:00Z').getUTCDay() + 6) % 7; return Date.now() + ((6 - dow) * 86400 + 86400 - ((+p.hour % 24) * 3600 + +p.minute * 60 + +p.second)) * 1000; };
-const raceView = (u) => { if (u.bot) return null; const w = raceWeek(), r = u.rc && u.rc.w === w ? u.rc : null, next = (u.rcT || 0) + RACE_HOUR; return { w, pos: r ? r.pos : 0, car: u.car || null, next, ready: Date.now() >= next, end: raceEnd(), cost: CAR_COST }; };
+const raceView = (u) => { if (u.bot || u.pseudo === OP_NAME) return null; const w = raceWeek(), r = u.rc && u.rc.w === w ? u.rc : null, next = (u.rcT || 0) + RACE_HOUR, x = u.rcX || 0; return { w, pos: r ? r.pos : 0, car: u.car || null, next, x, ready: x > 0 || Date.now() >= next, end: raceEnd(), cost: CAR_COST }; }; // x = packs offerts par le staff (en plus du pack gratuit de l'heure)
 const racePrevWeek = () => new Date(Date.parse(raceWeek() + 'T12:00:00Z') - 7 * DAY).toISOString().slice(0, 10);
 const PFP_COST = 500; // photo de profil : 1re gratuite, 2e payante, 3e et + vérifiées par l'opérateur
 const FK_DAYS = 7, FK_MAX = 5;
@@ -279,7 +280,7 @@ const price = (sh, t, cat) => Math.round((PRICE * 2 ** (lvOf(cat, t) - 1) * (100
 // boutique d'un joueur : un seul sachet par ligne (celui de son niveau) ; les anciens ne restent que s'il en reste d'achetés
 const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t), ob = cat[t]; if (ob && ob.until != null && !ob.base && ((u.rb || {})[t] || 0) >= 1) return false; return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
 const view = (u, sh, cat, cu, mk) => ({
-  market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => (x.seller === u.pseudo && !x.staff) || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))).map((x) => (x.staff ? { ...x, seller: '' } : x)), inbox: u.inbox || [],
+  market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => x.seller === u.pseudo || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))), inbox: u.inbox || [],
   dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, pf: u.pf || null, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
   next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), cards: u.cards, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
@@ -507,7 +508,7 @@ const handler = async (req, res) => {
         const names = (await redis.smembers('users')).sort();
         const list = names.length ? await redis.mget(...names.map(key)) : [];
         const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u), pf: !!u.pf }; });
-        return ok({ maint: !!(await redis.get('maint')), maintinfo: (await redis.get('maintinfo')) || { presets: [], msg: '' }, maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
+        return ok({ skin: (await redis.get('skin')) || null, maint: !!(await redis.get('maint')), maintinfo: (await redis.get('maintinfo')) || { presets: [], msg: '' }, maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
       }
       if (b.action === 'shop') {
         if (!cat[b.theme] || b.theme === 'obj') return fail('Thème inconnu');
@@ -635,13 +636,33 @@ const handler = async (req, res) => {
         await redis.set('market', ((await redis.get('market')) || []).filter((x) => x.seller !== u.pseudo));
         return ok({ done: true });
       }
+      if (b.action === 'giverace') {
+        const u = await redis.get(key(String(b.pseudo || '')));
+        if (!u) return fail('Joueur introuvable');
+        if (!raceView(u)) return fail("Ce compte ne participe pas à la course (bot ou opérateur)");
+        const n = int(b.n, 50);
+        if (n < 1) return fail('Choisis un nombre de packs entre 1 et 50');
+        const take = b.mode === 'take', cur = u.rcX || 0;
+        if (take && cur < 1) return fail("Ce joueur n'a aucun pack de course offert à retirer");
+        const done = take ? Math.min(n, cur) : n;
+        u.rcX = take ? cur - done : Math.min(500, cur + done);
+        note(u, take ? '⚠️ Le staff t’a retiré ' + done + ' pack' + (done > 1 ? 's' : '') + ' de course' : '🎁 Le staff t’a offert ' + done + ' pack' + (done > 1 ? 's' : '') + ' de course : tu peux les ouvrir dans Social › Course');
+        await redis.set(key(u.pseudo), u);
+        return ok({ done: true, rx: u.rcX });
+      }
+      if (b.action === 'skin') {
+        const k = String(b.skin || '');
+        if (k && !SKINS.includes(k)) return fail('Thème inconnu');
+        if (k) await redis.set('skin', k); else await redis.del('skin');
+        return ok({ done: true, skin: k || null });
+      }
       if (b.action === 'pinfo') {
         const u = await redis.get(key(String(b.pseudo || '')));
         if (!u) return fail('Joueur introuvable');
         tick(u);
         const nms = await redis.smembers('users'), all = nms.length ? await redis.mget(...nms.map(key)) : [];
         const same = (u.ips || []).length ? all.filter((x) => x && x.pseudo !== u.pseudo && (x.ips || []).some((h) => u.ips.includes(h))).map((x) => x.pseudo) : [];
-        return ok({ p: { seen: u.bot ? u.lastAct || 0 : u.seen || 0, ban: banOf(u), same, pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards || {}, rb: u.rb || {}, rl: rlInfo(u).left, dl: { left: dlInfo(u).left, max: dlInfo(u).max }, mg: mgInfo(u), renames: u.renames || 0 }, max: { rl: RL_MAX, mg: MG_MAX } });
+        return ok({ p: { seen: u.bot ? u.lastAct || 0 : u.seen || 0, ban: banOf(u), same, pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards || {}, rb: u.rb || {}, rl: rlInfo(u).left, dl: { left: dlInfo(u).left, max: dlInfo(u).max }, mg: mgInfo(u), renames: u.renames || 0, race: !!raceView(u), rx: u.rcX || 0 }, max: { rl: RL_MAX, mg: MG_MAX } });
       }
       if (b.action === 'pset') {
         const u = await redis.get(key(String(b.pseudo || '')));
@@ -939,7 +960,7 @@ const handler = async (req, res) => {
       if (!v.ready) return fail('Ton prochain pack de course arrive dans ' + Math.ceil((v.next - Date.now()) / 6e4) + ' min');
       const x = crypto.randomInt(100), gain = x < 55 ? 1 : x < 85 ? 2 : x < 97 ? 5 : 10, to = v.pos + gain, now = Date.now();
       if (u.rc && u.rc.w !== v.w) u.rcPrev = u.rc; // on garde le score de la semaine précédente pour désigner le vainqueur
-      u.rc = { w: v.w, pos: to, tt: now }; u.rcT = now;
+      u.rc = { w: v.w, pos: to, tt: now }; if ((u.rcX || 0) > 0) u.rcX--; else u.rcT = now; // les packs offerts partent en premier : le compte à rebours du pack gratuit ne bouge pas
       extra = { gain, from: v.pos, to, rar: { 1: 'c', 2: 'r', 5: 'e', 10: 'l' }[gain] };
     } else if (b.action === 'carcolor') {
       const c = String(b.color || '').toLowerCase();
@@ -949,7 +970,7 @@ const handler = async (req, res) => {
       u.coins -= CAR_COST; u.car = c;
     } else if (b.action === 'racelb') {
       const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], w = raceWeek();
-      const pw = racePrevWeek(), real = list.filter((v) => v && !v.bot && (v.pseudo !== OP_NAME || u.pseudo === OP_NAME) && !banOf(v));
+      const pw = racePrevWeek(), real = list.filter((v) => v && !v.bot && v.pseudo !== OP_NAME && !banOf(v));
       const all = real.map((v) => { const r = v.rc && v.rc.w === w ? v.rc : null; return { pseudo: v.pseudo, pos: r ? r.pos : 0, tt: (r && r.tt) || 0, car: v.car || null, pf: v.pf || null }; })
         .sort((a, c) => c.pos - a.pos || (a.tt || 9e15) - (c.tt || 9e15) || a.pseudo.localeCompare(c.pseudo)) // le plus loin devant ; à égalité, celui qui y est arrivé le premier
         .map((x, i) => ({ ...x, rank: i + 1 }));
@@ -958,17 +979,18 @@ const handler = async (req, res) => {
       if (me && !rows.includes(me)) rows.push(me);
       extra = { race: { rows: rows.map((x, i) => (i < 10 || x === me ? x : { ...x, pf: null })), total: all.length, end: raceEnd(), last: last && { pseudo: last.pseudo, pos: last.pos } } };
     } else if (b.action === 'pfp') {
+      if (u.pseudo === OP_NAME) return fail("L'opérateur n'a pas de photo de profil");
       const img = String(b.img || '');
       if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(img) || img.length > 24000) return fail('Image invalide ou trop lourde : choisis une autre photo');
       const n = u.pfpN || 0;
-      if (n >= 2 && u.pseudo !== OP_NAME) { // 3e changement et suivants : l'opérateur vérifie avant d'afficher
+      if (n >= 2) { // 3e changement et suivants : l'opérateur vérifie avant d'afficher
         if (u.pfpReq) return fail('Une demande est déjà en attente de vérification');
         u.pfpReq = { img, t: Date.now() };
         const q = (await redis.get('pfpq')) || []; if (!q.includes(u.pseudo)) { q.push(u.pseudo); await redis.set('pfpq', q); }
         await opNote('🖼️ ' + u.pseudo + ' demande à changer sa photo de profil : à vérifier dans Opérateur → Joueurs → Photos de profil');
         extra = { pending: true };
       } else {
-        if (n === 1 && u.pseudo !== OP_NAME) { if (u.coins < PFP_COST) return fail('Pas assez de coins : ' + PFP_COST + ' 🪙 pour ce changement'); u.coins -= PFP_COST; }
+        if (n === 1) { if (u.coins < PFP_COST) return fail('Pas assez de coins : ' + PFP_COST + ' 🪙 pour ce changement'); u.coins -= PFP_COST; }
         u.pf = img; u.pfpN = n + 1; extra = { applied: true };
       }
     } else if (b.action === 'daily') {
@@ -1026,7 +1048,7 @@ const handler = async (req, res) => {
       const pr = int(b.price, 1e6);
       if (pr < 1) return fail('Prix invalide');
       if (!u.cards[b.card]) return fail('Carte non possédée');
-      if (mk.filter((x) => x.seller === u.pseudo && !x.staff).length >= 20) return fail('20 annonces maximum');
+      if (mk.filter((x) => x.seller === u.pseudo).length >= 20) return fail('20 annonces maximum');
       rm(u, b.card, 1);
       mk.push({ id: crypto.randomBytes(6).toString('hex'), seller: u.pseudo, card: b.card, price: pr, t: Date.now() });
       await redis.set('market', mk);
@@ -1095,7 +1117,7 @@ const handler = async (req, res) => {
       const gv = b.give, w = String(b.want || '');
       if (!u.cards[gv]) return fail('Carte non possédée');
       if (!rarOf(cat, w) || w.startsWith('obj:') || gv === w || !knownId(u, cat, w)) return fail('Carte demandée invalide');
-      if (mk.filter((x) => x.seller === u.pseudo && !x.staff).length >= 20) return fail('20 annonces maximum');
+      if (mk.filter((x) => x.seller === u.pseudo).length >= 20) return fail('20 annonces maximum');
       let to = null, tv = null;
       if (b.to) {
         tv = await redis.get(key(String(b.to)));
@@ -1143,7 +1165,7 @@ const handler = async (req, res) => {
       const v = await redis.get(key(x.seller));
       if (v) { add(v, x.card, 1); await dmPush(u, v, '❌ Échange refusé : ' + cn(x.card) + ' contre ' + cn(x.want), true); note(v, '❌ ' + u.pseudo + ' a refusé ton échange : ta carte t\'est rendue'); await redis.set(key(v.pseudo), v); }
     } else if (b.action === 'unlist') {
-      const x = mk.find((y) => y.id === b.id && y.seller === u.pseudo && !y.staff);
+      const x = mk.find((y) => y.id === b.id && y.seller === u.pseudo);
       if (!x) return fail('Annonce introuvable');
       mk = mk.filter((y) => y !== x); add(u, x.card, 1);
       await redis.set('market', mk);
@@ -1151,7 +1173,7 @@ const handler = async (req, res) => {
       const x = mk.find((y) => y.id === b.id);
       if (!x || !knownId(u, cat, x.card)) return fail('Annonce déjà vendue ou retirée');
       if (x.want) return fail("C'est une offre d'échange");
-      if (x.seller === u.pseudo && !x.staff) return fail("C'est ta propre annonce");
+      if (x.seller === u.pseudo) return fail("C'est ta propre annonce");
       if (u.coins < x.price) return fail('Pas assez de coins');
       mk = mk.filter((y) => y !== x);
       await redis.set('market', mk);
@@ -1226,7 +1248,7 @@ const handler = async (req, res) => {
 
     if (b.action === 'me') { extra = { notifs: u.notifs }; u.notifs = []; }
     await redis.set(key(u.pseudo), u);
-    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), maint: maintOn, maintinfo: maintOn ? await maintInfo() : null } });
+    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), maint: maintOn, maintinfo: maintOn ? await maintInfo() : null, skin: (await redis.get('skin')) || null } });
   } catch (e) {
     console.error(e);
     return fail('Erreur serveur : ' + e.message, 500);
