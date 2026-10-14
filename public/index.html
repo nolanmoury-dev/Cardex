@@ -231,6 +231,9 @@ details.fvb{border-color:var(--l)}details.fvb>summary{color:var(--l)}
 :root[data-sk=ete]{--ac:#ff9500;--ac2:#ffd23f;--acf:#1d1200;--ske:" 🌞"}
 :root[data-sk=ete][data-th=dark]{--bg:#06222c;--panel:#0c3445;--line:#1a5b72;--cb:#092b3a;--txt:#e9fbff;--dim:#86bccc}
 :root[data-sk=ete][data-th=light]{--bg:#fff6d6;--panel:#fffdf2;--line:#f1dc92;--cb:#ffefb8;--txt:#2b2100;--dim:#85691a}
+:root[data-sk=hiver]{--ac:#4aa8ff;--ac2:#9ad0ff;--acf:#04101d;--ske:" ❄️"}
+:root[data-sk=hiver][data-th=dark]{--bg:#0a1624;--panel:#122338;--line:#23405f;--cb:#0e1c2e;--txt:#e8f3ff;--dim:#8fb0cf}
+:root[data-sk=hiver][data-th=light]{--bg:#eef6ff;--panel:#fff;--line:#c4dcf2;--cb:#deedfb;--txt:#0c2036;--dim:#55748f;--ac:#1d78d6;--ac2:#6fb4f0;--acf:#fff}
 :root[data-sk=halloween]{--ac:#ff7a1a;--ac2:#ffb36b;--acf:#1a0a00;--ske:" 🎃"}
 :root[data-sk=halloween][data-th=dark]{--bg:#110a17;--panel:#1c1226;--line:#3b2352;--cb:#160e1f;--txt:#f4eaff;--dim:#ab93c4}
 :root[data-sk=halloween][data-th=light]{--bg:#fff0de;--panel:#fffaf2;--line:#efcfa3;--cb:#ffe4c4;--txt:#2a1300;--dim:#8a5a2b;--ac:#d9480f;--ac2:#ff9a5c;--acf:#fff}
@@ -250,13 +253,33 @@ const pfImg = (p) => (p ? '<img class="pf" src="' + p + '" alt="">' : '');
 let tok = localStorage.tok, isOp = localStorage.op === '1', asP = localStorage.asp === '1', S, CAT = {}, RAR = {}, tab = 'shop', timer, sort = 'def', openT = new Set();
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-// --- Thème de saison (choisi par l'opérateur, identique pour tous) : Octobre rose, Hyper été, Halloween
-const SKINS = { rose: '🎀', ete: '🌞', halloween: '🎃' };
+// --- Thème de saison (choisi par l'opérateur, identique pour tous) : Octobre rose, Été, Hiver, Halloween + thèmes créés par l'opérateur
+const SKINS = { rose: '🎀', ete: '🌞', hiver: '❄️', halloween: '🎃' };
+let SKC = {}, SKK = '', SKPV = false; // SKC : thèmes personnalisés connus ; SKK : thème affiché ; SKPV : aperçu opérateur en cours
+try { const d = JSON.parse(localStorage.skd || 'null'); if (d && d.id) SKC[d.id] = d; } catch {}
 function metaTheme() { const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#10141c'; }
+function hsl(h, s, l) { s /= 100; l /= 100; const a = s * Math.min(l, 1 - l), f = (n) => { const k = (n + h / 30) % 12; return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); }; return '#' + [f(0), f(8), f(4)].map((x) => Math.round(x * 255).toString(16).padStart(2, '0')).join(''); }
+function skinPal(hex) {
+  const r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0; if (d) h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) * 60 : mx === g ? ((b - r) / d + 2) * 60 : ((r - g) / d + 4) * 60;
+  const gray = d < 0.06 ? 0.25 : 1, lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  return {
+    ac2: hsl(h, 80, 72), acf: lum > 0.6 ? '#1a1a1a' : '#fff',
+    dark: { bg: hsl(h, 38 * gray, 8), panel: hsl(h, 34 * gray, 13), line: hsl(h, 30 * gray, 24), cb: hsl(h, 36 * gray, 10), txt: hsl(h, 60 * gray, 95), dim: hsl(h, 22 * gray, 68) },
+    light: { bg: hsl(h, 100 * gray, 96), panel: hsl(h, 100 * gray, 99), line: hsl(h, 60 * gray, 85), cb: hsl(h, 100 * gray, 92), txt: hsl(h, 50 * gray, 12), dim: hsl(h, 25 * gray, 36) },
+  };
+}
+function skinCss(c) {
+  const p = skinPal(c.ac), v = (o) => Object.entries(o).map(([k, x]) => '--' + k + ':' + x).join(';'), e = String(c.emoji || '').replace(/["'\\<>&]/g, '');
+  return ':root[data-sk=custom]{--ac:' + c.ac + ';--ac2:' + p.ac2 + ';--acf:' + p.acf + ';--ske:"' + (e ? ' ' + e : '') + '"}:root[data-sk=custom][data-th=dark]{' + v(p.dark) + '}:root[data-sk=custom][data-th=light]{' + v(p.light) + '}';
+}
 function setSkin(k, preview) {
-  k = SKINS[k] ? k : '';
-  if (k) document.documentElement.dataset.sk = k; else delete document.documentElement.dataset.sk;
-  if (!preview) { try { if (k) localStorage.sk = k; else localStorage.removeItem('sk'); } catch {} }
+  const c = SKC[k]; k = SKINS[k] || c ? k : ''; SKK = k; SKPV = !!preview;
+  const root = document.documentElement;
+  if (c) root.dataset.sk = 'custom'; else if (k) root.dataset.sk = k; else delete root.dataset.sk;
+  let st = document.getElementById('skx'); if (!st) { st = document.createElement('style'); st.id = 'skx'; document.head.appendChild(st); }
+  st.textContent = c ? skinCss(c) : '';
+  if (!preview) { try { if (k) { localStorage.sk = k; if (c) localStorage.skd = JSON.stringify(c); else localStorage.removeItem('skd'); } else { localStorage.removeItem('sk'); localStorage.removeItem('skd'); } } catch {} }
   metaTheme();
 }
 function setTheme(t) { document.documentElement.dataset.th = t; localStorage.th = t; metaTheme(); }
@@ -267,7 +290,7 @@ async function flip() {
   if (!isOp) try { await api('settings', { theme: t }); } catch {}
 }
 function setCat(c) { CAT = c; RAR = {}; for (const [t, o] of Object.entries(CAT)) [...'crel'].forEach((r) => o[r].forEach((n) => (RAR[t + ':' + n] = r))); }
-function setS(s) { S = s; setCat(s.themes); if (s.theme && s.theme !== localStorage.th) setTheme(s.theme); if (s.skin !== undefined && (s.skin || '') !== (document.documentElement.dataset.sk || '')) setSkin(s.skin); }
+function setS(s) { S = s; setCat(s.themes); if (s.theme && s.theme !== localStorage.th) setTheme(s.theme); if (s.skin !== undefined && !SKPV) { if (s.skind) SKC[s.skind.id] = s.skind; if ((s.skin || '') !== SKK || (s.skind && localStorage.skd !== JSON.stringify(s.skind))) setSkin(s.skin); } }
 
 async function api(action, d = {}) {
   const r = await fetch('/api/game', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, token: tok, ...(isOp && asP ? { as: 'player' } : {}), ...d }) });
@@ -346,7 +369,7 @@ function shopHTML() {
   const packs = Object.entries(S.shop).map(([t, sh]) => {
     const o = CAT[t];
     const pr = sh.nobuy ? '<b>Ancien niveau</b> : plus en vente, tu peux ouvrir ceux qu\'il te reste' : sh.blocked ? '<b class="err">Indisponible pour le moment</b>' : sh.discount ? '<s>' + sh.full + '</s> <b>' + sh.price + ' coins</b> <span class="pill">-' + sh.discount + '%</span>' : '<b>' + sh.price + ' coins</b>';
-    return '<div class="box"><div class="pk" style="--pc:' + o.color + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (sh.lvl > 1 ? ' <span class="pill">Niveau ' + sh.lvl + '/5</span>' : '') + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes' + (sh.lvl > 1 ? ' d\'une collection différente à chaque niveau' : '') + '. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || sh.nobuy || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button>' + (packsOf(t) >= 2 && !sh.blocked ? '<input type="number" inputmode="numeric" data-nn="' + t + '" min="1" max="' + Math.min(50, packsOf(t)) + '" value="' + Math.min(5, packsOf(t)) + '" style="width:72px" aria-label="Nombre de sachets à ouvrir"><button class="g" data-om="' + t + '">Ouvrir ce nombre</button><button class="g" data-oa="' + t + '">Tout ouvrir (' + Math.min(50, packsOf(t)) + ')</button>' : '') + '</div></div>';
+    return '<div class="box"><div class="pk" style="--pc:' + pkc(o, sh.lvl) + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (sh.lvl > 1 ? ' <span class="pill">Niveau ' + sh.lvl + '/5</span>' : '') + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes' + (sh.lvl > 1 ? ' d\'une collection différente à chaque niveau' : '') + '. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || sh.nobuy || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button>' + (packsOf(t) >= 2 && !sh.blocked ? '<input type="number" inputmode="numeric" data-nn="' + t + '" min="1" max="' + Math.min(50, packsOf(t)) + '" value="' + Math.min(5, packsOf(t)) + '" style="width:72px" aria-label="Nombre de sachets à ouvrir"><button class="g" data-om="' + t + '">Ouvrir ce nombre</button><button class="g" data-oa="' + t + '">Tout ouvrir (' + Math.min(50, packsOf(t)) + ')</button>' : '') + '</div></div>';
   }).join('');
   const objs = S.objs.length ? '<h2>Objets</h2><div class="grid2">' + S.objs.map((x) => '<div class="box"><b style="color:var(--' + x.r + ')">' + esc(x.name) + '</b> — ' + RN[x.r] + '<p>' + x.price + ' coins' + (x.stock != null ? (x.stock > 0 ? ' · Reste ' + x.stock : ' · Épuisé') : '') + '</p><button data-ob="' + esc('obj:' + x.name) + '"' + (S.coins < x.price || (x.stock != null && x.stock <= 0) ? ' disabled' : '') + '>Acheter</button></div>').join('') + '</div>' : '';
   return '<div class="box"><p>Un sachet gratuit toutes les 10 à 14 minutes (10 maximum, 2 h pour tout remplir). Sachets gratuits : <b>' + S.packs + '/10</b>. <span id="cd"></span></p></div><div class="grid2">' + packs + '</div>' + objs;
@@ -941,7 +964,7 @@ function ownedEl(id) {
   return el;
 }
 function playerView() {
-  clearInterval(timer);
+  clearInterval(timer); setTimeout(showUpdate, 600);
   if (S.ban) tab = 'set'; else if (S.maint && tab !== 'col' && tab !== 'set' && tab !== 'rk') tab = 'col';
   app.classList.toggle('mt', !!(S.maint || S.ban));
   app.innerHTML = head() + (S.ban ? banBox() : S.maint ? maintBox() : '') + { shop: shopHTML, col: colHTML, mk: mkHTML, jeu: jeuHTML, rk: rkHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
@@ -1099,9 +1122,34 @@ function playerView() {
     $('#frp').onsubmit = (e) => { e.preventDefault(); run(async () => { const idea = $('#rc').value === 'idea'; await api('report', { text: $('#rt').value, cat: idea ? 'idea' : 'bug' }); msg(idea ? 'Idée envoyée au staff, merci !' : 'Signalement envoyé au staff', true); $('#frp').reset(); }); };
   }
 }
+// =====================================================================================================================
+// # À TOUS CEUX QUI TOUCHENT À CE CODE (règle de l'opérateur, valable à partir du 14/10/2026) :
+// # à CHAQUE mise à jour visible par les joueurs, ajoutez une entrée EN HAUT de la liste UPDATES ci-dessous.
+// # Un pop-up s'affiche alors une seule fois à chaque joueur pour lui expliquer la mise à jour (titre + quelques lignes
+// # simples, en français, sans jargon). Une mise à jour sans entrée dans UPDATES = pas de pop-up = règle non respectée.
+// # `v` doit être unique et change à chaque mise à jour (ex. la date AAAA-MM-JJ, avec -2, -3… s'il y en a plusieurs le même jour).
+// =====================================================================================================================
+const UPDATES = [
+  { v: '2026-10-14', title: 'Nouveautés !', items: [
+    '🏁 Course : le staff peut t’offrir des packs de course en plus du pack gratuit de l’heure (tu les ouvres quand tu veux).',
+    '🎨 Thèmes de l’app : Octobre rose, Été, Hiver, Halloween… et des thèmes spéciaux créés par le staff, pour tout le monde.',
+    '📦 Les sachets changent de couleur quand tu montes de niveau : gris, bleu, vert, rouge…',
+    '🐍 Nouveau Snake, avec ton gain en couleur.',
+  ] },
+];
+function showUpdate() {
+  const u = UPDATES[0]; if (!u || S.ban) return;
+  let seen = ''; try { seen = localStorage.upd || ''; } catch {}
+  if (seen === u.v || document.querySelector('.ov')) return;
+  const ov = overlay('<div class="box" style="max-width:420px;margin:10vh auto"><h2>🎉 ' + esc(u.title) + '</h2><ul style="padding-left:18px;margin:8px 0 14px">' + u.items.map((x) => '<li style="margin:6px 0">' + esc(x) + '</li>').join('') + '</ul><button id="updok" style="width:100%">C’est parti !</button></div>');
+  $('#updok').onclick = () => { try { localStorage.upd = u.v; } catch {} ov.remove(); };
+}
+// Couleur du sachet selon le niveau : rien (couleur de la collection) → gris → bleu → vert → rouge → violet → or → rose → cyan
+const PKC = [null, '#8b949e', '#2a7de1', '#2ea043', '#e5484d', '#8b5cf6', '#f5b301', '#ff9ad5', '#22d3ee'];
+const pkc = (o, lv) => (lv > 1 && PKC[Math.min(9, lv) - 1]) || o.color;
 function overlay(html) { const ov = document.createElement('div'); ov.className = 'ov'; ov.innerHTML = html; document.body.append(ov); return ov; }
 function reveal(ids, t, n) {
-  const o = CAT[t], ov = overlay('<div class="pk big shake" style="--pc:' + o.color + '">' + o.icon + '</div>'), multi = (n || 1) > 1;
+  const o = CAT[t], ov = overlay('<div class="pk big shake" style="--pc:' + pkc(o, o.lv || 1) + '">' + o.icon + '</div>'), multi = (n || 1) > 1;
   setTimeout(() => {
     ov.innerHTML = ''; const g = document.createElement('div'); g.className = 'grid';
     let list = ids.map((id) => [id, 1]);
@@ -1482,25 +1530,45 @@ function snOp() {
   view(); tbl();
 }
 
-// --- Espace opérateur : choix du thème de l'app pour tous les joueurs
-const SK_LIST = [['', 'Normal', ['#10141c', '#1a202c', '#2a5bd7']], ['rose', 'Octobre rose', ['#1c1017', '#2a1620', '#d63384']], ['ete', 'Hyper été', ['#06222c', '#0c3445', '#ff9500']], ['halloween', 'Halloween', ['#110a17', '#1c1226', '#ff7a1a']]];
-const skinOpHTML = () => '<div class="box" id="skbox"><h2>🎨 Thème de l’app</h2><p>Change l’apparence pour <b>tous les joueurs</b> : ils la voient en quelques secondes, sans rien faire. Chacun garde son mode clair ou sombre, et les couleurs des raretés ne changent jamais.</p><p>Thème actuel : <b id="sk-cur"></b></p>'
-  + '<div class="skg">' + SK_LIST.map(([k, l, c]) => '<button type="button" class="g skc" data-sk="' + k + '"><span class="sw3">' + c.map((x) => '<i style="background:' + x + '"></i>').join('') + '</span><b>' + (SKINS[k] || '🎨') + ' ' + l + '</b></button>').join('') + '</div>'
-  + '<p><small>Un clic sur un thème te le montre sur ton écran seulement. Il n’est appliqué aux joueurs qu’avec le bouton ci-dessous.</small></p><div class="row"><button id="sk-go">Appliquer à tout le monde</button></div><div class="err" id="e10"></div></div>';
-function skinOp(cur) {
-  const root = $('#skbox'); if (!root) return;
-  let sel = SKINS[cur] ? cur : '', saved = sel;
-  const lab = (k) => (SK_LIST.find((x) => x[0] === k) || SK_LIST[0])[1];
+// --- Espace opérateur : choisir, créer, modifier et supprimer les thèmes de l'app (pour tous les joueurs)
+const SK_BASE = [['', 'Normal', ['#10141c', '#1a202c', '#2a5bd7']], ['rose', 'Octobre rose', ['#1c1017', '#2a1620', '#d63384']], ['ete', 'Été', ['#06222c', '#0c3445', '#ff9500']], ['hiver', 'Hiver', ['#0a1624', '#122338', '#4aa8ff']], ['halloween', 'Halloween', ['#110a17', '#1c1226', '#ff7a1a']]];
+const skinOpHTML = () => '<div class="box" id="skbox"><h2>🎨 Thème de l’app</h2><p>Change l’apparence pour <b>tous les joueurs</b> : ils la voient en quelques secondes, sans rien faire. Chacun garde son mode clair ou sombre, et les couleurs des raretés ne changent jamais.</p><div id="skbody"></div></div>';
+function skinOp(cur, list) {
+  const root = $('#skbody'); if (!root) return;
+  list = (list || []).slice(); list.forEach((d) => (SKC[d.id] = d));
+  let sel = SKINS[cur] || SKC[cur] ? cur : '', saved = sel, ed = null, msg = '', ok = false;
+  const nameOf = (k) => (SK_BASE.find((x) => x[0] === k) || [0, (SKC[k] || {}).name || 'Normal'])[1];
+  const icon = (k) => SKINS[k] || (SKC[k] ? SKC[k].emoji || '✨' : '🎨');
+  const sw = (d) => { const p = skinPal(d.ac); return [p.dark.bg, p.dark.panel, d.ac]; };
   const draw = () => {
-    root.querySelector('#sk-cur').textContent = (SKINS[saved] ? SKINS[saved] + ' ' : '') + lab(saved);
-    root.querySelectorAll('[data-sk]').forEach((b) => b.classList.toggle('on', b.dataset.sk === sel));
-    root.querySelector('#sk-go').disabled = sel === saved;
-  };
-  root.querySelectorAll('[data-sk]').forEach((b) => (b.onclick = () => { sel = b.dataset.sk; setSkin(sel, true); draw(); }));
-  root.querySelector('#sk-go').onclick = async () => {
-    const e = root.querySelector('#e10');
-    try { await api('skin', { skin: sel }); saved = sel; setSkin(sel); draw(); e.style.color = '#3fb950'; e.textContent = 'Thème appliqué à tout le monde'; }
-    catch (er) { e.style.color = ''; e.textContent = er.message; }
+    root.innerHTML = '<p>Thème actuel : <b>' + icon(saved) + ' ' + esc(nameOf(saved)) + '</b></p>'
+      + '<div class="skg">' + SK_BASE.map(([k, l, c]) => '<button type="button" class="g skc' + (sel === k ? ' on' : '') + '" data-k="' + k + '"><span class="sw3">' + c.map((x) => '<i style="background:' + x + '"></i>').join('') + '</span><b>' + (SKINS[k] || '🎨') + ' ' + l + '</b></button>').join('')
+      + list.map((d) => '<button type="button" class="g skc' + (sel === d.id ? ' on' : '') + '" data-k="' + esc(d.id) + '"><span class="sw3">' + sw(d).map((x) => '<i style="background:' + x + '"></i>').join('') + '</span><b>' + esc(d.emoji || '✨') + ' ' + esc(d.name) + '</b></button>').join('')
+      + '<button type="button" class="g skc" id="sk-new"><span class="sw3"><i style="background:transparent;display:grid;place-items:center">＋</i></span><b>Créer un thème</b></button></div>'
+      + (ed ? '<div class="box" style="margin:0 0 10px"><b>' + (ed.id ? 'Modifier le thème' : 'Nouveau thème') + '</b><div class="row" style="margin-top:8px"><input id="sk-n" maxlength="24" placeholder="Nom (ex. Noël)" value="' + esc(ed.name) + '" style="flex:1;min-width:140px"><input id="sk-e" maxlength="4" placeholder="🎄" value="' + esc(ed.emoji) + '" style="width:64px;text-align:center" aria-label="Emoji"><input id="sk-c" type="color" value="' + ed.ac + '" aria-label="Couleur principale" style="width:54px;height:42px;padding:2px"></div><p><small>Les fonds clair et sombre sont calculés à partir de la couleur principale. L’aperçu est visible sur ton écran seulement.</small></p><div class="row"><button type="button" id="sk-save">Enregistrer</button><button type="button" class="g" id="sk-cancel">Annuler</button></div></div>' : '')
+      + (!ed && SKC[sel] && list.some((d) => d.id === sel) ? '<div class="row" style="margin-bottom:10px"><button type="button" class="g" id="sk-edit">✏️ Modifier</button><button type="button" class="g" id="sk-del">🗑️ Supprimer</button></div>' : '')
+      + (ed ? '' : '<p><small>Un clic sur un thème te le montre sur ton écran seulement. Il n’est appliqué aux joueurs qu’avec le bouton ci-dessous.</small></p><div class="row"><button id="sk-go"' + (sel === saved ? ' disabled' : '') + '>Appliquer à tout le monde</button></div>')
+      + '<div class="err" id="e10" style="' + (ok ? 'color:#3fb950' : '') + '">' + esc(msg) + '</div>';
+    root.querySelectorAll('[data-k]').forEach((b) => (b.onclick = () => { sel = b.dataset.k; ed = null; msg = ''; setSkin(sel, true); draw(); }));
+    const q = (s) => root.querySelector(s), fail = (er) => { ok = false; msg = er.message; draw(); };
+    q('#sk-new').onclick = () => { ed = { id: '', name: '', emoji: '', ac: '#8b5cf6' }; msg = ''; SKC._draft = { id: '_draft', name: '', emoji: '', ac: ed.ac }; setSkin('_draft', true); draw(); };
+    if (q('#sk-n')) {
+      const live = () => { ed.name = q('#sk-n').value; ed.emoji = q('#sk-e').value; ed.ac = q('#sk-c').value; SKC._draft = { id: '_draft', name: ed.name, emoji: ed.emoji, ac: ed.ac }; setSkin('_draft', true); };
+      ['#sk-n', '#sk-e', '#sk-c'].forEach((s) => (q(s).oninput = live));
+      q('#sk-cancel').onclick = () => { ed = null; delete SKC._draft; setSkin(sel, true); draw(); };
+      q('#sk-save').onclick = async () => {
+        live();
+        try { const r = await api('skinsave', { id: ed.id, name: ed.name, emoji: ed.emoji, ac: ed.ac }); list = r.skinc; list.forEach((d) => (SKC[d.id] = d)); delete SKC._draft; sel = r.id; ed = null; ok = true; msg = 'Thème enregistré : choisis « Appliquer à tout le monde » pour le montrer aux joueurs'; setSkin(sel, true); draw(); } catch (er) { fail(er); }
+      };
+    }
+    if (q('#sk-edit')) q('#sk-edit').onclick = () => { const d = SKC[sel]; ed = { id: d.id, name: d.name, emoji: d.emoji || '', ac: d.ac }; msg = ''; draw(); };
+    if (q('#sk-del')) q('#sk-del').onclick = async () => {
+      if (!confirm('Supprimer le thème « ' + SKC[sel].name + ' » ?' + (saved === sel ? ' Il est actif : les joueurs reviendront au thème normal.' : ''))) return;
+      try { const id = sel; const r = await api('skindel', { id }); list = r.skinc; delete SKC[id]; if (saved === id) { saved = ''; setSkin('', false); } sel = saved; setSkin(sel, true); ok = true; msg = 'Thème supprimé'; draw(); } catch (er) { fail(er); }
+    };
+    if (q('#sk-go')) q('#sk-go').onclick = async () => {
+      try { await api('skin', { skin: sel }); saved = sel; setSkin(sel); ok = true; msg = 'Thème appliqué à tout le monde'; draw(); } catch (er) { fail(er); }
+    };
   };
   draw();
 }
@@ -1614,7 +1682,7 @@ function opInbox() {
   const pn = ov.querySelector('#opn'); if (pn) pn.onclick = async () => { try { await enablePush({ as: 'player' }); opInbox(); } catch (e) { ov.querySelector('#ne2').textContent = e.message; } };
 }
 async function opView(m) {
-  const j = await api('users'), { users, shop, custom, reports } = j; setCat(j.themes); setSkin(j.skin);
+  const j = await api('users'), { users, shop, custom, reports } = j; setCat(j.themes); (j.skinc || []).forEach((d) => (SKC[d.id] = d)); setSkin(j.skin);
   const opts = Object.entries(CAT).map(([t, o]) => '<optgroup label="' + esc(o.name) + '">' + [...'crel'].flatMap((r) => o[r].map((n) => '<option value="' + esc(t + ':' + n) + '">' + RN[r] + ' — ' + esc(n) + '</option>')).join('') + '</optgroup>').join('');
   const list = users.map((u) => {
     const nb = u.packs + Object.values(u.bought).reduce((a, b) => a + b, 0);
@@ -1853,7 +1921,7 @@ async function opView(m) {
   };
   showOc();
   snOp();
-  skinOp(j.skin);
+  skinOp(j.skin, j.skinc);
   opOn = true; opBell().catch(() => {});
   if (m) { const [i, t] = m.split('|'), el = $('#' + i); el.style.color = '#3fb950'; el.textContent = t; }
 }
