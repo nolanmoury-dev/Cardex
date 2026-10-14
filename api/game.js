@@ -1,3 +1,5 @@
+// # À TOUS CEUX QUI TOUCHENT À CE CODE : à chaque mise à jour visible par les joueurs, ajoutez une entrée en haut de UPDATES dans index.html
+// # (pop-up affiché une seule fois à chaque joueur pour expliquer la mise à jour). Règle de l'opérateur, valable à partir du 14/10/2026.
 const crypto = require('crypto');
 const T0 = require('../lib/cards');
 
@@ -16,14 +18,18 @@ const DAY = 864e5, MAXP = 10, PRICE = 100, PACK = 5, OPEN_MAX = 50;
 // Connexion quotidienne : jour 1 à 7 (heure de Paris). Un jour raté remet la série à zéro ; après le jour 7 on repart au jour 1.
 const DAILY = [10, 20, 30, 40, 50, 60, 200];
 const prevDay = (d) => new Date(Date.parse(d + 'T12:00:00Z') - DAY).toISOString().slice(0, 10);
-const dyInfo = (u) => { if (u.bot || u.pseudo === OP_NAME) return null; const t = parisDay(), s = u.ds, claimed = !!(s && s.d === t); return { day: claimed ? s.n : s && s.d === prevDay(t) ? (s.n % 7) + 1 : 1, claimed, rew: DAILY }; };
+const dyInfo = (u) => { if (u.bot) return null; const t = parisDay(), s = u.ds, claimed = !!(s && s.d === t); return { day: claimed ? s.n : s && s.d === prevDay(t) ? (s.n % 7) + 1 : 1, claimed, rew: DAILY }; };
 // Favorites gardées après une renaissance (livret Favoris) : leur valeur monte progressivement jusqu'à ×5 en 7 jours
 // Course de la semaine : 1 pack de course par heure (non cumulable), chaque pack fait avancer la voiture de +1, +2, +5 ou +10 (de plus en plus rare)
-const SKINS = ['rose', 'ete', 'halloween']; // thèmes de saison que l'opérateur peut activer pour tout le monde
+const SKINS = ['rose', 'ete', 'hiver', 'halloween']; // thèmes de saison que l'opérateur peut activer pour tout le monde
+const SKC_MAX = 12; // thèmes personnalisés que l'opérateur peut garder en réserve
+const skinList = async () => { const l = await redis.get('skinc'); return Array.isArray(l) ? l : []; };
+// thème actif + (si personnalisé) sa définition, pour que les joueurs puissent l'afficher
+const skinState = async () => { const k = (await redis.get('skin')) || null; if (!k || SKINS.includes(k)) return { skin: k, skind: null }; const d = (await skinList()).find((x) => x.id === k); return d ? { skin: k, skind: d } : { skin: null, skind: null }; };
 const RACE_HOUR = 36e5, CAR_COST = 200; // pas de ligne d'arrivée : celui qui est le plus loin à la fin de la semaine gagne
 const raceWeek = () => { const d = new Date(parisDay() + 'T12:00:00Z'); return new Date(d - ((d.getUTCDay() + 6) % 7) * DAY).toISOString().slice(0, 10); }; // lundi (Paris) de la semaine en cours
 const raceEnd = () => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(new Date()).map((x) => [x.type, x.value])), dow = (new Date(parisDay() + 'T12:00:00Z').getUTCDay() + 6) % 7; return Date.now() + ((6 - dow) * 86400 + 86400 - ((+p.hour % 24) * 3600 + +p.minute * 60 + +p.second)) * 1000; };
-const raceView = (u) => { if (u.bot || u.pseudo === OP_NAME) return null; const w = raceWeek(), r = u.rc && u.rc.w === w ? u.rc : null, next = (u.rcT || 0) + RACE_HOUR, x = u.rcX || 0; return { w, pos: r ? r.pos : 0, car: u.car || null, next, x, ready: x > 0 || Date.now() >= next, end: raceEnd(), cost: CAR_COST }; }; // x = packs offerts par le staff (en plus du pack gratuit de l'heure)
+const raceView = (u) => { if (u.bot) return null; const w = raceWeek(), r = u.rc && u.rc.w === w ? u.rc : null, next = (u.rcT || 0) + RACE_HOUR, x = u.rcX || 0; return { w, pos: r ? r.pos : 0, car: u.car || null, next, x, ready: x > 0 || Date.now() >= next, end: raceEnd(), cost: CAR_COST }; }; // x = packs offerts par le staff (en plus du pack gratuit de l'heure)
 const racePrevWeek = () => new Date(Date.parse(raceWeek() + 'T12:00:00Z') - 7 * DAY).toISOString().slice(0, 10);
 const PFP_COST = 500; // photo de profil : 1re gratuite, 2e payante, 3e et + vérifiées par l'opérateur
 const FK_DAYS = 7, FK_MAX = 5;
@@ -508,7 +514,7 @@ const handler = async (req, res) => {
         const names = (await redis.smembers('users')).sort();
         const list = names.length ? await redis.mget(...names.map(key)) : [];
         const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u), pf: !!u.pf }; });
-        return ok({ skin: (await redis.get('skin')) || null, maint: !!(await redis.get('maint')), maintinfo: (await redis.get('maintinfo')) || { presets: [], msg: '' }, maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
+        return ok({ ...(await skinState()), skinc: await skinList(), maint: !!(await redis.get('maint')), maintinfo: (await redis.get('maintinfo')) || { presets: [], msg: '' }, maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
       }
       if (b.action === 'shop') {
         if (!cat[b.theme] || b.theme === 'obj') return fail('Thème inconnu');
@@ -639,7 +645,7 @@ const handler = async (req, res) => {
       if (b.action === 'giverace') {
         const u = await redis.get(key(String(b.pseudo || '')));
         if (!u) return fail('Joueur introuvable');
-        if (!raceView(u)) return fail("Ce compte ne participe pas à la course (bot ou opérateur)");
+        if (!raceView(u)) return fail("Ce compte ne participe pas à la course (bot)");
         const n = int(b.n, 50);
         if (n < 1) return fail('Choisis un nombre de packs entre 1 et 50');
         const take = b.mode === 'take', cur = u.rcX || 0;
@@ -652,9 +658,30 @@ const handler = async (req, res) => {
       }
       if (b.action === 'skin') {
         const k = String(b.skin || '');
-        if (k && !SKINS.includes(k)) return fail('Thème inconnu');
+        if (k && !SKINS.includes(k) && !(await skinList()).some((x) => x.id === k)) return fail('Thème inconnu');
         if (k) await redis.set('skin', k); else await redis.del('skin');
         return ok({ done: true, skin: k || null });
+      }
+      if (b.action === 'skinsave') {
+        const name = String(b.name || '').trim().slice(0, 24), emoji = String(b.emoji || '').replace(/["'\\<>&]/g, '').trim().slice(0, 8), ac = String(b.ac || '');
+        if (!name) return fail('Donne un nom au thème');
+        if (!/^#[0-9a-fA-F]{6}$/.test(ac)) return fail('Couleur invalide');
+        const list = await skinList(), id = String(b.id || '');
+        const i = id ? list.findIndex((x) => x.id === id) : -1;
+        if (id && i < 0) return fail('Thème introuvable');
+        if (i < 0 && list.length >= SKC_MAX) return fail('Maximum ' + SKC_MAX + ' thèmes personnalisés : supprime-en un');
+        const d = { id: i < 0 ? 'c' + Date.now().toString(36) : id, name, emoji, ac: ac.toLowerCase() };
+        if (i < 0) list.push(d); else list[i] = d;
+        await redis.set('skinc', list);
+        return ok({ done: true, skinc: list, id: d.id });
+      }
+      if (b.action === 'skindel') {
+        const id = String(b.id || ''), list = await skinList();
+        if (!list.some((x) => x.id === id)) return fail('Thème introuvable');
+        const nl = list.filter((x) => x.id !== id);
+        if (nl.length) await redis.set('skinc', nl); else await redis.del('skinc');
+        if ((await redis.get('skin')) === id) await redis.del('skin'); // le thème actif est supprimé : retour au thème normal
+        return ok({ done: true, skinc: nl });
       }
       if (b.action === 'pinfo') {
         const u = await redis.get(key(String(b.pseudo || '')));
@@ -970,7 +997,7 @@ const handler = async (req, res) => {
       u.coins -= CAR_COST; u.car = c;
     } else if (b.action === 'racelb') {
       const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], w = raceWeek();
-      const pw = racePrevWeek(), real = list.filter((v) => v && !v.bot && v.pseudo !== OP_NAME && !banOf(v));
+      const pw = racePrevWeek(), real = list.filter((v) => v && !v.bot && !banOf(v));
       const all = real.map((v) => { const r = v.rc && v.rc.w === w ? v.rc : null; return { pseudo: v.pseudo, pos: r ? r.pos : 0, tt: (r && r.tt) || 0, car: v.car || null, pf: v.pf || null }; })
         .sort((a, c) => c.pos - a.pos || (a.tt || 9e15) - (c.tt || 9e15) || a.pseudo.localeCompare(c.pseudo)) // le plus loin devant ; à égalité, celui qui y est arrivé le premier
         .map((x, i) => ({ ...x, rank: i + 1 }));
@@ -1033,7 +1060,7 @@ const handler = async (req, res) => {
       }).sort((a, b) => b.rb - a.rb || b.l - a.l || b.e - a.e || b.r - a.r || b.c - a.c || b.coins - a.coins).slice(0, [5, 10].includes(+b.n) ? +b.n : 10000).map((x, i) => (i < 10 ? x : { ...x, pf: null })) };
     } else if (b.action === 'chrank') { // classement des défis : ouvert à tous, même vide
       const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], H = (await redis.get('chh')) || [];
-      const rows = list.filter((v) => v && !v.bot && v.pseudo !== OP_NAME && !banOf(v)).map((v) => { const c = v.cs || csFrom(H, v.pseudo); return { pseudo: v.pseudo, w: c.w, l: c.l, d: c.d, n: c.w + c.l + c.d, pf: v.pf || null }; })
+      const rows = list.filter((v) => v && !v.bot && !banOf(v)).map((v) => { const c = v.cs || csFrom(H, v.pseudo); return { pseudo: v.pseudo, w: c.w, l: c.l, d: c.d, n: c.w + c.l + c.d, pf: v.pf || null }; })
         .filter((r) => r.n > 0).sort((x, y) => y.w - x.w || y.w / y.n - x.w / x.n || y.n - x.n || x.pseudo.localeCompare(y.pseudo));
       extra = { chrank: rows.slice(0, [5, 10].includes(+b.n) ? +b.n : 10000).map((x, i) => (i < 10 ? x : { ...x, pf: null })) };
     } else if (b.action === 'vapid') {
@@ -1248,7 +1275,7 @@ const handler = async (req, res) => {
 
     if (b.action === 'me') { extra = { notifs: u.notifs }; u.notifs = []; }
     await redis.set(key(u.pseudo), u);
-    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), maint: maintOn, maintinfo: maintOn ? await maintInfo() : null, skin: (await redis.get('skin')) || null } });
+    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), maint: maintOn, maintinfo: maintOn ? await maintInfo() : null, ...(await skinState()) } });
   } catch (e) {
     console.error(e);
     return fail('Erreur serveur : ' + e.message, 500);
