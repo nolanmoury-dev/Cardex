@@ -874,7 +874,11 @@ const handler = async (req, res) => {
         if (!oc || b.theme === 'obj') return fail('Collection inconnue');
         if (!(oc.until != null && !oc.base && oc.until <= Date.now())) return fail('« Tout vendre » est réservé aux collections terminées');
         list = Object.entries(u.cards).filter(([id]) => id.startsWith(b.theme + ':') && !u.fav.includes(id)).map(([id, n]) => [id, n]);
+            } else if (b.mode === 'list') { // doublons choisis : on garde toujours 1 exemplaire, jamais de favori
+        const o = b.cards && typeof b.cards === 'object' ? b.cards : {};
+        list = Object.entries(o).filter(([id]) => !u.fav.includes(id)).map(([id, n]) => [id, Math.max(0, Math.min(int(n, 50), (u.cards[id] || 0) - 1))]);
       } else list = [[String(b.card), 1]];
+
       let gain = 0, cnt = 0;
       for (const [id, n] of list) {
         const k = Math.min(n, u.cards[id] || 0); if (k < 1) continue;
