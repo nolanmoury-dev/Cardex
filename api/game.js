@@ -46,6 +46,17 @@ function subCheck(u) {
   note(u, u.sub.trial ? '⭐ Ton jour d\'essai gratuit est terminé : le bonus de chances et ta couleur de fond d\'abonné sont retirés. Tu peux t\'abonner dans Réglages.' : '⭐ Ton abonnement ' + (x ? x.name + ' ' : '') + 'est terminé : le bonus de chances et ta couleur de fond d\'abonné sont retirés. Tu peux te réabonner dans Réglages.');
   delete u.sub; delete u.subCol;
 }
+// Applique un abonnement offert (cadeau ou code) : même palier = prolongation, palier plus haut = remplace tout de suite.
+// Un palier PLUS BAS que celui en cours est refusé (on ne rétrograde jamais personne) : renvoie alors l'abonnement actuel, sinon null.
+function applySub(u, T, d) {
+  subCheck(u);
+  const cur = subOf(u);
+  if (cur && cur.t > T.t) return cur;
+  u.sub = { t: T.t, until: (cur && cur.t === T.t ? u.sub.until : Date.now()) + d * DAY };
+  return null;
+}
+// --- Codes : { CODE: { code, label, t, coins, packs, rx, bought:{thème:n}, cards:{id:n}, sub:{t,days}|null, max (null = illimité), exp (ms|null), used:[pseudos en minuscules] } }
+const normCode = (s) => String(s || '').trim().toUpperCase().replace(/\s+/g, '');
 const fkMult = (u, id) => { const t = (u.fk || {})[id]; return t ? 1 + (FK_MAX - 1) * Math.min(1, (Date.now() - t) / (FK_DAYS * DAY)) : 1; };
 const stepOf = (k) => Math.round((10 + (4 * k) / 9) * 60000); // 10 min pour le 1er sachet, 14 min pour le 10e (total 2 h)
 const pend = [];
@@ -527,7 +538,7 @@ const handler = async (req, res) => {
         const names = (await redis.smembers('users')).sort();
         const list = names.length ? await redis.mget(...names.map(key)) : [];
         const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u), pf: !!u.pf }; });
-        return ok({ ...(await skinState()), skinc: await skinList(), maint: !!(await redis.get('maint')), maintinfo: (await redis.get('maintinfo')) || { presets: [], msg: '' }, maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
+        return ok({ ...(await skinState()), skinc: await skinList(), maint: !!(await redis.get('maint')), maintinfo: (await redis.get('maintinfo')) || { presets: [], msg: '' }, maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), subs: SUBS, users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
       }
       if (b.action === 'shop') {
         if (!cat[b.theme] || b.theme === 'obj') return fail('Thème inconnu');
@@ -629,6 +640,39 @@ const handler = async (req, res) => {
       if (b.action === 'dmview') {
         const k = String(b.k || ''); if (!k.startsWith('dm:')) return fail('Conversation introuvable');
         return ok({ thread: ((await redis.get(k)) || []).slice(-200) });
+      }
+      if (b.action === 'codelist') {
+        const codes = Object.values((await redis.get('codes')) || {}).sort((x, y) => y.t - x.t);
+        return ok({ codes });
+      }
+      if (b.action === 'codeadd') { // créer un code : récompenses au choix (coins, sachets, cartes, packs de course, abonnement), limite d'utilisations et date d'expiration facultatives
+        const codes = (await redis.get('codes')) || {};
+        let code = normCode(b.code);
+        if (code) { if (!/^[A-Z0-9_-]{3,24}$/.test(code)) return fail('Code : 3 à 24 caractères (lettres, chiffres, - ou _)'); }
+        else { do { code = crypto.randomBytes(5).toString('hex').toUpperCase().slice(0, 8); } while (codes[code]); }
+        if (codes[code]) return fail('Ce code existe déjà');
+        if (Object.keys(codes).length >= 500) return fail('500 codes maximum : supprime les anciens');
+        const c = { code, label: String(b.label || '').trim().slice(0, 60), t: Date.now(), coins: int(b.coins, 1e9), packs: int(b.packs, 1000), rx: int(b.rx, 500), bought: {}, cards: {}, sub: null, max: int(b.max, 1e6) || null, exp: null, used: [] };
+        for (const [t, n] of Object.entries(b.bought || {})) { if (!cat[t] || t === 'obj') return fail('Collection inconnue : ' + t); const v = int(n, 1000); if (v) c.bought[t] = v; }
+        for (const [id, n] of Object.entries(b.cards || {})) { if (!rarOf(cat, id)) return fail('Carte inconnue : ' + id); const v = int(n, 1000); if (v) c.cards[id] = v; }
+        if (b.sub && int(b.sub.t, 3)) {
+          const T = SUBS.find((x) => x.t === int(b.sub.t, 3)), d = int(b.sub.days, 365);
+          if (!T) return fail('Palier inconnu');
+          if (d < 1) return fail("Durée de l'abonnement : 1 à 365 jours");
+          c.sub = { t: T.t, days: d };
+        }
+        if (String(b.days ?? '').trim() !== '') { const d = int(b.days, 3650); if (d < 1) return fail("Expiration : au moins 1 jour (ou laisse vide pour « jamais »)"); c.exp = Date.now() + d * DAY; }
+        if (!(c.coins || c.packs || c.rx || c.sub || Object.keys(c.bought).length || Object.keys(c.cards).length)) return fail('Choisis au moins une récompense');
+        codes[code] = c;
+        await redis.set('codes', codes);
+        return ok({ done: true, code });
+      }
+      if (b.action === 'codedel') {
+        const codes = (await redis.get('codes')) || {}, code = normCode(b.code);
+        if (!codes[code]) return fail('Code introuvable');
+        delete codes[code];
+        await redis.set('codes', codes);
+        return ok({ done: true });
       }
       if (b.action === 'maint') {
         await redis.set('maint', !!b.on);
@@ -1183,6 +1227,50 @@ const handler = async (req, res) => {
       note(v, '🎁 ' + u.pseudo + " t'a offert " + what + (txt ? ' — « ' + txt + ' »' : ''));
       await redis.set(key(v.pseudo), v);
       extra = { gifted: what, to: v.pseudo };
+    } else if (b.action === 'subgift') { // offrir un abonnement depuis une conversation : payé par celui qui offre (prix × jours)
+      const v = await redis.get(key(String(b.to || '')));
+      if (!v || v.pseudo === u.pseudo) return fail('Joueur introuvable');
+      if (v.bot) return fail("Les bots n'ont pas d'abonnement");
+      const T = SUBS.find((x) => x.t === int(b.tier, 3));
+      if (!T) return fail('Palier inconnu');
+      const d = int(b.days, SUB_MAX);
+      if (d < 1) return fail('Choisis une durée de 1 à ' + SUB_MAX + ' jours');
+      const cost = T.price * d;
+      if (u.coins < cost) return fail('Pas assez de coins : il faut ' + cost + ' 🪙 pour offrir ' + d + ' jour' + (d > 1 ? 's' : '') + ' de ' + T.name);
+      const hi = applySub(v, T, d);
+      if (hi) return fail(v.pseudo + ' a déjà un abonnement ' + hi.name + ' en cours : tu peux lui offrir le même palier (pour le prolonger) ou un palier plus haut, pas un palier plus bas');
+      u.coins -= cost;
+      const what = "l'abonnement " + T.ico + ' ' + T.name + ' (' + d + ' jour' + (d > 1 ? 's' : '') + ')';
+      await dmPush(u, v, '🎁 Cadeau : ' + what, true);
+      note(v, '🎁 ' + u.pseudo + " t'a offert " + what + " : le bonus de chances et la couleur de fond d'abonné sont actifs");
+      await redis.set(key(v.pseudo), v);
+      extra = { gifted: what, to: v.pseudo };
+    } else if (b.action === 'redeem') { // Réglages → Code : un code ne s'utilise qu'une fois par joueur
+      const now = Date.now(), code = normCode(b.code);
+      u.codeF = (u.codeF || []).filter((x) => now - x < 600000);
+      const bad = async (m) => { u.codeF.push(now); await redis.set(key(u.pseudo), u); return fail(m); }; // les mauvais codes sont comptés (5 essais ratés = 10 minutes de pause)
+      if (u.codeF.length >= 5) return fail('Trop d’essais ratés : réessaie dans quelques minutes');
+      if (!code) return fail('Entre un code');
+      const codes = (await redis.get('codes')) || {}, c = codes[code];
+      if (!c) return bad('Code invalide');
+      if (c.exp && c.exp <= now) return bad('Ce code a expiré');
+      c.used ||= [];
+      if (c.used.includes(u.pseudo.toLowerCase())) return fail('Tu as déjà utilisé ce code');
+      if (c.max && c.used.length >= c.max) return bad("Ce code a déjà été utilisé le nombre maximum de fois");
+      const T = c.sub ? SUBS.find((x) => x.t === c.sub.t) : null;
+      if (T) { const hi = applySub(u, T, c.sub.days); if (hi) return fail('Ce code donne un abonnement ' + T.name + ', mais ton abonnement ' + hi.name + ' est plus haut : réessaie quand il sera terminé (le code n’est pas consommé)'); }
+      const parts = [];
+      if (c.coins) { u.coins += c.coins; parts.push(c.coins + ' 🪙'); }
+      if (c.packs) { u.packs += c.packs; parts.push(c.packs + ' sachet' + (c.packs > 1 ? 's' : '') + ' gratuit' + (c.packs > 1 ? 's' : '')); }
+      for (const [t, n] of Object.entries(c.bought || {})) { if (!cat[t] || t === 'obj') continue; u.bought[t] = (u.bought[t] || 0) + n; parts.push(n + ' sachet' + (n > 1 ? 's' : '') + ' ' + cat[t].name); }
+      for (const [id, n] of Object.entries(c.cards || {})) { if (!rarOf(cat, id)) continue; add(u, id, n); parts.push((n > 1 ? n + ' × ' : '') + 'la carte ' + id.slice(id.indexOf(':') + 1)); }
+      if (c.rx) { u.rcX = Math.min(500, (u.rcX || 0) + c.rx); parts.push(c.rx + ' pack' + (c.rx > 1 ? 's' : '') + ' de course'); }
+      if (T) parts.push("l'abonnement " + T.ico + ' ' + T.name + ' (' + c.sub.days + ' jour' + (c.sub.days > 1 ? 's' : '') + ')');
+      c.used.push(u.pseudo.toLowerCase());
+      codes[code] = c;
+      await redis.set('codes', codes);
+      note(u, '🎟️ Code ' + code + ' utilisé : ' + (parts.join(', ') || 'rien'));
+      extra = { redeemed: parts.join(', ') || 'rien' };
     } else if (b.action === 'dmsend') {
       const v = await redis.get(key(String(b.to || '')));
       if (!v || v.pseudo === u.pseudo) return fail('Joueur introuvable');
