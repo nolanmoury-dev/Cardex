@@ -39,12 +39,12 @@ const SUBS = [{ t: 1, name: 'Bronze', ico: '🥉', price: 200, leg: 1.5 }, { t: 
 const SUB_MAX = 30;
 const subOf = (u) => { const x = u && u.sub && u.sub.until > Date.now() && SUBS.find((y) => y.t === u.sub.t); return x || null; };
 const subMult = (u) => { const x = subOf(u); return x ? x.leg : 1; };
-// Fin d'abonnement : tout s'enlève d'un coup (bonus + thème d'abonné) et le joueur est prévenu dans sa boîte 🔔
+// Fin d'abonnement : tout s'enlève d'un coup (bonus + couleur de fond d'abonné) et le joueur est prévenu dans sa boîte 🔔
 function subCheck(u) {
   if (!u || !u.sub || u.sub.until > Date.now()) return;
   const x = SUBS.find((y) => y.t === u.sub.t);
-  note(u, u.sub.trial ? '⭐ Ton jour d\'essai gratuit est terminé : le bonus de chances et le thème d\'abonné sont retirés. Tu peux t\'abonner dans la Boutique.' : '⭐ Ton abonnement ' + (x ? x.name + ' ' : '') + 'est terminé : le bonus de chances et le thème d\'abonné sont retirés. Tu peux te réabonner dans la Boutique.');
-  delete u.sub;
+  note(u, u.sub.trial ? '⭐ Ton jour d\'essai gratuit est terminé : le bonus de chances et ta couleur de fond d\'abonné sont retirés. Tu peux t\'abonner dans Réglages.' : '⭐ Ton abonnement ' + (x ? x.name + ' ' : '') + 'est terminé : le bonus de chances et ta couleur de fond d\'abonné sont retirés. Tu peux te réabonner dans Réglages.');
+  delete u.sub; delete u.subCol;
 }
 const fkMult = (u, id) => { const t = (u.fk || {})[id]; return t ? 1 + (FK_MAX - 1) * Math.min(1, (Date.now() - t) / (FK_DAYS * DAY)) : 1; };
 const stepOf = (k) => Math.round((10 + (4 * k) / 9) * 60000); // 10 min pour le 1er sachet, 14 min pour le 10e (total 2 h)
@@ -300,7 +300,7 @@ const price = (sh, t, cat) => Math.round((PRICE * 2 ** (lvOf(cat, t) - 1) * (100
 const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t), ob = cat[t]; if (ob && ob.until != null && !ob.base && ((u.rb || {})[t] || 0) >= 1) return false; return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
 const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => x.seller === u.pseudo || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))), inbox: u.inbox || [],
-  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, pf: u.pf || null, sub: subOf(u) ? { t: u.sub.t, until: u.sub.until, trial: !!u.sub.trial } : null, subTrial: !!u.subTrial, subs: SUBS, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
+  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, pf: u.pf || null, sub: subOf(u) ? { t: u.sub.t, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial, subs: SUBS, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
   next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), cards: u.cards, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
   shop: Object.fromEntries(Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s, t, cat), full: PRICE * 2 ** (lvOf(cat, t) - 1), lvl: lvOf(cat, t) }])), lv: Object.fromEntries(LINES.map((b) => [b, lineLv(u, b)])), lvn: Object.fromEntries(LINES.map((b) => [b, (cat[b + (lineLv(u, b) + 1)] || {}).name || null])),
@@ -702,7 +702,7 @@ const handler = async (req, res) => {
         tick(u);
         const nms = await redis.smembers('users'), all = nms.length ? await redis.mget(...nms.map(key)) : [];
         const same = (u.ips || []).length ? all.filter((x) => x && x.pseudo !== u.pseudo && (x.ips || []).some((h) => u.ips.includes(h))).map((x) => x.pseudo) : [];
-        return ok({ p: { seen: u.bot ? u.lastAct || 0 : u.seen || 0, ban: banOf(u), same, pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards || {}, rb: u.rb || {}, rl: rlInfo(u).left, dl: { left: dlInfo(u).left, max: dlInfo(u).max }, mg: mgInfo(u), renames: u.renames || 0, race: !!raceView(u), rx: u.rcX || 0, sub: subOf(u) ? { t: u.sub.t, name: subOf(u).name, ico: subOf(u).ico, until: u.sub.until, trial: !!u.sub.trial } : null, subTrial: !!u.subTrial }, max: { rl: RL_MAX, mg: MG_MAX, subs: SUBS } });
+        return ok({ p: { seen: u.bot ? u.lastAct || 0 : u.seen || 0, ban: banOf(u), same, pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards || {}, rb: u.rb || {}, rl: rlInfo(u).left, dl: { left: dlInfo(u).left, max: dlInfo(u).max }, mg: mgInfo(u), renames: u.renames || 0, race: !!raceView(u), rx: u.rcX || 0, sub: subOf(u) ? { t: u.sub.t, name: subOf(u).name, ico: subOf(u).ico, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial }, max: { rl: RL_MAX, mg: MG_MAX, subs: SUBS } });
       }
       if (b.action === 'subset') { // offrir (ou prolonger) un abonnement, ou le retirer (tier = 0)
         const u = await redis.get(key(String(b.pseudo || '')));
@@ -712,8 +712,8 @@ const handler = async (req, res) => {
         const tier = int(b.tier, 3);
         if (!tier) {
           if (!u.sub) return fail("Ce joueur n'a pas d'abonnement");
-          delete u.sub;
-          note(u, "⚠️ Le staff a retiré ton abonnement : le bonus de chances et le thème d'abonné sont retirés");
+          delete u.sub; delete u.subCol;
+          note(u, "⚠️ Le staff a retiré ton abonnement : le bonus de chances et ta couleur de fond d'abonné sont retirés");
         } else {
           const T = SUBS.find((x) => x.t === tier), d = int(b.days, 365);
           if (!T) return fail('Palier inconnu');
@@ -911,6 +911,12 @@ const handler = async (req, res) => {
       const cur = subOf(u);
       u.coins -= cost;
       u.sub = { t: T.t, until: (cur && cur.t === T.t ? u.sub.until : Date.now()) + d * DAY }; // même palier = prolongation ; autre palier = remplace l'ancien tout de suite, sans remboursement
+    } else if (b.action === 'subcolor') { // couleur de fond choisie par le joueur abonné (vide = couleur par défaut)
+      if (!subOf(u)) return fail('Réservé aux abonnés');
+      const c = String(b.color || '').trim().toLowerCase();
+      if (!c) delete u.subCol;
+      else if (/^#[0-9a-f]{6}$/.test(c)) u.subCol = c;
+      else return fail('Couleur invalide');
     } else if (b.action === 'subtrial') {
       if (u.subTrial) return fail('Tu as déjà utilisé ton jour gratuit');
       if (subOf(u)) return fail('Tu as déjà un abonnement en cours');
