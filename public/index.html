@@ -888,7 +888,7 @@ function rkHTML() {
   return '<div class="pills">' + [['r', '🏆 Classement'], ['k', '🏅 Classement défis'], ['c', '🏁 Course'], ['d', '⚔️ Défis'], ['m', '💬 Messages' + (un ? ' (' + un + ')' : '')]].filter(([k]) => !S.maint || k === 'r' || k === 'k').map(([k, l]) => '<button class="pill' + (rkSub === k ? ' on' : '') + '" data-rs="' + k + '">' + l + '</button>').join('') + '</div>' + (rkSub === 'm' ? dmHTML() : rkSub === 'd' ? chHTML() : rkSub === 'k' ? chRankHTML() : rkSub === 'c' ? raceHTML() : rankHTML());
 }
 function dmHTML() {
-  if (dmWith) return '<div class="box"><div class="row" style="margin-bottom:8px"><button class="g" id="dmb">← Retour</button>' + avEl(dmWith) + '<b>' + esc(dmWith) + '</b><button class="g" id="dmch" style="margin-left:auto">⚔️ Défier</button></div><div id="dmt"></div><div class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="dmx" maxlength="500" placeholder="Écrire un message…" style="flex:1;min-width:0"><button id="dms">Envoyer</button></div></div>';
+  if (dmWith) return '<div class="box"><div class="row" style="margin-bottom:8px"><button class="g" id="dmb">← Retour</button>' + avEl(dmWith) + '<b>' + esc(dmWith) + '</b><button class="g" id="dmsg" style="margin-left:auto">🎁 Abonnement</button><button class="g" id="dmch">⚔️ Défier</button></div><div id="dmt"></div><div class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="dmx" maxlength="500" placeholder="Écrire un message…" style="flex:1;min-width:0"><button id="dms">Envoyer</button></div></div>';
   if (dmNew) return '<div class="box"><div class="row" style="margin-bottom:8px"><button class="g" id="dmb">← Retour</button><b>Nouveau message : à qui ?</b></div><input id="dmq" placeholder="Rechercher un joueur" style="width:100%;margin-bottom:8px"><div id="dml">Chargement…</div></div>';
   return '<button id="dmn" style="margin-bottom:10px">✉️ Créer un nouveau message</button><div id="dml">' + ((S.dms || []).map((e) => '<div class="dm" data-w="' + esc(e.p) + '">' + avEl(e.p) + '<div class="tx"><b>' + esc(e.p) + '</b><small>' + (e.f === S.pseudo ? 'Toi : ' : '') + esc(e.x) + '</small></div><small>' + ago(e.t) + '</small>' + (e.n ? '<span class="un">' + e.n + '</span>' : '') + '</div>').join('') || '<p>Aucune conversation. Appuie sur « Créer un nouveau message » pour écrire à un joueur.</p>') + '</div><small>Les propositions d\'échange, contre-offres et cadeaux que tu reçois arrivent aussi ici. Le staff peut consulter les messages (modération).</small>';
 }
@@ -923,6 +923,21 @@ function dmInit() {
     if (dmPl) draw(); else api('players').then((j) => { dmPl = j.players; if ($('#dmq')) draw(); }).catch((e) => msg(e.message));
   }
   if (dmWith) {
+    const sgb = $('#dmsg'); if (sgb) sgb.onclick = () => { // offrir un abonnement à la personne de cette conversation
+      const who = dmWith, SB = S.subs || [];
+      if (!SB.length) return;
+      const ov = overlay('<div class="box" style="max-width:420px;margin:12vh auto;text-align:center"><h2>🎁 Offrir un abonnement à ' + esc(who) + '</h2><p>Tu paies d’avance (prix × jours). Même palier que le sien : ça le prolonge. Palier plus haut : il remplace l’ancien tout de suite. On ne peut pas rétrograder quelqu’un.</p><div style="display:grid;gap:10px"><select id="sgt" aria-label="Palier">' + SB.map((x) => '<option value="' + x.t + '">' + x.ico + ' ' + esc(x.name) + ' : ' + x.price + ' 🪙 par jour</option>').join('') + '</select><label><small>Jours (1 à 30)</small><input id="sgd" type="number" min="1" max="30" value="7" style="width:100%"></label><b id="sgp"></b><button id="sgo">Offrir</button><button id="sgx" class="g">Annuler</button><div class="err" id="sge"></div></div></div>');
+      const q = (s) => ov.querySelector(s), T = () => SB.find((x) => String(x.t) === q('#sgt').value), D = () => Math.max(1, Math.min(30, parseInt(q('#sgd').value, 10) || 1));
+      const price = () => { q('#sgp').textContent = T().price * D() + ' 🪙 (tu as ' + S.coins + ' 🪙)'; };
+      q('#sgt').onchange = price; q('#sgd').oninput = price; price();
+      q('#sgx').onclick = () => ov.remove();
+      q('#sgo').onclick = async () => {
+        const t = T(), d = D(), cost = t.price * d, er = q('#sge');
+        if (cost > S.coins) { er.textContent = 'Pas assez de coins : il faut ' + cost + ' 🪙'; return; }
+        if (!confirm('Offrir ' + t.name + ' (' + d + ' jour' + (d > 1 ? 's' : '') + ') à ' + who + ' pour ' + cost + ' 🪙 ? Ce cadeau est définitif.')) return;
+        try { setS((await api('subgift', { to: who, tier: t.t, days: d })).state); ov.remove(); await dmLoad(true); msg('Abonnement ' + t.name + ' offert à ' + who + ' 🎁', true); } catch (e) { er.textContent = e.message; }
+      };
+    };
     const cb = $('#dmch'); if (cb) cb.onclick = () => {
       if (!S.ch || !S.ch.ok) return msg('Les défis se débloquent à ta première renaissance (♻️)');
       const who = dmWith, ov = overlay('<div class="box" style="max-width:420px;margin:12vh auto;text-align:center"><h2>⚔️ Défier ' + esc(who) + '</h2><p>Quel type de défi ?</p><div style="display:grid;gap:10px"><button id="dcf">🤝 Amical<br><small>On ne perd rien : ni coins, ni cartes</small></button><button id="dcw" class="g">⚔️ Guerre<br><small>Mise en coins + le gagnant prend 1 carte</small></button><button id="dcx" class="g">Annuler</button></div></div>');
@@ -950,6 +965,7 @@ function setHTML() {
   return (pushOn || S.maint || S.ban ? '' : '<div class="box"><h2>🔔 Notifications</h2><p>Messages du staff, nouveaux objets et nouvelles cartes au Marché, même app fermée. <b>Sur iPhone</b> : ajoute d\'abord le site à l\'écran d\'accueil (Partager → « Sur l\'écran d\'accueil »), ouvre-le depuis l\'icône, puis appuie ici.</p><button id="pn2">Activer</button></div>') +
     '<div class="box"><h2>Apparence</h2><select id="tsel"><option value="dark"' + (th === 'dark' ? ' selected' : '') + '>Sombre</option><option value="light"' + (th === 'light' ? ' selected' : '') + '>Clair</option></select></div>' +
     (S.maint || S.ban ? '' : subHTML()) +
+    (S.maint || S.ban ? '' : '<form class="box" id="fcode" style="display:grid;gap:10px;max-width:400px"><h2>🎟️ Code</h2><p>Tu as un code ? Entre-le ici pour recevoir sa récompense. Un même code ne s’utilise qu’une fois par joueur.</p><input id="cdi" placeholder="Ton code" maxlength="24" autocomplete="off" autocapitalize="characters" required><button>Valider</button></form>') +
     pfpBox() +
     (S.maint || S.ban ? '' : '<form class="box" id="frn" style="display:grid;gap:10px;max-width:400px"><h2>Pseudo</h2>' + (S.renames ? '<p>Tu as utilisé ton changement gratuit. Pour changer à nouveau, fais une demande au staff (« Contacter un staff » ci-dessous).</p>' : '<p>Tu as un changement de pseudo gratuit. Ensuite, il faudra le demander au staff.</p><input id="rn2" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button>') + '</form>') +
     '<form class="box" id="fpw" style="display:grid;gap:10px;max-width:400px"><h2>Mot de passe</h2><input id="po" type="password" placeholder="Ancien mot de passe" autocomplete="current-password" required><input id="pn" type="password" placeholder="Nouveau mot de passe" autocomplete="new-password" required><button>Changer</button></form>' +
@@ -1178,6 +1194,7 @@ function playerView() {
     if ($('#subcol')) $('#subcol').oninput = (e) => setSubColor(e.target.value); // aperçu en direct, rien n'est enregistré tant qu'on n'appuie pas sur Enregistrer
     if ($('#subcs')) $('#subcs').onclick = () => subCol($('#subcol').value);
     if ($('#subcr')) $('#subcr').onclick = () => subCol('');
+    if ($('#fcode')) $('#fcode').onsubmit = (e) => { e.preventDefault(); run(async () => { const j = await api('redeem', { code: $('#cdi').value }); setS(j.state); playerView(); msg('🎟️ Code validé : tu as reçu ' + j.redeemed, true); }); };
     $('#tsel').onchange = (e) => run(async () => { setTheme(e.target.value); await api('settings', { theme: e.target.value }); });
     if ($('#frn')) $('#frn').onsubmit = (e) => { e.preventDefault(); if (!$('#rn2') || !confirm('Un seul changement gratuit. Continuer ?')) return; run(async () => { setS((await api('rename', { name: $('#rn2').value })).state); playerView(); msg('Pseudo changé', true); }); };
     $('#fpw').onsubmit = (e) => { e.preventDefault(); run(async () => { await api('settings', { old: $('#po').value, pw: $('#pn').value }); msg('Mot de passe changé', true); $('#fpw').reset(); }); };
@@ -1192,6 +1209,10 @@ function playerView() {
 // # `v` doit être unique et change à chaque mise à jour (ex. la date AAAA-MM-JJ, avec -2, -3… s'il y en a plusieurs le même jour).
 // =====================================================================================================================
 const UPDATES = [
+  { v: '2026-10-19-2', title: 'Cadeaux d’abonnement et codes', items: [
+    '🎁 Dans une conversation (Social → Messages), le bouton « Abonnement » te permet d’offrir un abonnement à la personne : tu choisis le palier et les jours, et tu paies avec tes coins.',
+    '🎟️ Nouveau dans Réglages : « Code ». Entre un code reçu du staff pour gagner sa récompense (coins, sachets, cartes, abonnement…). Un même code ne s’utilise qu’une fois par joueur.',
+  ] },
   { v: '2026-10-19', title: 'Abonnements', items: [
     '⭐ Nouveau dans Réglages : 3 abonnements (Bronze, Argent, Or) qui augmentent tes chances de tirer des cartes légendaires.',
     '📅 Tu choisis le palier et la durée (1 à 30 jours). Prix par jour : 200, 300 et 500 🪙.',
@@ -1779,6 +1800,7 @@ function opInbox() {
   ov.querySelector('#nc').onclick = () => del('all'); ov.querySelector('#nx').onclick = () => ov.remove();
   const pn = ov.querySelector('#opn'); if (pn) pn.onclick = async () => { try { await enablePush({ as: 'player' }); opInbox(); } catch (e) { ov.querySelector('#ne2').textContent = e.message; } };
 }
+let cdDraft = { bought: {}, cards: {} }; // récompenses en cours de préparation dans Opérateur → Codes
 async function opView(m) {
   const j = await api('users'), { users, shop, custom, reports } = j; setCat(j.themes); (j.skinc || []).forEach((d) => (SKC[d.id] = d)); setSkin(j.skin);
   const opts = Object.entries(CAT).map(([t, o]) => '<optgroup label="' + esc(o.name) + '">' + [...'crel'].flatMap((r) => o[r].map((n) => '<option value="' + esc(t + ':' + n) + '">' + RN[r] + ' — ' + esc(n) + '</option>')).join('') + '</optgroup>').join('');
@@ -1812,6 +1834,15 @@ async function opView(m) {
     '<div class="box"><h2>🔧 Maintenance</h2><p>' + (j.maint ? 'ACTIVE : les joueurs voient « maintenance », peuvent seulement regarder leurs cartes, aller dans Réglages et te contacter.' : 'Désactivée.') + '</p><p><small>Explication montrée aux joueurs (facultatif, plusieurs choix possibles) :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible">' + j.maintPresets.map((p) => '<button type="button" class="pill mp' + ((j.maintinfo.presets || []).includes(p.k) ? ' on' : '') + '" data-mp="' + p.k + '">' + p.label + '</button>').join('') + '</div><textarea id="mmsg" rows="2" maxlength="300" placeholder="Message du staff (facultatif)" style="margin:8px 0"></textarea><div class="row"><button id="mnt" class="' + (j.maint ? '' : 'g') + '">' + (j.maint ? 'Désactiver la maintenance' : 'Activer la maintenance (tout verrouiller)') + '</button>' + (j.maint ? '<button class="g" id="mnu">Mettre à jour le message</button>' : '') + '</div><div class="err" id="e7"></div></div>' +
     '<form class="box" id="fr" style="display:grid;gap:10px"><h2>Changer le pseudo d\'un joueur</h2><select id="ru" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="rnn" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button><div class="err" id="e6"></div></form>' +
     '<div class="box" id="cpn"><h2>🎴 Panneau Cartes</h2><input id="cq" placeholder="🔎 Nom d\'une carte (objets compris)" style="width:100%;margin-bottom:8px" autocomplete="off"><div id="cres"></div><div id="cinf"></div></div>' +
+    '<form class="box" id="fcd" style="display:grid;gap:10px"><h2>🎟️ Codes</h2><p><small>Les joueurs les entrent dans Réglages → Code. Un même code ne s’utilise qu’une fois par joueur.</small></p>'
+    + '<div class="row"><input id="cdc" placeholder="Code (vide = généré au hasard)" maxlength="24" autocapitalize="characters" style="flex:1;min-width:160px"><input id="cdn" placeholder="Note pour toi (facultatif)" maxlength="60" style="flex:1;min-width:160px"></div>'
+    + '<div class="row"><input id="cdo" type="number" min="0" placeholder="Coins" style="width:110px"><input id="cdp" type="number" min="0" placeholder="Sachets gratuits" style="width:140px"><input id="cdr" type="number" min="0" placeholder="Packs de course" style="width:140px"></div>'
+    + '<div class="row"><select id="cdt" aria-label="Sachet de collection">' + Object.keys(CAT).filter((t) => t !== 'obj').map((t) => '<option value="' + esc(t) + '">' + esc(CAT[t].icon + ' ' + CAT[t].name) + '</option>').join('') + '</select><input id="cdtn" type="number" min="1" value="1" style="width:80px" aria-label="Quantité"><button type="button" class="g" id="cdta">➕ Sachets</button></div>'
+    + '<div class="row"><select id="cdk" aria-label="Carte" style="flex:1;min-width:160px"><option value="">Carte…</option>' + opts + '</select><input id="cdkn" type="number" min="1" value="1" style="width:80px" aria-label="Quantité"><button type="button" class="g" id="cdka">➕ Carte</button></div>'
+    + '<div id="cdd" class="row" style="flex-wrap:wrap;gap:6px"></div>'
+    + '<div class="row"><select id="cds" aria-label="Abonnement"><option value="0">Pas d’abonnement</option>' + (j.subs || []).map((x) => '<option value="' + x.t + '">' + x.ico + ' ' + esc(x.name) + '</option>').join('') + '</select><input id="cdsd" type="number" min="1" max="365" value="7" style="width:90px" aria-label="Jours d’abonnement"> jours</div>'
+    + '<div class="row"><input id="cdm" type="number" min="1" placeholder="Utilisations max (vide = illimité)" style="flex:1;min-width:180px"><input id="cde" type="number" min="1" placeholder="Expire dans… jours (vide = jamais)" style="flex:1;min-width:180px"></div>'
+    + '<button>Créer le code</button><div class="err" id="ecd"></div><div id="cdl">Chargement…</div></form>' +
     '<div class="box"><h2>Signalements (' + reports.length + (reports.some((r) => r.cat === 'idea') ? ' dont ' + reports.filter((r) => r.cat === 'idea').length + ' idée(s)' : '') + ')</h2>' + reps + '</div>';
   app.querySelectorAll('.rt').forEach((el, i) => (el.textContent = reports[i].text));
   $('#pv').onclick = () => { asP = true; localStorage.asp = '1'; start(); };
@@ -1985,7 +2016,7 @@ async function opView(m) {
   $('#fr').onsubmit = act('e6', () => api('rename', { pseudo: $('#ru').value, name: $('#rnn').value }), 'Pseudo changé');
   app.querySelectorAll('[data-du]').forEach((b) => (b.onclick = (e) => { if (confirm('Supprimer définitivement le compte ' + b.dataset.du + ' ?')) act('e', () => api('deluser', { pseudo: b.dataset.du }), 'Compte supprimé')(e); }));
   // --- Catégories (au lieu d'une seule longue page) : 5 onglets qui tiennent sur 2 lignes maximum, sans glisser
-  const OC = [['b', '🛒 Boutique', ['Boutique', 'Collection provisoire', 'Objet en boutique']], ['j', '👥 Joueurs', ['Joueurs', 'Photos de profil', 'Donner ou retirer', 'Changer le pseudo']], ['m', '✉️ Messages', ['Envoyer une notification']], ['s', '🚩 Signalements', ['Signalements']], ['c', '🎴 Cartes', ['Panneau Cartes']], ['k', '🏪 Marché', ['Marché']], ['x', '🔧 Maintenance', ['Maintenance']], ['n', '🐍 Snake', ['Snake']], ['t', '🎨 Thème', ['Thème de l']]];
+  const OC = [['b', '🛒 Boutique', ['Boutique', 'Collection provisoire', 'Objet en boutique']], ['j', '👥 Joueurs', ['Joueurs', 'Photos de profil', 'Donner ou retirer', 'Changer le pseudo']], ['m', '✉️ Messages', ['Envoyer une notification']], ['s', '🚩 Signalements', ['Signalements']], ['c', '🎴 Cartes', ['Panneau Cartes']], ['k', '🏪 Marché', ['Marché']], ['x', '🔧 Maintenance', ['Maintenance']], ['n', '🐍 Snake', ['Snake']], ['t', '🎨 Thème', ['Thème de l']], ['o', '🎟️ Codes', ['Codes']]];
   const bar = app.querySelector('.bar'), dmBox = document.createElement('div');
   dmBox.className = 'box'; dmBox.id = 'opdm'; dmBox.innerHTML = '<h2>👁️ Voir les messages des joueurs</h2><div id="opdl">Chargement…</div><div id="opdt"></div>';
   app.append(dmBox);
@@ -2001,6 +2032,7 @@ async function opView(m) {
     opTabs.querySelectorAll('[data-oc]').forEach((b) => (b.onclick = () => { opTab = b.dataset.oc; showOc(); }));
     [...app.children].forEach((el) => { if (el !== bar && el !== opTabs) el.style.display = el.dataset.oc === opTab ? '' : 'none'; });
     if (opTab === 'm') opDmList();
+    if (opTab === 'o') opCodes();
   };
   const opDmList = async () => {
     const box = $('#opdl'), th = $('#opdt'); th.innerHTML = '';
@@ -2020,6 +2052,44 @@ async function opView(m) {
         } catch (er) { box.insertAdjacentHTML('afterbegin', '<p class="err">' + esc(er.message) + '</p>'); }
       }));
     } catch (er) { box.textContent = er.message; }
+  };
+  // --- Codes : préparer les récompenses, créer, lister, supprimer
+  const cdWhat = (c) => {
+    const p = [], T = c.sub && (j.subs || []).find((x) => x.t === c.sub.t);
+    if (c.coins) p.push(c.coins + ' 🪙'); if (c.packs) p.push(c.packs + ' 📦 gratuit' + (c.packs > 1 ? 's' : '')); if (c.rx) p.push(c.rx + ' 🏁');
+    Object.entries(c.bought || {}).forEach(([t, n]) => p.push(n + ' × ' + esc(((CAT[t] || {}).icon || '📦') + ' ' + ((CAT[t] || {}).name || t))));
+    Object.entries(c.cards || {}).forEach(([id, n]) => p.push((n > 1 ? n + ' × ' : '') + '🃏 ' + esc(id.slice(id.indexOf(':') + 1))));
+    if (T) p.push(T.ico + ' ' + esc(T.name) + ' ' + c.sub.days + ' j');
+    return p.join(' · ');
+  };
+  const cdDrawD = () => {
+    const box = $('#cdd'); if (!box) return;
+    box.innerHTML = [...Object.entries(cdDraft.bought).map(([t, n]) => ['b', t, n + ' × ' + esc(((CAT[t] || {}).icon || '') + ' ' + ((CAT[t] || {}).name || t))]), ...Object.entries(cdDraft.cards).map(([id, n]) => ['c', id, n + ' × ' + esc(id.slice(id.indexOf(':') + 1))])]
+      .map(([k, id, tx]) => '<button type="button" class="g" data-cdk="' + k + '" data-cdi="' + esc(id) + '">' + tx + ' ✕</button>').join('');
+    box.querySelectorAll('[data-cdk]').forEach((b) => (b.onclick = () => { delete cdDraft[b.dataset.cdk === 'b' ? 'bought' : 'cards'][b.dataset.cdi]; cdDrawD(); }));
+  };
+  async function opCodes() {
+    const box = $('#cdl'); if (!box) return;
+    try {
+      const { codes } = await api('codelist');
+      box.innerHTML = '<h3 style="margin:8px 0 4px">Codes existants (' + codes.length + ')</h3>' + (codes.map((c) => '<div class="row" style="border-top:1px solid var(--line);padding:8px 0"><div style="flex:1;min-width:200px"><b>' + esc(c.code) + '</b>' + (c.label ? ' <small>(' + esc(c.label) + ')</small>' : '') + '<br><small title="' + esc((c.used || []).join(', ')) + '">' + cdWhat(c) + ' · utilisé ' + (c.used || []).length + (c.max ? '/' + c.max : '') + ' fois' + (c.exp ? (c.exp <= Date.now() ? ' · ⛔ expiré' : ' · expire le ' + new Date(c.exp).toLocaleString('fr-FR')) : '') + '</small></div><button type="button" class="g" data-cdd="' + esc(c.code) + '">Supprimer</button></div>').join('') || '<p>Aucun code pour le moment.</p>');
+      box.querySelectorAll('[data-cdd]').forEach((b) => (b.onclick = async () => {
+        if (!confirm('Supprimer le code ' + b.dataset.cdd + ' ?')) return;
+        try { await api('codedel', { code: b.dataset.cdd }); await opCodes(); } catch (er) { $('#ecd').style.color = ''; $('#ecd').textContent = er.message; }
+      }));
+    } catch (er) { box.textContent = er.message; }
+  }
+  cdDrawD();
+  $('#cdta').onclick = () => { const t = $('#cdt').value; if (!t) return; cdDraft.bought[t] = (cdDraft.bought[t] || 0) + Math.max(1, parseInt($('#cdtn').value, 10) || 1); cdDrawD(); };
+  $('#cdka').onclick = () => { const id = $('#cdk').value; if (!id) return; cdDraft.cards[id] = (cdDraft.cards[id] || 0) + Math.max(1, parseInt($('#cdkn').value, 10) || 1); cdDrawD(); };
+  $('#fcd').onsubmit = async (e) => {
+    e.preventDefault();
+    const num = (s) => parseInt($(s).value, 10) || 0;
+    try {
+      const r = await api('codeadd', { code: $('#cdc').value, label: $('#cdn').value, coins: num('#cdo'), packs: num('#cdp'), rx: num('#cdr'), bought: cdDraft.bought, cards: cdDraft.cards, sub: { t: num('#cds'), days: num('#cdsd') }, max: $('#cdm').value, days: $('#cde').value });
+      cdDraft = { bought: {}, cards: {} };
+      await opView('ecd|Code créé : ' + r.code);
+    } catch (er) { $('#ecd').style.color = ''; $('#ecd').textContent = er.message; }
   };
   showOc();
   snOp();
