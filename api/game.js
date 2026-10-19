@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const T0 = require('../lib/cards');
 
 let redis;
-const W = { c: 60, r: 25, e: 11, l: 4 }, BASE = { c: 2, r: 8, e: 25, l: 80 }, R = 'crel';
+const W = { c: 60, r: 25, e: 11, l: 4 }, BASE = { c: 2, r: 8, e: 25, l: 80, m: 250, s: 800, u: 2500 }, R = 'crelmsu'; // m = Mythique, s = Céleste, u = Unique : créées par l'opérateur uniquement (aucun sachet n'en contient)
 const RL_MAX = 10, RL_WAIT = 30000, parisDay = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
 const rlInfo = (u) => { const r = u.rl && u.rl.d === parisDay() ? u.rl : { n: 0, t: 0 }; return { left: Math.max(0, RL_MAX - r.n), next: r.t + RL_WAIT }; };
 // Mini-jeux : limite de parties par jour (heure de Paris). Retour moyen visé : ~88-96 % (jamais > 100 %), mise 10-500.
@@ -156,12 +156,12 @@ const loadCu = async () => ({ cols: [], objs: [], vals: {}, stats: {}, ...((awai
 const full = (cu) => {
   const t = { ...T0 };
   cu.cols.forEach((c) => (t[c.key] = c));
-  const o = { name: 'Objets', icon: '🎁', color: '#db2777', hidden: true, c: [], r: [], e: [], l: [] };
+  const o = { name: 'Objets', icon: '🎁', color: '#db2777', hidden: true, c: [], r: [], e: [], l: [], m: [], s: [], u: [] };
   cu.objs.forEach((x) => o[x.r].push(x.name));
   t.obj = o;
-  return t;
+  return Object.fromEntries(Object.entries(t).map(([k, v]) => [k, { ...v, m: v.m || [], s: v.s || [], u: v.u || [] }]));
 };
-const rarOf = (cat, id) => { const i = id.indexOf(':'), o = cat[id.slice(0, i)], n = id.slice(i + 1); return o && [...R].find((r) => o[r].includes(n)); };
+const rarOf = (cat, id) => { const i = id.indexOf(':'), o = cat[id.slice(0, i)], n = id.slice(i + 1); return o && [...R].find((r) => (o[r] || []).includes(n)); };
 const defBase = (id, r, cu) => { const ob = id.startsWith('obj:') && cu.objs.find((x) => 'obj:' + x.name === id); return ob ? Math.max(1, Math.floor(ob.price * 0.6)) : BASE[r]; };
 // Valeur de base d'une carte : réglable par l'opérateur (cu.vals), sinon selon la rareté ; l'ancienneté s'ajoute par-dessus (+1 %/jour, max ×2)
 const val = (u, id, cat, cu) => {
@@ -170,13 +170,26 @@ const val = (u, id, cat, cu) => {
   const d = Math.min(100, Math.floor((Date.now() - ((u.since || {})[id] || Date.now())) / DAY));
   return Math.max(1, Math.round(b * (1 + d / 100) * fkMult(u, id)));
 };
+// --- Badges : à l'ouverture d'un sachet, chaque carte a 1/20 d'être Bronze, 1/30 Argent, 1/50 Or (tirage unique : jamais deux badges).
+// u.cards[id] = TOUS les exemplaires (badgés compris) ; u.bd[id] = { 1: n bronze, 2: n argent, 3: n or } = combien de ces exemplaires portent un badge.
+// Un exemplaire badgé compte dans la collection tant que le joueur n'a pas d'exemplaire identique SANS badge ; dès qu'il en a un, le badgé passe dans les livrets de badges.
+const BADGES = [{ t: 1, name: 'Bronze', ico: '🥉', odds: 20 }, { t: 2, name: 'Argent', ico: '🥈', odds: 30 }, { t: 3, name: 'Or', ico: '🥇', odds: 50 }];
+const rollBadge = () => { let x = Math.random(); for (const b of [BADGES[2], BADGES[1], BADGES[0]]) { x -= 1 / b.odds; if (x < 0) return b.t; } return 0; };
+const bdSum = (u, id) => { const b = u.bd && u.bd[id]; return b ? (b[1] || 0) + (b[2] || 0) + (b[3] || 0) : 0; };
 const add = (u, id, n) => { if (!u.cards[id]) u.since[id] = Date.now(); u.cards[id] = (u.cards[id] || 0) + n; };
-const rm = (u, id, n) => { u.cards[id] -= n; if (u.cards[id] <= 0) { delete u.cards[id]; delete u.since[id]; if (u.fk) delete u.fk[id]; u.fav = u.fav.filter((x) => x !== id); } };
+const addB = (u, id, t) => { add(u, id, 1); u.bd ||= {}; const b = (u.bd[id] ||= {}); b[t] = (b[t] || 0) + 1; };
+// On retire d'abord les exemplaires SANS badge, puis les badgés (le Bronze en premier) : un badge n'est perdu que s'il n'y a plus rien d'autre à retirer.
+const rm = (u, id, n) => {
+  u.cards[id] -= n;
+  const b = u.bd && u.bd[id];
+  if (b) { let over = bdSum(u, id) - Math.max(0, u.cards[id]); for (const t of [1, 2, 3]) while (over > 0 && b[t] > 0) { b[t]--; over--; } for (const t of [1, 2, 3]) if (!b[t]) delete b[t]; if (!bdSum(u, id)) delete u.bd[id]; }
+  if (u.cards[id] <= 0) { delete u.cards[id]; delete u.since[id]; if (u.bd) delete u.bd[id]; if (u.fk) delete u.fk[id]; u.fav = u.fav.filter((x) => x !== id); }
+};
 
 // =================== DÉFIS ===================
 // Cartes jouables : collections de niveau II à V, ou n'importe quelle collection dont le joueur a déjà fait une renaissance ; objets seulement si l'opérateur leur a donné des stats.
 const CH = { fee: 5, max: 5000, ttl: 48 * 36e5, day: 10, vs: 3, sent: 5 };
-const HP0 = { c: [20, 5], r: [30, 8], e: [45, 12], l: [70, 18] }, LVM = [1, 1.2, 1.4, 1.6, 1.8], COST = { c: 1, r: 3, e: 8, l: 20 };
+const HP0 = { c: [20, 5], r: [30, 8], e: [45, 12], l: [70, 18], m: [110, 28], s: [160, 40], u: [240, 60] }, LVM = [1, 1.2, 1.4, 1.6, 1.8], COST = { c: 1, r: 3, e: 8, l: 20, m: 40, s: 70, u: 120 };
 const csFrom = (H, p) => H.reduce((c, h) => { if (h.a === p || h.b === p) { const m = h.w * (h.a === p ? 1 : -1); if (m > 0) c.w++; else if (m < 0) c.l++; else c.d++; } return c; }, { w: 0, l: 0, d: 0 }); // victoires / défaites / égalités en défi
 const rbTot = (u) => Object.values((u && u.rb) || {}).reduce((a, x) => a + x, 0);
 const statsOf = (id, cat, cu, raw) => {
@@ -312,7 +325,7 @@ const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t
 const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => x.seller === u.pseudo || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))), inbox: u.inbox || [],
   dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, pf: u.pf || null, sub: subOf(u) ? { t: u.sub.t, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial, subs: SUBS, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
-  next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), cards: u.cards, fav: u.fav, theme: u.theme || null,
+  next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), cards: u.cards, bd: u.bd || {}, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
   shop: Object.fromEntries(Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s, t, cat), full: PRICE * 2 ** (lvOf(cat, t) - 1), lvl: lvOf(cat, t) }])), lv: Object.fromEntries(LINES.map((b) => [b, lineLv(u, b)])), lvn: Object.fromEntries(LINES.map((b) => [b, (cat[b + (lineLv(u, b) + 1)] || {}).name || null])),
   objs: cu.objs.filter((x) => !x.gone), themes: Object.fromEntries(Object.entries(cat).filter(([t]) => known(u, cat, t))),
@@ -323,7 +336,7 @@ function draw(o, t, lv = 1, mult = 1) {
   const w = { ...W, l: (LEG[lv - 1] ?? LEG[0]) * mult, e: EPI[lv - 1] ?? EPI[0] }; // mult = bonus d'abonnement sur les légendaires
   w.c = 100 - w.r - w.e - w.l;
   let x = Math.random() * 100, r = 'c';
-  for (const k of R) { if ((x -= w[k]) < 0) { r = k; break; } }
+  for (const k of 'crel') { if ((x -= w[k]) < 0) { r = k; break; } } // les raretés m / s / u ne sont jamais tirées
   if (!o[r].length) r = 'c';
   return t + ':' + o[r][Math.floor(Math.random() * o[r].length)];
 }
@@ -359,7 +372,7 @@ async function botTurn(u, cat, cu, sh, mk) {
     let t = Object.keys(u.bought).find((k) => u.bought[k] > 0 && sh[k] && !sh[k].blocked);
     if (t) u.bought[t]--; else {
       if (!themes.length) break;
-      const miss = (k) => [...R].flatMap((r) => cat[k][r].map((n) => k + ':' + n)).filter((id) => !u.cards[id]).length;
+      const miss = (k) => [...R].flatMap((r) => (cat[k][r] || []).map((n) => k + ':' + n)).filter((id) => !u.cards[id]).length;
       t = u.bot === 'fort' || u.bot === 'mf' ? themes.sort((a, c) => miss(c) - miss(a))[0] : pick(themes);
       u.packs--;
     }
@@ -576,9 +589,9 @@ const handler = async (req, res) => {
         const now0 = Date.now(), un0 = Number(b.until);
         if (b.until != null && !(un0 > now0)) return fail('La date de fin doit être dans le futur');
         const endAt = b.until != null ? Math.min(un0, now0 + 366 * DAY) : now0 + Math.max(1, int(b.days, 365) || 7) * DAY;
-        const o = { key: 'x' + Date.now(), name, icon: String(b.icon || '').trim().slice(0, 4) || '⭐', color: /^#[0-9a-f]{6}$/i.test(b.color) ? b.color : '#0ea5e9', until: endAt, c: [], r: [], e: [], l: [] };
+        const o = { key: 'x' + Date.now(), name, icon: String(b.icon || '').trim().slice(0, 4) || '⭐', color: /^#[0-9a-f]{6}$/i.test(b.color) ? b.color : '#0ea5e9', until: endAt, c: [], r: [], e: [], l: [], m: [], s: [], u: [] };
         String(b.cards || '').split('\n').slice(0, 200).forEach((ln) => {
-          const m = ln.trim().match(/^([crel]):(.+)$/i), r = m ? m[1].toLowerCase() : 'c', n = (m ? m[2] : ln).trim();
+          const m = ln.trim().match(/^([crelmsu]):(.+)$/i), r = m ? m[1].toLowerCase() : 'c', n = (m ? m[2] : ln).trim();
           if (n && !o[r].includes(n)) o[r].push(n);
         });
         if (!o.c.length) return fail('Mets au moins une carte commune (ligne sans préfixe)');
@@ -936,8 +949,9 @@ const handler = async (req, res) => {
       const n = Math.min(have, OPEN_MAX, b.all ? OPEN_MAX : Math.max(1, int(b.n, OPEN_MAX) || 1)); // plusieurs sachets de la même collection d'un coup
       for (let i = 0; i < n; i++) { if (u.bought[b.theme] > 0) u.bought[b.theme] -= 1; else u.packs -= 1; }
       const drawn = Array.from({ length: PACK * n }, () => draw(cat[b.theme], b.theme, lvOf(cat, b.theme), subMult(u)));
-      drawn.forEach((id) => add(u, id, 1));
-      extra = { drawn, n };
+      const bad = drawn.map(() => rollBadge()); // 0 = aucun badge, 1 = Bronze, 2 = Argent, 3 = Or
+      drawn.forEach((id, i) => (bad[i] ? addB(u, id, bad[i]) : add(u, id, 1)));
+      extra = { drawn, bad, n };
     } else if (b.action === 'buyobj') {
       const x = cu.objs.find((o) => !o.gone && 'obj:' + o.name === b.id);
       if (!x) return fail('Objet indisponible');
@@ -1071,7 +1085,7 @@ const handler = async (req, res) => {
       if (u.coins < a) return fail('Pas assez de coins');
       const e = mgUse(u, 'battle'); if (e) return fail(e);
       const pick = () => { const t = LINES[crypto.randomInt(LINES.length)]; return draw(cat[t], t, 1); };
-      const rk = (id) => 'crel'.indexOf(rarOf(cat, id)), rounds = []; let res = 0;
+      const rk = (id) => R.indexOf(rarOf(cat, id)), rounds = []; let res = 0;
       for (let i = 0; i < 5 && !res; i++) { const p = pick(), o = pick(); rounds.push([p, o]); res = Math.sign(rk(p) - rk(o)); }
       const gain = res > 0 ? Math.floor(a * BATTLE_X) : res < 0 ? 0 : a;
       u.coins += gain - a; extra = { rounds, res, gain, bet: a };
@@ -1140,7 +1154,7 @@ const handler = async (req, res) => {
     } else if (b.action === 'rebirth') {
       const t = String(b.t || ''), o = cat[t];
       if (!o || t === 'obj') return fail('Collection inconnue');
-      const ids = [...R].flatMap((r) => o[r].map((n) => t + ':' + n));
+      const ids = [...R].flatMap((r) => (o[r] || []).map((n) => t + ':' + n));
       if (o.until != null && !o.base && ((u.rb || {})[t] || 0) >= 1) return fail('Cette collection provisoire a déjà fait sa renaissance (une seule fois)');
       if (!ids.length || ids.some((id) => !u.cards[id])) return fail('Collection incomplète');
       const gain = Math.floor(ids.reduce((a, id) => a + val(u, id, cat, cu), 0) / 5);
