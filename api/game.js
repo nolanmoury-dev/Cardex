@@ -153,11 +153,13 @@ const int = (v, max = 1e6) => Math.max(0, Math.min(max, parseInt(v, 10) || 0));
 const envFind = (re) => { const k = Object.keys(process.env).find((x) => re.test(x) && process.env[x]); return k && process.env[k]; };
 const live = (o) => !o.hidden && (!o.until || o.until > Date.now());
 const loadCu = async () => ({ cols: [], objs: [], vals: {}, stats: {}, ...((await redis.get('custom')) || {}) });
+// Lien de photo facultatif d'une carte (collection provisoire ou objet) : https uniquement, remplace l'image Wikipédia
+const picOf = (s) => { const x = String(s || '').trim(); return /^https:\/\/[^\s"'<>\\]{4,300}$/.test(x) ? x : null; };
 const full = (cu) => {
   const t = { ...T0 };
   cu.cols.forEach((c) => (t[c.key] = c));
-  const o = { name: 'Objets', icon: '🎁', color: '#db2777', hidden: true, c: [], r: [], e: [], l: [], m: [], s: [], u: [] };
-  cu.objs.forEach((x) => o[x.r].push(x.name));
+  const o = { name: 'Objets', icon: '🎁', color: '#db2777', hidden: true, c: [], r: [], e: [], l: [], m: [], s: [], u: [], im: {} };
+  cu.objs.forEach((x) => { o[x.r].push(x.name); if (x.img) o.im[x.name] = x.img; });
   t.obj = o;
   return Object.fromEntries(Object.entries(t).map(([k, v]) => [k, { ...v, m: Array.isArray(v.m) ? v.m : [], s: Array.isArray(v.s) ? v.s : [], u: Array.isArray(v.u) ? v.u : [] }]));
 };
@@ -605,10 +607,20 @@ const handler = async (req, res) => {
         if (b.until != null && !(un0 > now0)) return fail('La date de fin doit être dans le futur');
         const endAt = b.until != null ? Math.min(un0, now0 + 366 * DAY) : now0 + Math.max(1, int(b.days, 365) || 7) * DAY;
         const o = { key: 'x' + Date.now(), name, icon: String(b.icon || '').trim().slice(0, 4) || '⭐', color: /^#[0-9a-f]{6}$/i.test(b.color) ? b.color : '#0ea5e9', until: endAt, c: [], r: [], e: [], l: [], m: [], s: [], u: [] };
-        String(b.cards || '').split('\n').slice(0, 200).forEach((ln) => {
-          const m = ln.trim().match(/^([crelmsu]):(.+)$/i), r = m ? m[1].toLowerCase() : 'c', n = (m ? m[2] : ln).trim();
-          if (n && !o[r].includes(n)) o[r].push(n);
-        });
+        // Format : une carte par ligne (préfixe c: r: e: l: m: s: u: facultatif) ; une ligne qui commence par https:// juste en dessous = lien de la photo de cette carte (facultatif)
+        let last = null, nb = 0;
+        for (const ln0 of String(b.cards || '').split('\n').slice(0, 600)) {
+          const ln = ln0.trim(); if (!ln) continue;
+          if (/^https?:\/\//i.test(ln)) {
+            if (!/^https:\/\//i.test(ln)) return fail('Le lien de photo doit commencer par https:// : ' + ln.slice(0, 60));
+            if (!last) return fail('Un lien de photo doit être juste sous le nom de sa carte : ' + ln.slice(0, 60));
+            const p = picOf(ln); if (!p) return fail('Lien de photo invalide pour « ' + last + ' »');
+            (o.im ||= {})[last] = p; last = null; continue;
+          }
+          const m = ln.match(/^([crelmsu]):(.+)$/i), r = m ? m[1].toLowerCase() : 'c', n = (m ? m[2] : ln).trim().slice(0, 60);
+          last = n || null;
+          if (n && !o[r].includes(n) && nb < 200) { o[r].push(n); nb++; }
+        }
         if (!o.c.length) return fail('Mets au moins une carte commune (ligne sans préfixe)');
         cu.cols.push(o);
         await redis.set('custom', cu);
@@ -635,7 +647,9 @@ const handler = async (req, res) => {
         if (name.length < 2 || pr < 1) return fail('Nom et prix requis');
         cu.objs = cu.objs.filter((x) => x.name !== name);
         const st = parseInt(b.stock, 10);
-        cu.objs.push({ name, r, price: pr, stock: st > 0 ? Math.min(st, 1e6) : null });
+        const img = String(b.img || '').trim();
+        if (img && !picOf(img)) return fail('Le lien de la photo doit commencer par https:// (ou laisse le champ vide)');
+        cu.objs.push({ name, r, price: pr, stock: st > 0 ? Math.min(st, 1e6) : null, ...(img ? { img } : {}) });
         await redis.set('custom', cu);
         await bcast('🛍️ Nouvel objet en boutique : ' + name);
         return ok({ done: true });
