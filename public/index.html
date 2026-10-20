@@ -750,10 +750,10 @@ function chFormDraw(el) {
   };
   const grid = () => {
     const g = $('#cfg'), q = (f.q || '').toLowerCase(), used = {}; f.sel.forEach((s) => (used[s] = (used[s] || 0) + 1));
-    const ids = Object.keys(S.cards).filter((id) => stk(id) && stk(id)[2] && !(war() && S.fav.includes(id)) && matchQ(id, q)).sort((a, b) => RAREV.indexOf(RAR[a]) - RAREV.indexOf(RAR[b]) || cname(a).localeCompare(cname(b)));
-    g.innerHTML = ''; if (!ids.length) g.innerHTML = '<small>Aucune carte jouable' + (q ? ' pour cette recherche' : ' : seules les cartes des collections niveau II à V (ou d\'une collection dont tu as fait la renaissance) peuvent combattre') + '.</small>';
+    const ids = Object.keys(S.cards).filter((id) => stk(id) && (stk(id)[2] || bdSum(id) > 0) && !(war() && S.fav.includes(id)) && matchQ(id, q)).sort((a, b) => RAREV.indexOf(RAR[a]) - RAREV.indexOf(RAR[b]) || cname(a).localeCompare(cname(b)));
+    g.innerHTML = ''; if (!ids.length) g.innerHTML = '<small>Aucune carte jouable' + (q ? ' pour cette recherche' : ' : seules peuvent combattre les cartes de renaissance (collections niveau II à V ou déjà renaissance), les cartes badgées et les cartes objet') + '.</small>';
     ids.slice(0, 60).forEach((id) => [0, 1, 2, 3].forEach((tr) => { // une tuile par version possédée : sans badge, Bronze, Argent, Or
-      const have = tr ? bdN(id, tr) : plainN(id); if (!have) return;
+      const have = tr ? bdN(id, tr) : (stk(id)[2] ? plainN(id) : 0); if (!have) return; // sans badge : seulement si la carte est jouable (renaissance ou objet)
       const s = tr ? id + '@' + tr : id, left = have - (used[s] || 0), c = cardEl(id, left, null, tr), bb = tr ? BDB[tr] : 0;
       c.querySelector('.rn').insertAdjacentHTML('afterend', '<div class="stt">❤️ ' + (st(id)[0] + bb) + ' · ⚔️ ' + (st(id)[1] + bb) + ' · 🔋 ' + COSTC[RAR[id]] + '</div>');
       if (used[s]) c.classList.add('csel');
@@ -1046,7 +1046,7 @@ const bdN = (id, t) => ((S.bd || {})[id] || {})[t] || 0, bdSum = (id) => bdN(id,
 // Collection : on voit l'exemplaire SANS badge ; s'il n'y en a pas, la carte badgée tient la place (et compte dans la collection)
 function ownedEl(id) {
   const pl = plainN(id), el = cardEl(id, pl > 0 ? pl : S.cards[id], null, pl > 0 ? 0 : topBd(id));
-  { const s = stk(id); if (s) { el.querySelector('.rn').insertAdjacentHTML('afterend', '<div class="stt"' + (s[2] ? '' : ' title="Non jouable en défi : collection niveau I sans renaissance" style="opacity:.6"') + '>❤️ ' + s[0] + ' · ⚔️ ' + s[1] + (s[2] ? '' : ' 🔒') + '</div>'); } }
+  { const s = stk(id); if (s) { el.querySelector('.rn').insertAdjacentHTML('afterend', '<div class="stt"' + (s[2] ? '' : ' title="Non jouable en défi sans badge : il faut une carte de renaissance, une carte badgée ou une carte objet" style="opacity:.6"') + '>❤️ ' + s[0] + ' · ⚔️ ' + s[1] + (s[2] ? '' : ' 🔒') + '</div>'); } }
   el.insertAdjacentHTML('beforeend', '<div class="ac"><button class="g" data-f aria-label="Favori">' + (S.fav.includes(id) ? '⭐' : '☆') + '</button><button class="g" data-m title="Mettre à la boutique">🏷️</button><button class="g" data-s>Vendre 1 · ' + S.vals[id] + '🪙</button></div>');
   el.querySelector('[data-f]').onclick = () => run(async () => { setS((await api('fav', { card: id })).state); playerView(); });
   el.querySelector('[data-s]').onclick = () => run(async () => { const j = await api('sell', { card: id }); setS(j.state); playerView(); msg('Vendue : +' + j.gain + ' 🪙', true); });
