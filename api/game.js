@@ -232,7 +232,7 @@ function pickCards(u, ids, fmt, stake, mode, cat, cu) {
   for (const s of ids) {
     const { id, tr } = dk(s), r = rarOf(cat, id);
     if (!r) return 'Carte inconnue';
-    if (!playable(u, id, cat, cu)) return cn(id) + " n'est pas jouable en défi";
+    if (!tr && !playable(u, id, cat, cu)) return cn(id) + " n'est pas jouable en défi (il faut une carte de renaissance, une carte badgée ou une carte objet)"; // un exemplaire badgé est toujours jouable
     cnt[s] = (cnt[s] || 0) + 1;
     const have = tr ? ((u.bd && u.bd[id] && u.bd[id][tr]) || 0) : Math.max(0, (u.cards[id] || 0) - bdSum(u, id));
     if (cnt[s] > have) return "Tu n'as pas assez d'exemplaires de " + cn(id) + (tr ? ' (badge ' + BADGES[tr - 1].name + ')' : ' sans badge');
