@@ -154,7 +154,7 @@ const envFind = (re) => { const k = Object.keys(process.env).find((x) => re.test
 const live = (o) => !o.hidden && (!o.until || o.until > Date.now());
 const loadCu = async () => ({ cols: [], objs: [], vals: {}, stats: {}, ...((await redis.get('custom')) || {}) });
 // Lien de photo facultatif d'une carte (collection provisoire ou objet) : https uniquement, remplace l'image Wikipédia
-const picOf = (s) => { const x = String(s || '').trim(); return /^https:\/\/[^\s"'<>\\]{4,300}$/.test(x) ? x : null; };
+const picOf = (s) => { const x = String(s || '').trim(); return /^https:\/\/[^\s"'<>\\]{4,300}$/.test(x) || /^\/api\/game\?img=[a-f0-9]{12}$/.test(x) ? x : null; };
 const full = (cu) => {
   const t = { ...T0 };
   cu.cols.forEach((c) => (t[c.key] = c));
@@ -204,14 +204,14 @@ const dk = (s) => { const m = String(s).match(/^(.*)@([123])$/); return m ? { id
 // =================== DÉFIS ===================
 // Cartes jouables : collections de niveau II à V, ou n'importe quelle collection dont le joueur a déjà fait une renaissance ; objets seulement si l'opérateur leur a donné des stats.
 const CH = { fee: 5, max: 5000, ttl: 48 * 36e5, day: 10, vs: 3, sent: 5 };
-const HP0 = { c: [20, 5], r: [30, 8], e: [45, 12], l: [70, 18], m: [110, 28], s: [160, 40], u: [240, 60] }, LVM = [1, 1.2, 1.4, 1.6, 1.8], COST = { c: 1, r: 3, e: 8, l: 20, m: 40, s: 70, u: 120 };
+const HP0 = { c: [20, 5], r: [30, 8], e: [45, 12], l: [70, 18], m: [110, 28], s: [160, 40], u: [240, 60] }, LVM = [1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6], COST = { c: 1, r: 3, e: 8, l: 20, m: 40, s: 70, u: 120 };
 const csFrom = (H, p) => H.reduce((c, h) => { if (h.a === p || h.b === p) { const m = h.w * (h.a === p ? 1 : -1); if (m > 0) c.w++; else if (m < 0) c.l++; else c.d++; } return c; }, { w: 0, l: 0, d: 0 }); // victoires / défaites / égalités en défi
 const rbTot = (u) => Object.values((u && u.rb) || {}).reduce((a, x) => a + x, 0);
 const statsBase = (id, cat, cu, raw) => {
   const o = !raw && (cu.stats || {})[id];
   if (o) return { hp: o.hp, atk: o.atk, custom: true };
   const r = rarOf(cat, id); if (!r) return null;
-  const t = id.slice(0, id.indexOf(':')), lv = Math.min(5, Math.max(1, (cat[t] && cat[t].lv) || 1));
+  const t = id.slice(0, id.indexOf(':')), lv = Math.min(9, Math.max(1, (cat[t] && cat[t].lv) || 1));
   const h = parseInt(crypto.createHash('md5').update(id).digest('hex').slice(0, 6), 16) / 0xffffff, k = LVM[lv - 1] * (0.9 + 0.2 * h); // écart propre à chaque carte : -10 % à +10 %
   return { hp: Math.max(1, Math.round(HP0[r][0] * k)), atk: Math.max(1, Math.round(HP0[r][1] * k)) };
 };
@@ -327,9 +327,9 @@ const shopOf = async (cat) => {
   const s = (await redis.get('shop')) || {};
   return Object.fromEntries(Object.entries(cat).filter(([, o]) => live(o)).map(([t]) => [t, { discount: int(s[(cat[t] && cat[t].base) || t] && s[(cat[t] && cat[t].base) || t].discount, 90), blocked: !!(s[(cat[t] && cat[t].base) || t] && s[(cat[t] && cat[t].base) || t].blocked) }]));
 };
-// Niveaux : chaque collection de base (foot…) a 5 niveaux = 5 collections différentes (foot, foot2…foot5).
+// Niveaux : chaque collection de base (foot…) a plusieurs niveaux = autant de collections différentes (foot, foot2…foot6). Niveaux 6 à 9 : +100 cartes par niveau (200, 300, 400, 500) avec mythiques, célestes et uniques.
 // Niveau d'un joueur sur une ligne = 1 + son nombre total de renaissances sur cette ligne (5 max). Le prix du sachet double à chaque niveau : 100, 200, 400, 800, 1600.
-const LVMAX = 5, LINES = Object.keys(T0).filter((t) => Object.values(T0).some((o) => o.base === t));
+const LVMAX = 6, LINES = Object.keys(T0).filter((t) => Object.values(T0).some((o) => o.base === t));
 const lvOf = (cat, t) => (cat[t] && cat[t].lv) || 1, baseOf = (cat, t) => (cat[t] && cat[t].base) || t;
 const lineLv = (u, b) => Math.min(LVMAX, 1 + [b, ...Array.from({ length: LVMAX - 1 }, (_, i) => b + (i + 2))].reduce((a, k) => a + (((u && u.rb) || {})[k] || 0), 0));
 // Un niveau supérieur d'une ligne reste invisible (marché, échanges, cadeaux, recherche…) tant que le joueur ne l'a pas débloqué : comme s'il n'existait pas. On garde ce qu'il possède déjà.
@@ -347,13 +347,15 @@ const view = (u, sh, cat, cu, mk) => ({
   objs: cu.objs.filter((x) => !x.gone), themes: Object.fromEntries(Object.entries(cat).filter(([t]) => known(u, cat, t))),
 });
 // Plus le niveau du sachet est haut, plus les légendaires (et un peu les épiques) sont rares ; la différence revient aux communes.
-const LEG = [4, 2.5, 1.5, 0.9, 0.5], EPI = [11, 10, 9, 8, 7];
+const LEG = [4, 2.5, 1.5, 0.9, 0.5, 0.4, 0.35, 0.3, 0.25], EPI = [11, 10, 9, 8, 7, 6.5, 6, 5.5, 5];
+// Niveaux 6 à 9 seulement : chances (en % par carte) d'une carte mythique, céleste, unique. Avant le niveau 6, elles ne sortent jamais.
+const MSU = [null, null, null, null, null, [0.08, 0.03, 0.005], [0.10, 0.04, 0.007], [0.12, 0.05, 0.010], [0.15, 0.06, 0.015]];
 function draw(o, t, lv = 1, mult = 1) {
-  const w = { ...W, l: (LEG[lv - 1] ?? LEG[0]) * mult, e: EPI[lv - 1] ?? EPI[0] }; // mult = bonus d'abonnement sur les légendaires
-  w.c = 100 - w.r - w.e - w.l;
+  const ms = MSU[lv - 1] || [0, 0, 0], w = { ...W, l: (LEG[lv - 1] ?? LEG[0]) * mult, e: EPI[lv - 1] ?? EPI[0], m: ms[0], s: ms[1], u: ms[2] }; // mult = bonus d'abonnement sur les légendaires
+  w.c = 100 - w.r - w.e - w.l - w.m - w.s - w.u;
   let x = Math.random() * 100, r = 'c';
-  for (const k of 'crel') { if ((x -= w[k]) < 0) { r = k; break; } } // les raretés m / s / u ne sont jamais tirées
-  if (!o[r].length) r = 'c';
+  for (const k of 'crelmsu') { if ((x -= w[k]) < 0) { r = k; break; } }
+  if (!(o[r] || []).length) r = 'c';
   return t + ':' + o[r][Math.floor(Math.random() * o[r].length)];
 }
 
@@ -500,7 +502,8 @@ const handler = async (req, res) => {
   const fail = (m, c = 400) => res.status(c).json({ error: m });
   const ok = (d) => res.status(200).json(d);
   const cron = req.method === 'GET' && new URL(req.url, 'http://x').searchParams.get('cron') === '1';
-  if (req.method !== 'POST' && !cron) return fail('POST uniquement', 405);
+  const imgId = req.method === 'GET' ? new URL(req.url, 'http://x').searchParams.get('img') : null; // photo de carte envoyée par l'opérateur depuis sa galerie
+  if (req.method !== 'POST' && !cron && !imgId) return fail('POST uniquement', 405);
   if (cron && process.env.CRON_SECRET) {
     const sent = (req.headers.authorization || '').replace(/^Bearer /, '') || new URL(req.url, 'http://x').searchParams.get('key');
     if (sent !== process.env.CRON_SECRET) return fail('Non autorisé', 401);
@@ -511,6 +514,12 @@ const handler = async (req, res) => {
       const url = envFind(/(REST_API_URL|REDIS_REST_URL)$/), token = envFind(/(REST_API_TOKEN|REDIS_REST_TOKEN)$/);
       if (!url || !token) return fail('Base de données non reliée : dans Vercel, ajoute Upstash Redis au projet (Storage > Connect Project), puis fais Redeploy', 500);
       redis = new (require('@upstash/redis').Redis)({ url, token });
+    }
+    if (imgId) {
+      const d = /^[a-f0-9]{12}$/.test(imgId) ? await redis.get('cimg:' + imgId) : null, m = typeof d === 'string' && d.match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+=*)$/);
+      if (!m) return fail('Image inconnue', 404);
+      res.setHeader('Content-Type', 'image/' + m[1]); res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.status(200).send(Buffer.from(m[2], 'base64'));
     }
     if (cron) return ok(await dailyPush());
     await ensureBots().catch((e) => console.error('ensureBots', e.message));
@@ -566,7 +575,7 @@ const handler = async (req, res) => {
       if (b.action === 'users') {
         const names = (await redis.smembers('users')).sort();
         const list = names.length ? await redis.mget(...names.map(key)) : [];
-        const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, bd: u.bd || {}, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u), pf: !!u.pf }; });
+        const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, bd: u.bd || {}, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u), pf: !!u.pf, push: (u.subs || []).length > 0 }; });
         return ok({ ...(await skinState()), skinc: await skinList(), maint: !!(await redis.get('maint')), maintinfo: (await redis.get('maintinfo')) || { presets: [], msg: '' }, maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), subs: SUBS, users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
       }
       if (b.action === 'shop') {
@@ -600,6 +609,13 @@ const handler = async (req, res) => {
         await redis.set(key(u.pseudo), u);
         return ok({ done: true });
       }
+      if (b.action === 'imgup') {
+        const d = String(b.img || '');
+        if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(d) || d.length > 70000) return fail('Image invalide ou trop lourde : choisis une autre photo');
+        const id = crypto.randomBytes(6).toString('hex');
+        await redis.set('cimg:' + id, d);
+        return ok({ url: '/api/game?img=' + id });
+      }
       if (b.action === 'addcol') {
         const name = String(b.name || '').trim().slice(0, 30);
         if (name.length < 2) return fail('Nom trop court');
@@ -611,8 +627,8 @@ const handler = async (req, res) => {
         let last = null, nb = 0;
         for (const ln0 of String(b.cards || '').split('\n').slice(0, 600)) {
           const ln = ln0.trim(); if (!ln) continue;
-          if (/^https?:\/\//i.test(ln)) {
-            if (!/^https:\/\//i.test(ln)) return fail('Le lien de photo doit commencer par https:// : ' + ln.slice(0, 60));
+          if (/^(https?:\/\/|\/api\/game\?img=)/i.test(ln)) {
+            if (!/^(https:\/\/|\/api\/game\?img=)/i.test(ln)) return fail('Le lien de photo doit commencer par https:// : ' + ln.slice(0, 60));
             if (!last) return fail('Un lien de photo doit être juste sous le nom de sa carte : ' + ln.slice(0, 60));
             const p = picOf(ln); if (!p) return fail('Lien de photo invalide pour « ' + last + ' »');
             (o.im ||= {})[last] = p; last = null; continue;
@@ -788,7 +804,7 @@ const handler = async (req, res) => {
         tick(u);
         const nms = await redis.smembers('users'), all = nms.length ? await redis.mget(...nms.map(key)) : [];
         const same = (u.ips || []).length ? all.filter((x) => x && x.pseudo !== u.pseudo && (x.ips || []).some((h) => u.ips.includes(h))).map((x) => x.pseudo) : [];
-        return ok({ p: { seen: u.bot ? u.lastAct || 0 : u.seen || 0, ban: banOf(u), same, pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards || {}, rb: u.rb || {}, rl: rlInfo(u).left, dl: { left: dlInfo(u).left, max: dlInfo(u).max }, mg: mgInfo(u), renames: u.renames || 0, race: !!raceView(u), rx: u.rcX || 0, sub: subOf(u) ? { t: u.sub.t, name: subOf(u).name, ico: subOf(u).ico, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial }, max: { rl: RL_MAX, mg: MG_MAX, subs: SUBS } });
+        return ok({ p: { seen: u.bot ? u.lastAct || 0 : u.seen || 0, ban: banOf(u), same, pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards || {}, rb: u.rb || {}, rl: rlInfo(u).left, dl: { left: dlInfo(u).left, max: dlInfo(u).max }, mg: mgInfo(u), renames: u.renames || 0, race: !!raceView(u), rx: u.rcX || 0, push: (u.subs || []).length > 0, sub: subOf(u) ? { t: u.sub.t, name: subOf(u).name, ico: subOf(u).ico, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial }, max: { rl: RL_MAX, mg: MG_MAX, subs: SUBS } });
       }
       if (b.action === 'subset') { // offrir (ou prolonger) un abonnement, ou le retirer (tier = 0)
         const u = await redis.get(key(String(b.pseudo || '')));
@@ -851,6 +867,17 @@ const handler = async (req, res) => {
           if (mine.length) { await redis.set('challenges', L.filter((x) => x.from !== u.pseudo)); mine.forEach((x) => refundCh(u, x, '↩️ Ton défi en attente a été annulé : mise et cartes rendues')); }
         }
         note(u, '⛔ Ton compte a été banni' + (u.ban.reason ? ' : ' + u.ban.reason : ''));
+        await redis.set(key(u.pseudo), u);
+        return ok({ done: true });
+      }
+      if (b.action === 'pwreset') { // mot de passe perdu : l'opérateur en donne un nouveau au joueur
+        const u = await redis.get(key(String(b.pseudo || '')));
+        if (!u) return fail('Joueur introuvable');
+        if (u.bot) return fail('Les bots n’ont pas de mot de passe');
+        const pw = String(b.password || '');
+        if (pw.length < 8) return fail('Mot de passe trop court (8 caractères minimum)');
+        if (pw.length > 64) return fail('Mot de passe trop long (64 caractères maximum)');
+        u.salt = crypto.randomBytes(16).toString('hex'); u.hash = hash(pw, u.salt);
         await redis.set(key(u.pseudo), u);
         return ok({ done: true });
       }
@@ -1210,7 +1237,7 @@ const handler = async (req, res) => {
       (u.rb ||= {})[t] = (u.rb[t] || 0) + 1; u.coins += gain;
       if (o.until != null && !o.base && u.bought[t] > 0) { u.packs += u.bought[t]; delete u.bought[t]; } // collection provisoire : les sachets restants deviennent des sachets gratuits
       const L1 = lineLv(u, baseOf(cat, t)), nt = L1 > L0 ? (L1 > 1 ? baseOf(cat, t) + L1 : baseOf(cat, t)) : null;
-      extra = { chUnlock: rb0 === 0, gain, lv: L1, kept, unlocked: nt && cat[nt] ? cat[nt].name : null };
+      extra = { chUnlock: rb0 === 0, gain, lv: L1, kept, unlocked: nt && cat[nt] ? cat[nt].name : null, last: !(nt && cat[nt]) && LINES.includes(baseOf(cat, t)) && L1 >= LVMAX };
     } else if (b.action === 'rank') {
       const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
       extra = { rank: list.filter(Boolean).map((v) => {

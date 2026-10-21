@@ -25,10 +25,6 @@ button:disabled{opacity:.4;cursor:not-allowed}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--l);outline-offset:2px}
 .tabs{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 16px}
 .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
-.box.lvb{border:2px solid var(--lc);box-shadow:0 0 12px -2px var(--lc)}
-.box.lvb.lv9{border-color:transparent;box-shadow:0 0 14px -2px #a855ff;background:linear-gradient(var(--panel),var(--panel)) padding-box,conic-gradient(from var(--ang),#ff3b3b,#ffb000,#3bff6a,#27c6ff,#a855ff,#ff3bd4,#ff3b3b) border-box;animation:spin 3.5s linear infinite}
-.pk.rb{background:linear-gradient(135deg,#ff3b3b,#ffb000,#3bff6a,#27c6ff,#a855ff,#ff3bd4)}
-@media(prefers-reduced-motion:reduce){.box.lvb.lv9{animation:none}}
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .auth{max-width:340px;margin:12vh auto;display:grid;gap:10px}
 .err{color:#ff7b72;min-height:1.3em}
@@ -363,6 +359,19 @@ function wiki(t) {
     } catch { return { img: null, title: t }; }
   })();
 }
+// Photo prise dans la galerie : réduite en JPEG léger avant envoi
+async function shrinkImg(file) {
+  const u = URL.createObjectURL(file);
+  try {
+    const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Image illisible : essaie une autre photo')); i.src = u; });
+    for (const [side, q] of [[420, 0.8], [360, 0.72], [300, 0.65], [240, 0.6]]) {
+      const k = Math.min(1, side / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.width * k)); c.height = Math.max(1, Math.round(im.height * k));
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      const d = c.toDataURL('image/jpeg', q); if (d.length <= 65000) return d;
+    }
+    throw new Error('Image trop lourde : choisis une autre photo');
+  } finally { URL.revokeObjectURL(u); }
+}
 function cardEl(id, count, i, tier) {
   const name = id.slice(id.indexOf(':') + 1), r = RAR[id] || 'c';
   const el = document.createElement('div');
@@ -439,7 +448,7 @@ function shopHTML() {
   const packs = Object.entries(S.shop).map(([t, sh]) => {
     const o = CAT[t];
     const pr = sh.nobuy ? '<b>Ancien niveau</b> : plus en vente, tu peux ouvrir ceux qu\'il te reste' : sh.blocked ? '<b class="err">Indisponible pour le moment</b>' : sh.discount ? '<s>' + sh.full + '</s> <b>' + sh.price + ' coins</b> <span class="pill">-' + sh.discount + '%</span>' : '<b>' + sh.price + ' coins</b>';
-    return '<div class="box' + (sh.lvl > 1 ? ' lvb' + (sh.lvl >= 9 ? ' lv9' : '') : '') + '" style="--lc:' + pkc(o, sh.lvl) + '"><div class="pk' + (sh.lvl >= 9 ? ' rb' : '') + '" style="--pc:' + pkc(o, sh.lvl) + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes' + (sh.lvl > 1 ? ' d\'une collection différente à chaque niveau' : '') + '. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || sh.nobuy || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button>' + (packsOf(t) >= 2 && !sh.blocked ? '<input type="number" inputmode="numeric" data-nn="' + t + '" min="1" max="' + Math.min(50, packsOf(t)) + '" value="' + Math.min(5, packsOf(t)) + '" style="width:72px" aria-label="Nombre de sachets à ouvrir"><button class="g" data-om="' + t + '">Ouvrir ce nombre</button><button class="g" data-oa="' + t + '">Tout ouvrir (' + Math.min(50, packsOf(t)) + ')</button>' : '') + '</div></div>';
+    return '<div class="box"><div class="pk" style="--pc:' + pkc(o, sh.lvl) + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (sh.lvl > 1 ? ' <span class="pill">Niveau ' + sh.lvl + '</span>' : '') + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes' + (sh.lvl > 1 ? ' d\'une collection différente à chaque niveau' : '') + '. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || sh.nobuy || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button>' + (packsOf(t) >= 2 && !sh.blocked ? '<input type="number" inputmode="numeric" data-nn="' + t + '" min="1" max="' + Math.min(50, packsOf(t)) + '" value="' + Math.min(5, packsOf(t)) + '" style="width:72px" aria-label="Nombre de sachets à ouvrir"><button class="g" data-om="' + t + '">Ouvrir ce nombre</button><button class="g" data-oa="' + t + '">Tout ouvrir (' + Math.min(50, packsOf(t)) + ')</button>' : '') + '</div></div>';
   }).join('');
   const objs = S.objs.length ? '<h2>Objets</h2><div class="grid2">' + S.objs.map((x) => '<div class="box"><b style="color:var(--' + x.r + ')">' + esc(x.name) + '</b> — ' + RN[x.r] + '<p>' + x.price + ' coins' + (x.stock != null ? (x.stock > 0 ? ' · Reste ' + x.stock : ' · Épuisé') : '') + '</p><button data-ob="' + esc('obj:' + x.name) + '"' + (S.coins < x.price || (x.stock != null && x.stock <= 0) ? ' disabled' : '') + '>Acheter</button></div>').join('') + '</div>' : '';
   return '<div class="box"><p>Un sachet gratuit toutes les 10 à 14 minutes (10 maximum, 2 h pour tout remplir). Sachets gratuits : <b>' + S.packs + '/10</b>. <span id="cd"></span></p></div><div class="grid2">' + packs + '</div>' + objs;
@@ -1007,7 +1016,7 @@ function setHTML() {
 }
 function rebirthFlow(t) {
   const o = CAT[t], tot = idsOf(t).length, base = o.base || t, lv = (S.lv || {})[base] || 9;
-  const nx = lv < 5 ? ((S.lvn || {})[base] || '') : '';
+  const nx = (S.lvn || {})[base] || '';
   let tm = [], iv, fin = false;
   const ov = document.createElement('div'); ov.id = 'rbo';
   const close = () => { clearInterval(iv); tm.forEach(clearTimeout); ov.remove(); };
@@ -1040,7 +1049,7 @@ function rebirthFlow(t) {
       + '<div class="a t tt" style="top:262px;font-size:26px;font-weight:500;--d:2.2s">Renaissance</div>'
       + '<div class="a t" style="top:296px;font-size:14px;color:#8b949e;--d:2.5s">' + esc(o.name) + ' complété</div>'
       + '<div class="a t" style="top:318px;font-size:22px;font-weight:500;color:#f5c518;--d:3s">🪙 <span id="rbc">+0</span></div>'
-      + '<div class="a u"><span style="font-size:28px">' + (j.unlocked ? '🎁' : '♻️') + '</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">' + (j.unlocked ? 'Niveau ' + j.lv + ' débloqué' : 'Renaissance validée') + '</div><div style="font-size:12px;color:#8b949e">' + (j.unlocked ? 'Sachet ' + esc(j.unlocked) + ' dans la Boutique' : 'Niveau maximum atteint') + '</div></div><button data-ct>Continuer</button></div>'
+      + '<div class="a u"><span style="font-size:28px">' + (j.unlocked ? '🎁' : '♻️') + '</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">' + (j.unlocked ? 'Niveau ' + j.lv + ' débloqué' : 'Renaissance validée') + '</div><div style="font-size:12px;color:#8b949e">' + (j.unlocked ? 'Sachet ' + esc(j.unlocked) + ' dans la Boutique' : j.last ? 'Les prochains sachets arrivent bientôt !' : 'Niveau maximum atteint') + '</div></div><button data-ct>Continuer</button></div>'
       + '</div>';
     ov.querySelector('[data-sk]').onclick = done;
     ov.querySelector('[data-ct]').onclick = done;
@@ -1258,6 +1267,11 @@ function playerView() {
 // # `v` doit être unique et change à chaque mise à jour (ex. la date AAAA-MM-JJ, avec -2, -3… s'il y en a plusieurs le même jour).
 // =====================================================================================================================
 const UPDATES = [
+  { v: '2026-10-21', title: 'Niveau 6 !', items: [
+    '🚀 Un nouveau niveau de sachets : le niveau 6, avec 200 cartes par collection.',
+    '💎 Les cartes Mythique, Céleste et Unique peuvent enfin sortir des sachets, avec une chance minuscule, à partir du niveau 6.',
+    '⬆️ Pour y accéder : fais la renaissance du niveau 5 d’une collection.',
+  ] },
   { v: '2026-10-20-1', title: 'Badges : vente et défis', items: [
     '💰 Dans Collection → Badges, tu peux vendre tes cartes badgées : Bronze ×1,5, Argent ×2, Or ×3 le prix d’une carte normale (une par une, ou tout le livret).',
     '⚔️ Défis : tu peux maintenant jouer toutes tes cartes, y compris les cartes objet et les cartes badgées. Un badge donne +1 (Bronze), +2 (Argent) ou +4 (Or) en vie et en attaque.',
@@ -1295,13 +1309,13 @@ function showUpdate() {
   const ov = overlay('<div class="box" style="max-width:420px;margin:10vh auto"><h2>🎉 ' + esc(u.title) + '</h2><ul style="padding-left:18px;margin:8px 0 14px">' + u.items.map((x) => '<li style="margin:6px 0">' + esc(x) + '</li>').join('') + '</ul><button id="updok" style="width:100%">C’est parti !</button></div>');
   $('#updok').onclick = () => { try { localStorage.upd = u.v; } catch {} ov.remove(); };
 }
-// Couleur du sachet selon le niveau : rien (couleur de la collection) → gris → bleu → vert → rouge → violet → or → rose → arc-en-ciel (comme la carte Unique)
-const PKC = [null, '#8b949e', '#2a7de1', '#2ea043', '#e5484d', '#8b5cf6', '#f5b301', '#ff9ad5', '#a855ff'];
+// Couleur du sachet selon le niveau : rien (couleur de la collection) → gris → bleu → vert → rouge → violet → or → rose → cyan
+const PKC = [null, '#8b949e', '#2a7de1', '#2ea043', '#e5484d', '#8b5cf6', '#f5b301', '#ff9ad5', '#22d3ee'];
 const pkc = (o, lv) => (lv > 1 && PKC[Math.min(9, lv) - 1]) || o.color;
 function overlay(html) { const ov = document.createElement('div'); ov.className = 'ov'; ov.innerHTML = html; document.body.append(ov); return ov; }
 function reveal(ids, t, n, was, bad) {
   was = was || {};
-  const o = CAT[t], ov = overlay('<div class="pk big shake' + ((o.lv || 1) >= 9 ? ' rb' : '') + '" style="--pc:' + pkc(o, o.lv || 1) + '">' + o.icon + '</div>'), multi = (n || 1) > 1;
+  const o = CAT[t], ov = overlay('<div class="pk big shake" style="--pc:' + pkc(o, o.lv || 1) + '">' + o.icon + '</div>'), multi = (n || 1) > 1;
   setTimeout(() => {
     const RO = { u: -3, s: -2, m: -1, l: 0, e: 1, r: 2, c: 3 }, m = new Map(), grp = new Map(); // m = exemplaires SANS badge par carte ; grp = [carte, nombre, badge] (un groupe par carte et par badge)
     ids.forEach((id, i) => { const tr = (bad && bad[i]) || 0, k = id + '|' + tr, g0 = grp.get(k) || [id, 0, tr]; g0[1]++; grp.set(k, g0); if (!tr) m.set(id, (m.get(id) || 0) + 1); });
@@ -1865,7 +1879,7 @@ async function opView(m) {
   const opts = Object.entries(CAT).map(([t, o]) => '<optgroup label="' + esc(o.name) + '">' + [...RA].flatMap((r) => (o[r] || []).map((n) => '<option value="' + esc(t + ':' + n) + '">' + RN[r] + ' — ' + esc(n) + '</option>')).join('') + '</optgroup>').join('');
   const list = users.map((u) => {
     const nb = u.packs + Object.values(u.bought).reduce((a, b) => a + b, 0);
-    return '<div class="dm" data-pu="' + esc(u.pseudo) + '" data-pn="' + esc(u.pseudo.toLowerCase()) + '">' + avEl(u.pseudo) + '<div class="tx"><b>' + dotOf(u.seen) + (u.bot ? '🤖 ' : '') + (u.banned ? '⛔ ' : '') + esc(u.pseudo) + '</b><small>🪙 ' + u.coins + ' · 📦 ' + nb + ' · ' + Object.keys(u.cards).length + ' cartes</small></div><small>Ouvrir ›</small></div>';
+    return '<div class="dm" data-pu="' + esc(u.pseudo) + '" data-pn="' + esc(u.pseudo.toLowerCase()) + '">' + avEl(u.pseudo) + '<div class="tx"><b>' + dotOf(u.seen) + (u.bot ? '🤖 ' : '') + (u.banned ? '⛔ ' : '') + esc(u.pseudo) + (u.push ? ' <span title="Notifications activées">🔔</span>' : '') + '</b><small>🪙 ' + u.coins + ' · 📦 ' + nb + ' · ' + Object.keys(u.cards).length + ' cartes</small></div><small>Ouvrir ›</small></div>';
   }).join('') || '<p>Aucun joueur pour le moment.</p>';
   const now = Date.now();
   const cols = custom.cols.filter((c) => c.until > now).map((c) => '<div class="row">' + c.icon + ' <b>' + esc(c.name) + '</b> jusqu\'au ' + new Date(c.until).toLocaleDateString('fr-FR') + ' <input type="date" data-ed="' + c.key + '" value="' + dstr(c.until) + '" min="' + dstr(Date.now() + 864e5) + '"> <button class="g" data-ee="' + c.key + '">Changer la fin</button> <button class="g" data-ec="' + c.key + '">Terminer maintenant</button></div>').join('');
@@ -1881,8 +1895,8 @@ async function opView(m) {
   const pfbox = '<div class="box"><h2>Photos de profil (' + pq.length + ' à vérifier)</h2>' + (pq.map((r) => '<div class="row" style="border-top:1px solid var(--line);padding:8px 0"><img class="pf" style="width:64px;height:64px;margin:0" src="' + r.img + '" alt=""><div style="flex:1;min-width:140px"><b>' + esc(r.pseudo) + '</b><br><small>' + r.n + ' changement(s) · ' + new Date(r.t).toLocaleString('fr-FR') + '</small></div><button data-po="' + esc(r.pseudo) + '">Accepter</button><button class="g" data-pn2="' + esc(r.pseudo) + '">Refuser</button></div>').join('') || '<p>Aucune demande en attente.</p>') + '<div class="row" style="margin-top:8px"><select id="pdu"><option value="">Retirer la photo de…</option>' + users.filter((u) => u.pf).map((u) => '<option value="' + esc(u.pseudo) + '">' + esc(u.pseudo) + '</option>').join('') + '</select><button class="g" id="pdb">Retirer</button></div><div class="err" id="e8"></div></div>';
   app.innerHTML = '<div class="bar"><b>Espace opérateur</b><span class="row"><button class="g" id="obl" aria-label="Notifications">🔔' + (opInb.length ? ' ' + opInb.length : '') + '</button><button class="g" id="pv">🎮 Espace joueur</button><button class="g" id="th">🌓</button><button class="g" id="lo">Quitter</button></span></div>' +
     '<div class="box"><h2>Boutique</h2><div class="grid2">' + Object.keys(shop).filter((t) => !CAT[t].base).map((t) => '<div class="row"><b>' + CAT[t].icon + ' ' + esc(CAT[t].name) + '</b><input type="number" min="0" max="90" value="' + shop[t].discount + '" id="d-' + t + '" style="width:80px" aria-label="Réduction en %"> %<label><input type="checkbox" id="b-' + t + '"' + (shop[t].blocked ? ' checked' : '') + '> bloqué</label><button data-sv="' + t + '">Enregistrer</button></div>').join('') + '</div><div class="err" id="e2"></div></div>' +
-    '<div class="grid2"><form class="box" id="fc" style="display:grid;gap:10px"><h2>Collection provisoire</h2><input id="cn" placeholder="Nom" required><input id="ci" placeholder="Emoji (ex : 🎃)" maxlength="4"><label class="row" style="gap:8px">Date de fin <input id="cd" type="date" required min="' + dstr(Date.now() + 864e5) + '" value="' + dstr(Date.now() + 7 * 864e5) + '"></label><label class="row" style="gap:8px">Couleur du fond <input id="cc" type="color" value="#0ea5e9" style="width:60px;height:36px;padding:2px"></label><textarea id="cl" rows="8" placeholder="Une carte par ligne (titre Wikipédia). Préfixe r: e: l: m: s: u: pour la rareté (m = Mythique, s = Céleste, u = Unique), sans préfixe = commune.&#10;Photo (facultatif, si la carte n’a pas de page Wikipédia) : colle le lien https:// sur la ligne juste en dessous du nom.&#10;Exemple :&#10;l:Mon joueur&#10;https://exemple.com/photo.jpg"></textarea><button>Créer</button><div class="err" id="e3"></div>' + cols + '</form>' +
-    '<form class="box" id="fo" style="display:grid;gap:10px"><h2>Objet en boutique</h2><input id="on" placeholder="Nom de la carte (titre Wikipédia)" required><input id="oi" type="url" placeholder="Lien de la photo, https://… (facultatif, si pas de page Wikipédia)"><select id="or"><option value="c">Commune</option><option value="r">Rare</option><option value="e">Épique</option><option value="l">Légendaire</option><option value="m">Mythique</option><option value="s">Céleste</option><option value="u">Unique</option></select><input id="op" type="number" min="1" placeholder="Prix en coins" required><input id="os" type="number" min="1" placeholder="Quantité disponible (vide = illimité)"><button>Ajouter</button><div class="err" id="e4"></div>' + objs + '</form></div>' +
+    '<div class="grid2"><form class="box" id="fc" style="display:grid;gap:10px"><h2>Collection provisoire</h2><input id="cn" placeholder="Nom" required><input id="ci" placeholder="Emoji (ex : 🎃)" maxlength="4"><label class="row" style="gap:8px">Date de fin <input id="cd" type="date" required min="' + dstr(Date.now() + 864e5) + '" value="' + dstr(Date.now() + 7 * 864e5) + '"></label><label class="row" style="gap:8px">Couleur du fond <input id="cc" type="color" value="#0ea5e9" style="width:60px;height:36px;padding:2px"></label><textarea id="cl" rows="8" placeholder="Une carte par ligne (titre Wikipédia). Préfixe r: e: l: m: s: u: pour la rareté (m = Mythique, s = Céleste, u = Unique), sans préfixe = commune.&#10;Photo (facultatif, si la carte n’a pas de page Wikipédia) : colle le lien https:// sur la ligne juste en dessous du nom.&#10;Exemple :&#10;l:Mon joueur&#10;https://exemple.com/photo.jpg"></textarea><div class="row" style="gap:8px"><button type="button" class="g" id="cfb">📷 Photo depuis la galerie</button><input type="file" id="cf" accept="image/*" hidden><small>Mets le curseur sur la ligne du nom de la carte, puis choisis la photo : elle se place juste en dessous.</small></div><button>Créer</button><div class="err" id="e3"></div>' + cols + '</form>' +
+    '<form class="box" id="fo" style="display:grid;gap:10px"><h2>Objet en boutique</h2><input id="on" placeholder="Nom de la carte (titre Wikipédia)" required><input id="oi" placeholder="Lien de la photo, https://… (facultatif, si pas de page Wikipédia)"><div class="row" style="gap:8px"><button type="button" class="g" id="ofb">📷 Photo depuis la galerie</button><input type="file" id="of" accept="image/*" hidden><small id="ofs"></small></div><select id="or"><option value="c">Commune</option><option value="r">Rare</option><option value="e">Épique</option><option value="l">Légendaire</option><option value="m">Mythique</option><option value="s">Céleste</option><option value="u">Unique</option></select><input id="op" type="number" min="1" placeholder="Prix en coins" required><input id="os" type="number" min="1" placeholder="Quantité disponible (vide = illimité)"><button>Ajouter</button><div class="err" id="e4"></div>' + objs + '</form></div>' +
     '<div class="box" id="pbox"><h2>Joueurs (' + users.length + ')</h2><div id="plist"><input id="pq" placeholder="🔎 Taper le nom d\'un joueur" style="width:100%;margin-bottom:8px" autocomplete="off"><div id="pls">' + list + '</div></div><div id="pf" class="opf"></div></div>' +
     mkbox +
     snOpHTML() +
@@ -1930,10 +1944,11 @@ async function opView(m) {
       const rbTot = Object.values(p.rb).reduce((a, x) => a + x, 0);
       const cardRow = (id, n) => '<tr><td>' + esc(nm(id)) + ' <small>(' + (RN[RAR[id]] || '?') + ' · ' + esc((CAT[id.slice(0, id.indexOf(':'))] || {}).name || '?') + ')</small></td><td><input type="number" min="0" data-pc="' + esc(id) + '" value="' + n + '"></td></tr>';
       const banHtml = p.bot ? '' : '<details open><summary>⛔ Bannissement' + (p.ban ? ' (en cours)' : '') + '</summary>' + (p.ban ? '<p>Banni ' + (p.ban.until ? "jusqu'au " + new Date(p.ban.until).toLocaleString('fr-FR') : 'définitivement') + (p.ban.reason ? ' — ' + esc(p.ban.reason) : '') + '</p><button class="g" id="pf-ub" type="button">Lever le ban maintenant</button>' : '<div class="row">' + [['d', 'Jours'], ['h', 'Heures'], ['m', 'Minutes'], ['s', 'Secondes']].map(([k, l]) => '<label>' + l + ' <input type="number" min="0" id="bn-' + k + '" value="0" style="width:84px"></label>').join('') + '</div><label class="row" style="margin:6px 0"><input type="checkbox" id="bn-p"> Définitif</label><input id="bn-r" maxlength="300" placeholder="Raison (facultative, visible par le joueur)" style="width:100%;margin-bottom:8px"><button type="button" id="pf-bn">⛔ Bannir</button>') + '</details>';
-      pf.innerHTML = '<div class="row"><button class="g" id="pfb">← Retour</button>' + avEl(p.pseudo) + '<h2 style="margin:0">' + esc(p.pseudo) + (p.bot ? ' 🤖' : '') + (p.ban ? ' ⛔' : '') + '</h2></div>'
+      pf.innerHTML = '<div class="row"><button class="g" id="pfb">← Retour</button>' + avEl(p.pseudo) + '<h2 style="margin:0">' + esc(p.pseudo) + (p.bot ? ' 🤖' : '') + (p.ban ? ' ⛔' : '') + (p.push ? ' <span title="Notifications activées">🔔</span>' : '') + '</h2></div>'
         + '<p>' + dotOf(p.seen) + 'Dernière action : ' + (p.seen ? (Date.now() - p.seen < 60000 ? "à l'instant" : 'il y a ' + ago(p.seen)) : 'jamais') + '</p>'
         + (p.same && p.same.length ? '<p class="err" style="min-height:0">⚠️ Même IP que : ' + p.same.map(esc).join(', ') + '</p>' : '')
         + banHtml
+        + (p.bot ? '' : '<details><summary>🔑 Mot de passe perdu</summary><div class="row"><input id="pw-n" placeholder="Nouveau mot de passe (8 caractères minimum)" autocomplete="off" style="flex:1;min-width:180px"><button type="button" class="g" id="pw-g">🎲 Générer</button><button type="button" id="pw-s">Réinitialiser</button></div><small>Donne-lui ensuite ce mot de passe : il pourra le changer dans Réglages. Son ancien mot de passe ne marchera plus.</small></details>')
         + '<div class="row"><label>🪙 Coins <input type="number" min="0" id="pf-co" value="' + p.coins + '"></label><label>📦 Sachets gratuits <input type="number" min="0" id="pf-pk" value="' + p.packs + '"></label></div>'
         + (p.race ? '<div class="row"><b>🏁 Packs de course offerts : <span id="pf-rx">' + p.rx + '</span></b><input type="number" min="1" max="50" id="pf-rn" value="5" style="width:84px" aria-label="Nombre de packs de course"><button type="button" id="pf-rg">Donner</button><button type="button" class="g" id="pf-rt">Retirer</button></div><small>Cadeau ponctuel, en plus du pack gratuit de l’heure : le joueur les ouvre quand il veut, puis tout redevient normal (1 pack par heure).</small>' : '')
         + '<div class="row"><label>⚔️ Défis par jour (limite) <input type="number" min="0" id="pf-dl" value="' + p.dl.max + '"></label><small>' + p.dl.left + ' restant' + (p.dl.left > 1 ? 's' : '') + ' aujourd\'hui</small></div>'
@@ -1944,6 +1959,24 @@ async function opView(m) {
         + '<details open><summary>🎴 Cartes (' + Object.keys(p.cards).length + ' différentes)</summary><div class="row" style="flex-wrap:nowrap"><select id="pf-ac" style="flex:1;min-width:0">' + opts + '</select><input type="number" id="pf-an" min="1" value="1"><button id="pf-aa" type="button">Ajouter</button></div><small>Mets 0 pour retirer une carte. Les changements sont appliqués avec « Enregistrer ».</small><table id="pf-ct">' + Object.entries(p.cards).sort((x, y) => nm(x[0]).localeCompare(nm(y[0]))).map(([id, n]) => cardRow(id, n)).join('') + '</table></details>'
         + '<div class="row"><button id="pf-sv">💾 Enregistrer</button><button class="g" id="pf-del" type="button">🗑️ Supprimer le compte</button></div><div class="err" id="epf"></div>';
       $('#pfb').onclick = backList;
+      if ($('#pw-g')) {
+        $('#pw-g').onclick = () => { // 10 caractères : majuscules, minuscules et chiffres (sans les caractères qui se ressemblent)
+          const U = 'ABCDEFGHJKLMNPQRSTUVWXYZ', Lo = 'abcdefghijkmnopqrstuvwxyz', D = '23456789', all = U + Lo + D, rnd = (n) => crypto.getRandomValues(new Uint32Array(1))[0] % n;
+          const a = [U[rnd(U.length)], Lo[rnd(Lo.length)], D[rnd(D.length)]]; while (a.length < 10) a.push(all[rnd(all.length)]);
+          for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+          $('#pw-n').value = a.join('');
+        };
+        $('#pw-s').onclick = async () => {
+          const pw = $('#pw-n').value.trim(), e2 = $('#epf');
+          if (pw.length < 8) { e2.style.color = ''; e2.textContent = 'Mot de passe trop court (8 caractères minimum)'; return; }
+          if (!confirm('Réinitialiser le mot de passe de ' + p.pseudo + ' ? Son ancien mot de passe ne marchera plus.')) return;
+          try {
+            await api('pwreset', { pseudo: p.pseudo, password: pw });
+            try { await navigator.clipboard.writeText(pw); } catch {}
+            e2.style.color = '#3fb950'; e2.textContent = 'Mot de passe de ' + p.pseudo + ' réinitialisé : ' + pw + ' (copié). Donne-le-lui.';
+          } catch (er) { e2.style.color = ''; e2.textContent = er.message; }
+        };
+      }
       ['u', 'ru', 'mt'].forEach((id) => { const s = $('#' + id); if (s && [...s.options].some((o) => o.value === p.pseudo)) s.value = p.pseudo; }); $('#u').onchange(); // « Donner ou retirer », « Changer le pseudo » et « Envoyer une notification » ciblent déjà ce joueur
       const banDone = async (txt) => { await openFiche(p.pseudo); const e2 = $('#epf'); e2.style.color = '#3fb950'; e2.textContent = txt; };
       if ($('#pf-bn')) $('#pf-bn').onclick = async () => {
@@ -2070,6 +2103,24 @@ async function opView(m) {
   $('#pdb').onclick = act('e8', () => { if (!$('#pdu').value) throw new Error('Choisis un joueur'); return api('pfpdel', { pseudo: $('#pdu').value }); }, 'Photo retirée');
   app.querySelectorAll('[data-dr]').forEach((b) => (b.onclick = act('e2', () => api('delreport', { id: +b.dataset.dr }), 'Signalement supprimé')));
   $('#fc').onsubmit = act('e3', () => api('addcol', { name: $('#cn').value, icon: $('#ci').value, color: $('#cc').value, until: endOf($('#cd').value), cards: $('#cl').value }), 'Collection créée');
+  $('#cfb').onclick = () => $('#cf').click();
+  $('#cf').onchange = async (e) => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    const er3 = $('#e3');
+    try {
+      er3.style.color = ''; er3.textContent = 'Envoi de la photo…';
+      const j = await api('imgup', { img: await shrinkImg(f) }), t = $('#cl'), v = t.value;
+      const at = (() => { const i = v.indexOf('\n', t.selectionStart); return i < 0 ? v.length : i; })(), e2 = (() => { const i = v.indexOf('\n', at + 1); return i < 0 ? v.length : i; })();
+      const cut = /^(https?:\/\/|\/api\/game\?img=)/i.test(v.slice(at + 1, e2).trim()) ? e2 : at; // s'il y a déjà un lien sous la carte, il est remplacé
+      t.value = v.slice(0, at) + '\n' + j.url + v.slice(cut);
+      er3.style.color = '#3fb950'; er3.textContent = 'Photo ajoutée sous la carte';
+    } catch (er) { er3.style.color = ''; er3.textContent = er.message; }
+  };
+  $('#ofb').onclick = () => $('#of').click();
+  $('#of').onchange = async (e) => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try { $('#ofs').textContent = 'Envoi…'; const j = await api('imgup', { img: await shrinkImg(f) }); $('#oi').value = j.url; $('#ofs').textContent = '✅ Photo ajoutée'; } catch (er) { $('#ofs').textContent = er.message; }
+  };
   $('#fo').onsubmit = act('e4', () => api('addobj', { name: $('#on').value, rarity: $('#or').value, price: $('#op').value, stock: $('#os').value, img: $('#oi').value }), 'Objet ajouté à la boutique');
   $('#f').onsubmit = act('e', () => api('give', { pseudo: $('#u').value, mode: $('#m').value, coins: $('#co').value, packs: $('#pk').value, badge: $('#cab').value, cards: [...$('#ca').selectedOptions].map((o) => o.value) }), 'Fait');
   $('#fm').onsubmit = act('e5', () => api('msg', { pseudo: $('#mt').value, text: $('#mx').value }), 'Notification envoyée');
