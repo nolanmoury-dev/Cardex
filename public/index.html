@@ -64,15 +64,12 @@ details{border-top:1px solid var(--line);padding:8px 0}summary{cursor:pointer;fo
 .card.lock .im{display:flex;align-items:center;justify-content:center;font-size:48px;color:var(--dim)}
 .pk{display:flex;align-items:center;justify-content:center;height:90px;border-radius:10px;font-size:52px;background:linear-gradient(135deg,var(--pc),#0009);margin-bottom:8px}
 .pk.big{width:180px;height:240px;font-size:96px;margin:18vh auto 0}
-.pk.f{border:3px solid var(--fc);box-shadow:0 0 14px var(--fg);position:relative;overflow:hidden}
-.pk.l2{--fc:#c9d1d9;--fg:transparent}.pk.l3{--fc:#56d364;--fg:#3fb95044}.pk.l4{--fc:#58a6ff;--fg:#2a7de155}.pk.l5{--fc:#ff7b7f;--fg:#e5484d66}.pk.l6{--fc:#c4a7ff;--fg:#8b5cf677}
-.pk.l7{--fc:#ff5a6e;--fg:#ff2d4a99;--dl:#ff5a6e38}.pk.l8{--fc:#7dd3fc;--fg:#38bdf8aa;--dl:#7dd3fc4a}
-.pk.l7::after,.pk.l8::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,transparent 30%,#fff6 50%,transparent 70%);background-size:250% 100%;animation:sh 2.6s infinite}
-.pk.l7::before,.pk.l8::before{content:'';position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(45deg,var(--dl) 0 6px,transparent 6px 12px),repeating-linear-gradient(-45deg,var(--dl) 0 6px,transparent 6px 12px)}
-.pk.l8::before{background:radial-gradient(circle at 20% 22%,#fff 0 1.5px,transparent 3.5px),radial-gradient(circle at 78% 38%,#fff 0 1.5px,transparent 3.5px),radial-gradient(circle at 46% 82%,#fff 0 1.5px,transparent 3.5px),repeating-linear-gradient(45deg,var(--dl) 0 6px,transparent 6px 12px),repeating-linear-gradient(-45deg,var(--dl) 0 6px,transparent 6px 12px);animation:tw 1.8s ease-in-out infinite}
-.pk.l9{--fc:transparent;--fg:#a855ff88;background:linear-gradient(135deg,var(--pc),#0009) padding-box,linear-gradient(#0d1117,#0d1117) padding-box,conic-gradient(from var(--ang),#ff3b3b,#ffb000,#3bff6a,#27c6ff,#a855ff,#ff3bd4,#ff3b3b) border-box;animation:spin 3.5s linear infinite}
-.pk.l9.shake{animation:shake .16s infinite,spin 3.5s linear infinite}
-@media(prefers-reduced-motion:reduce){.pk.l9,.pk.l8::before,.pk.l7::after,.pk.l8::after{animation:none!important}}
+.box.pkb{border:3px solid var(--fc);box-shadow:0 0 14px var(--fg);position:relative;overflow:hidden}
+.box.pkb2{--fc:#c9d1d9;--fg:transparent}.box.pkb3{--fc:#56d364;--fg:#3fb95044}.box.pkb4{--fc:#58a6ff;--fg:#2a7de155}.box.pkb5{--fc:#ff7b7f;--fg:#e5484d66}.box.pkb6{--fc:#c4a7ff;--fg:#8b5cf677}
+.box.pkb7{--fc:#ff5a6e;--fg:#ff2d4a99}.box.pkb8{--fc:#7dd3fc;--fg:#38bdf8aa}
+.box.pkb7::after,.box.pkb8::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,transparent 30%,#fff3 50%,transparent 70%);background-size:250% 100%;animation:sh 2.6s infinite}
+.box.pkb9{--fc:transparent;--fg:#a855ff88;background:linear-gradient(var(--panel),var(--panel)) padding-box,conic-gradient(from var(--ang),#ff3b3b,#ffb000,#3bff6a,#27c6ff,#a855ff,#ff3bd4,#ff3b3b) border-box;animation:spin 3.5s linear infinite}
+@media(prefers-reduced-motion:reduce){.box.pkb9,.box.pkb7::after,.box.pkb8::after{animation:none!important}}
 .shake{animation:shake .16s infinite}
 @keyframes shake{0%,100%{transform:rotate(-5deg) scale(1.05)}50%{transform:rotate(5deg) scale(1.12)}}
 .ov{position:fixed;inset:0;background:#000d;overflow:auto;padding:16px;z-index:5;color:#e8ecf3}
@@ -457,7 +454,7 @@ function shopHTML() {
   const packs = Object.entries(S.shop).map(([t, sh]) => {
     const o = CAT[t];
     const pr = sh.nobuy ? '<b>Ancien niveau</b> : plus en vente, tu peux ouvrir ceux qu\'il te reste' : sh.blocked ? '<b class="err">Indisponible pour le moment</b>' : sh.discount ? '<s>' + sh.full + '</s> <b>' + sh.price + ' coins</b> <span class="pill">-' + sh.discount + '%</span>' : '<b>' + sh.price + ' coins</b>';
-    return '<div class="box"><div class="pk' + pkf(sh.lvl) + '" style="--pc:' + pkc(o, sh.lvl) + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (sh.lvl > 1 ? ' <span class="pill">Niveau ' + sh.lvl + '</span>' : '') + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes' + (sh.lvl > 1 ? ' d\'une collection différente à chaque niveau' : '') + '. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || sh.nobuy || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button>' + (packsOf(t) >= 2 && !sh.blocked ? '<input type="number" inputmode="numeric" data-nn="' + t + '" min="1" max="' + Math.min(50, packsOf(t)) + '" value="' + Math.min(5, packsOf(t)) + '" style="width:72px" aria-label="Nombre de sachets à ouvrir"><button class="g" data-om="' + t + '">Ouvrir ce nombre</button><button class="g" data-oa="' + t + '">Tout ouvrir (' + Math.min(50, packsOf(t)) + ')</button>' : '') + '</div></div>';
+    return '<div class="box' + pkf(sh.lvl) + '"><div class="pk" style="--pc:' + pkc(o) + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (sh.lvl > 1 ? ' <span class="pill">Niveau ' + sh.lvl + '</span>' : '') + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes' + (sh.lvl > 1 ? ' d\'une collection différente à chaque niveau' : '') + '. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || sh.nobuy || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button>' + (packsOf(t) >= 2 && !sh.blocked ? '<input type="number" inputmode="numeric" data-nn="' + t + '" min="1" max="' + Math.min(50, packsOf(t)) + '" value="' + Math.min(5, packsOf(t)) + '" style="width:72px" aria-label="Nombre de sachets à ouvrir"><button class="g" data-om="' + t + '">Ouvrir ce nombre</button><button class="g" data-oa="' + t + '">Tout ouvrir (' + Math.min(50, packsOf(t)) + ')</button>' : '') + '</div></div>';
   }).join('');
   const objs = S.objs.length ? '<h2>Objets</h2><div class="grid2">' + S.objs.map((x) => '<div class="box"><b style="color:var(--' + x.r + ')">' + esc(x.name) + '</b> — ' + RN[x.r] + '<p>' + x.price + ' coins' + (x.stock != null ? (x.stock > 0 ? ' · Reste ' + x.stock : ' · Épuisé') : '') + '</p><button data-ob="' + esc('obj:' + x.name) + '"' + (S.coins < x.price || (x.stock != null && x.stock <= 0) ? ' disabled' : '') + '>Acheter</button></div>').join('') + '</div>' : '';
   return '<div class="box"><p>Un sachet gratuit toutes les 10 à 14 minutes (10 maximum, 2 h pour tout remplir). Sachets gratuits : <b>' + S.packs + '/10</b>. <span id="cd"></span></p></div><div class="grid2">' + packs + '</div>' + objs;
@@ -1318,14 +1315,13 @@ function showUpdate() {
   const ov = overlay('<div class="box" style="max-width:420px;margin:10vh auto"><h2>🎉 ' + esc(u.title) + '</h2><ul style="padding-left:18px;margin:8px 0 14px">' + u.items.map((x) => '<li style="margin:6px 0">' + esc(x) + '</li>').join('') + '</ul><button id="updok" style="width:100%">C’est parti !</button></div>');
   $('#updok').onclick = () => { try { localStorage.upd = u.v; } catch {} ov.remove(); };
 }
-// Sachet selon le niveau : rien (couleur de la collection, sans cadre) → gris → vert → bleu → rouge → violet → rouge brillant → bleu ciel brillant → multicolore (cadres : classes .pk.l2 à .pk.l9)
-const PKC = [null, '#8b949e', '#2ea043', '#2a7de1', '#e5484d', '#8b5cf6', '#d61f3d', '#38bdf8', '#7a3cff'];
-const pkc = (o, lv) => (lv > 1 && PKC[Math.min(9, lv) - 1]) || o.color;
-const pkf = (lv) => lv > 1 ? ' f l' + Math.min(9, lv) : '';
+// Cadre de l'encart du sachet selon le niveau : rien (sans cadre) → gris → vert → bleu → rouge → violet → rouge brillant → bleu ciel brillant → multicolore (classes .box.pkb2 à .box.pkb9) ; l'image du sachet garde la couleur de base de la collection
+const pkc = (o) => o.color;
+const pkf = (lv) => lv > 1 ? ' pkb pkb' + Math.min(9, lv) : '';
 function overlay(html) { const ov = document.createElement('div'); ov.className = 'ov'; ov.innerHTML = html; document.body.append(ov); return ov; }
 function reveal(ids, t, n, was, bad) {
   was = was || {};
-  const o = CAT[t], ov = overlay('<div class="pk big shake' + pkf(o.lv || 1) + '" style="--pc:' + pkc(o, o.lv || 1) + '">' + o.icon + '</div>'), multi = (n || 1) > 1;
+  const o = CAT[t], ov = overlay('<div class="pk big shake" style="--pc:' + pkc(o) + '">' + o.icon + '</div>'), multi = (n || 1) > 1;
   setTimeout(() => {
     const RO = { u: -3, s: -2, m: -1, l: 0, e: 1, r: 2, c: 3 }, m = new Map(), grp = new Map(); // m = exemplaires SANS badge par carte ; grp = [carte, nombre, badge] (un groupe par carte et par badge)
     ids.forEach((id, i) => { const tr = (bad && bad[i]) || 0, k = id + '|' + tr, g0 = grp.get(k) || [id, 0, tr]; g0[1]++; grp.set(k, g0); if (!tr) m.set(id, (m.get(id) || 0) + 1); });
