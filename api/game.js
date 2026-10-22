@@ -329,7 +329,7 @@ const shopOf = async (cat) => {
 };
 // Niveaux : chaque collection de base (foot…) a plusieurs niveaux = autant de collections différentes (foot, foot2…foot6). Niveaux 6 à 9 : +100 cartes par niveau (200, 300, 400, 500) avec mythiques, célestes et uniques.
 // Niveau d'un joueur sur une ligne = 1 + son nombre total de renaissances sur cette ligne (5 max). Le prix du sachet double à chaque niveau : 100, 200, 400, 800, 1600.
-const LVMAX = 6, LINES = Object.keys(T0).filter((t) => Object.values(T0).some((o) => o.base === t));
+const LVMAX = 7, /* mettre 9 quand les niveaux 8 et 9 existent */ LINES = Object.keys(T0).filter((t) => Object.values(T0).some((o) => o.base === t));
 const lvOf = (cat, t) => (cat[t] && cat[t].lv) || 1, baseOf = (cat, t) => (cat[t] && cat[t].base) || t;
 const lineLv = (u, b) => Math.min(LVMAX, 1 + [b, ...Array.from({ length: LVMAX - 1 }, (_, i) => b + (i + 2))].reduce((a, k) => a + (((u && u.rb) || {})[k] || 0), 0));
 // Un niveau supérieur d'une ligne reste invisible (marché, échanges, cadeaux, recherche…) tant que le joueur ne l'a pas débloqué : comme s'il n'existait pas. On garde ce qu'il possède déjà.
