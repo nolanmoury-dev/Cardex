@@ -434,12 +434,13 @@ function authView(msg) {
 }
 
 // --- Joueur
-// Sachets gratuits : un stock et un compteur par niveau de sachet (S.fp = { niveau: { n, next } })
-const freeN = (L) => { const f = (S.fp || {})[L]; return f ? f.n : L <= 1 ? S.packs : 0; };
-const freeTot = () => Object.values(S.fp || { 1: { n: S.packs } }).reduce((a, f) => a + f.n, 0);
+// Sachets gratuits : un stock et un compteur PAR SACHET (S.fl = { collection: { n, next } }) + une réserve commune S.packs (sachets offerts, utilisables sur n'importe quel sachet)
+const slK = (t) => (CAT[t] && CAT[t].base) || t;
+const freeN = (t) => { const f = (S.fl || {})[slK(t)]; return (f ? f.n : 0) + (S.packs || 0); };
+const freeTot = () => Object.values(S.fl || {}).reduce((a, f) => a + f.n, 0) + (S.packs || 0);
 const lvT = (t) => (S.shop && S.shop[t] && S.shop[t].lvl) || (CAT[t] && CAT[t].lv) || 1;
-const packsOf = (t) => (S.bought[t] || 0) + freeN(lvT(t));
-const fpPill = () => '📦 ' + (Object.keys(S.fp || {}).length > 1 ? freeTot() : S.packs + '/10');
+const packsOf = (t) => (S.bought[t] || 0) + freeN(t);
+const fpPill = () => '📦 ' + freeTot();
 function head() {
   return '<div class="bar"><b style="display:flex;align-items:center;gap:6px"><img class="lg" src="/icon-192.png" alt="">' + S.pseudo + pfImg(S.pf) + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">' + fpPill() + '</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button></span></div><div class="tabs">' +
     (S.ban ? [['set', 'Réglages']] : S.maint ? [['col', 'Collection'], ['rk', 'Classement'], ['set', 'Réglages']] : [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Social' + (dmUnread() ? ' 💬' + dmUnread() : '')], ['set', 'Réglages']]).map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
@@ -468,7 +469,7 @@ function shopHTML() {
   const packs = Object.entries(S.shop).map(([t, sh]) => {
     const o = CAT[t];
     const pr = sh.nobuy ? '<b>Ancien niveau</b> : plus en vente, tu peux ouvrir ceux qu\'il te reste' : sh.blocked ? '<b class="err">Indisponible pour le moment</b>' : sh.discount ? '<s>' + sh.full + '</s> <b>' + sh.price + ' coins</b> <span class="pill">-' + sh.discount + '%</span>' : '<b>' + sh.price + ' coins</b>';
-    return '<div class="box' + pkf(sh.lvl) + '"><div class="pk" style="--pc:' + pkc(o) + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (sh.lvl > 1 ? ' <span class="pill">Niveau ' + sh.lvl + '</span>' : '') + ' <span class="pill" data-cd="' + (sh.lvl || 1) + '" style="font-variant-numeric:tabular-nums"></span>' + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes' + (sh.lvl > 1 ? ' d\'une collection différente à chaque niveau' : '') + '. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || sh.nobuy || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button>' + (packsOf(t) >= 2 && !sh.blocked ? '<input type="number" inputmode="numeric" data-nn="' + t + '" min="1" max="' + Math.min(50, packsOf(t)) + '" value="' + Math.min(5, packsOf(t)) + '" style="width:72px" aria-label="Nombre de sachets à ouvrir"><button class="g" data-om="' + t + '">Ouvrir ce nombre</button><button class="g" data-oa="' + t + '">Tout ouvrir (' + Math.min(50, packsOf(t)) + ')</button>' : '') + '</div></div>';
+    return '<div class="box' + pkf(sh.lvl) + '"><div class="pk" style="--pc:' + pkc(o) + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (sh.lvl > 1 ? ' <span class="pill">Niveau ' + sh.lvl + '</span>' : '') + ' <span class="pill" data-cd="' + slK(t) + '" style="font-variant-numeric:tabular-nums"></span>' + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes' + (sh.lvl > 1 ? ' d\'une collection différente à chaque niveau' : '') + '. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || sh.nobuy || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button>' + (packsOf(t) >= 2 && !sh.blocked ? '<input type="number" inputmode="numeric" data-nn="' + t + '" min="1" max="' + Math.min(50, packsOf(t)) + '" value="' + Math.min(5, packsOf(t)) + '" style="width:72px" aria-label="Nombre de sachets à ouvrir"><button class="g" data-om="' + t + '">Ouvrir ce nombre</button><button class="g" data-oa="' + t + '">Tout ouvrir (' + Math.min(50, packsOf(t)) + ')</button>' : '') + '</div></div>';
   }).join('');
   const objs = S.objs.length ? '<h2>Objets</h2><div class="grid2">' + S.objs.map((x) => '<div class="box"><b style="color:var(--' + x.r + ')">' + esc(x.name) + '</b> — ' + RN[x.r] + '<p>' + x.price + ' coins' + (x.stock != null ? (x.stock > 0 ? ' · Reste ' + x.stock : ' · Épuisé') : '') + '</p><button data-ob="' + esc('obj:' + x.name) + '"' + (S.coins < x.price || (x.stock != null && x.stock <= 0) ? ' disabled' : '') + '>Acheter</button></div>').join('') + '</div>' : '';
   return '<div class="grid2">' + packs + '</div>' + objs;
@@ -637,7 +638,7 @@ function giftInit() {
   const fill = () => { const t = ggc.value; gl = t ? idsOf(t) : []; gid = null; gg.innerHTML = '<option value="">Carte à ajouter</option>' + gl.map((id, i) => '<option value="' + i + '">' + mark(id) + esc(nm(id)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] > 1 ? ' ×' + S.cards[id] : '') + '</option>').join(''); info(); };
   const fillPack = () => {
     const have = (n) => (n > 0 ? '✅ ' : '❌ ');
-    $('#gt').innerHTML = '<option value="free">' + have(S.packs) + '📦 Sachet gratuit (×' + S.packs + ')</option>' + Object.keys(S.shop || {}).filter((t) => t !== 'obj' && CAT[t]).map((t) => '<option value="' + t + '">' + have((S.bought || {})[t] || 0) + CAT[t].icon + ' ' + esc(CAT[t].name) + ' (×' + ((S.bought || {})[t] || 0) + ')</option>').join('');
+    $('#gt').innerHTML = '<option value="free">' + have(freeTot()) + '📦 Sachet gratuit (×' + freeTot() + ')</option>' + Object.keys(S.shop || {}).filter((t) => t !== 'obj' && CAT[t]).map((t) => '<option value="' + t + '">' + have((S.bought || {})[t] || 0) + CAT[t].icon + ' ' + esc(CAT[t].name) + ' (×' + ((S.bought || {})[t] || 0) + ')</option>').join('');
   };
   const renderLot = () => {
     const box = $('#glot'), u = [...new Set(lot)];
@@ -673,7 +674,7 @@ function giftInit() {
       if (c > S.coins) return msg('Pas assez de coins (tu as ' + S.coins + ' 🪙)');
       body.amount = c; what = c + ' 🪙';
     } else if (kind === 'pack') {
-      const t = $('#gt').value, n = t === 'free' ? S.packs : (S.bought || {})[t] || 0;
+      const t = $('#gt').value, n = t === 'free' ? freeTot() : (S.bought || {})[t] || 0;
       if (!n) return msg('Tu n\'as pas ce sachet (❌)');
       body.theme = t; what = t === 'free' ? 'un sachet gratuit' : 'un sachet ' + CAT[t].name;
     } else {
@@ -1136,7 +1137,7 @@ function playerView() {
     app.querySelectorAll('[data-oa]').forEach((b) => (b.onclick = () => openN(b.dataset.oa, 0, true)));
     {
       const cds = [...app.querySelectorAll('[data-cd]')];
-      const tk = () => { let go = false; cds.forEach((c) => { const f = (S.fp || {})[c.dataset.cd]; if (!f || !f.next) { c.textContent = '⏱ plein'; return; } const s = Math.ceil((f.next - Date.now()) / 1000); if (s <= 0) { go = true; return; } c.textContent = '⏱ ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }); if (go) { clearInterval(timer); refresh(); } };
+      const tk = () => { let go = false; cds.forEach((c) => { const f = (S.fl || {})[c.dataset.cd]; if (!f || !f.next) { c.textContent = '⏱ plein'; return; } const s = Math.ceil((f.next - Date.now()) / 1000); if (s <= 0) { go = true; return; } c.textContent = '⏱ ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }); if (go) { clearInterval(timer); refresh(); } };
       tk(); timer = setInterval(tk, 1000);
     }
   } else if (tab === 'col') {
@@ -1314,8 +1315,8 @@ function playerView() {
 // =====================================================================================================================
 const UPDATES = [
   { v: '2026-10-23', title: 'Sachets gratuits par niveau', items: [
-    '⏱️ Chaque niveau de sachet a maintenant son propre stock de sachets gratuits (10 maximum) et son propre compteur.',
-    '🐢 Le premier sachet de chaque niveau revient toujours en 10 minutes. Les suivants sont un peu plus longs : le stock de 10 est plein en 2 h au niveau 1, jusqu’à 10 h au niveau 9. Le compteur est affiché à côté de chaque sachet. Ouvrir un sachet d’un niveau n’enlève que celui de ce niveau.',
+    '⏱️ Chaque sachet (foot, vélo, espace…) a maintenant son propre stock de sachets gratuits (10 maximum) et son propre compteur. Ouvrir un sachet n’en retire plus aux autres.',
+    '🐢 Le premier sachet de chaque niveau revient toujours en 10 minutes. Les suivants sont un peu plus longs : le stock de 10 est plein en 2 h au niveau 1, jusqu’à 10 h au niveau 9. Chaque sachet a son propre stock et son propre compteur, affiché à côté : ouvrir un sachet ne retire rien aux autres.',
     '💎 Plus tu approches de la fin d’une collection (niveau 6 et plus), plus tu as de chances de tirer les cartes Mythique, Céleste et Unique.',
     '🤖 Les bots font désormais des renaissances et acceptent (ou lancent) des défis : tu peux les défier dans Social → Défis.',
     '🎡 Courses : elles durent maintenant 3 jours, avec de temps en temps une course événement de 12 h ou 24 h. À la fin, le 1er et le 2e tournent une roue de récompenses (celle du 1er est la meilleure).',

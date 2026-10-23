@@ -358,20 +358,25 @@ async function dmDrop(u) { // suppression d'un compte : fils et résumés chez l
     if (o && o.dm) { delete o.dm[u.pseudo.toLowerCase()]; await redis.set('u:' + e.p.toLowerCase(), o); }
   }
 }
-// Sachets gratuits : un stock (10 max) et un compteur PAR NIVEAU de sachet. Niveau 1 = u.packs / u.last ; niveaux 2+ = u.fp[niveau] = { n, last }.
-// Temps total pour remplir le stock : ×1 (niveau 1), ×1,5, ×2 … ×5 (niveau 9). Ouvrir un sachet d'un niveau retire 1 sachet de CE niveau seulement.
-// Le 1er sachet de chaque niveau est TOUJOURS à 10 min. Les suivants s'allongent régulièrement pour que le stock de 10 se remplisse en 2 h × FM(L) (niveau 1 = 2 h … niveau 9 = 10 h).
+// Sachets gratuits : un stock (10 max) et un compteur PAR SACHET (par collection : foot, vélo, espace…). Ouvrir un sachet ne retire que du stock de CE sachet.
+// u.fl[collection] = { n, last }. u.packs = réserve commune : sachets offerts (codes, roue, staff…), utilisés par n'importe quel sachet quand son propre stock est vide.
+// Le 1er sachet est TOUJOURS à 10 min. Les suivants s'allongent régulièrement pour que le stock de 10 se remplisse en 2 h × FM(niveau) (niveau 1 = 2 h … niveau 9 = 10 h).
 const FM = (L) => 1 + 0.5 * (L - 1), stepL = (k, L) => Math.round((10 + (k * (120 * FM(L) - 100)) / 45) * 60000);
-const maxLv = (u) => Math.max(1, ...LINES.map((b) => lineLv(u, b)));
-const freeOf = (u, L) => (L <= 1 ? u.packs : ((u.fp || {})[L] || { n: 0 }).n);
-const freeTake = (u, L, n) => { if (L <= 1) u.packs -= n; else u.fp[L].n -= n; };
+const slKey = (cat, t) => baseOf(cat, t), slLv = (u, k) => (LINES.includes(k) ? lineLv(u, k) : 1);
+const freeOf = (u, cat, t) => { const x = (u.fl || {})[slKey(cat, t)]; return (x ? x.n : 0) + (u.packs || 0); };
+const freeTake = (u, cat, t, n) => { const x = (u.fl || {})[slKey(cat, t)], a = x ? Math.min(x.n, n) : 0; if (a) x.n -= a; if (n > a) u.packs -= n - a; };
+const freeAll = (u) => (u.packs || 0) + Object.values(u.fl || {}).reduce((a, x) => a + x.n, 0);
 const tk1 = (x, L, now) => { if (x.n >= MAXP) { x.last = now; return; } let st; while (x.n < MAXP && now - x.last >= (st = stepL(x.n, L))) { x.last += st; x.n++; } if (x.n >= MAXP) x.last = now; };
-function tick(u) {
-  const now = Date.now(), x = { n: u.packs, last: u.last };
-  tk1(x, 1, now); u.packs = x.n; u.last = x.last;
-  const m = maxLv(u);
-  if (m > 1) { u.fp ||= {}; for (let L = 2; L <= m; L++) tk1((u.fp[L] ||= { n: 0, last: now }), L, now); }
+function slMig(u, now) { // ancien système (un stock partagé par niveau) → un stock par sachet. On répartit l'ancien stock entre les sachets du même niveau : personne ne perd rien, rien n'est créé.
+  if (u.fl) return;
+  const old = (L) => (L <= 1 ? u.packs || 0 : ((u.fp || {})[L] || { n: 0 }).n), oldLast = (L) => (L <= 1 ? u.last : ((u.fp || {})[L] || {}).last) || now, lv = [...new Set(LINES.map((l) => lineLv(u, l)))];
+  let pool = 0; u.fl = {};
+  for (const L of lv) { const ls = LINES.filter((l) => lineLv(u, l) === L), tot = old(L); ls.forEach((l, i) => { u.fl[l] = { n: Math.floor(tot / ls.length) + (i < tot % ls.length ? 1 : 0), last: oldLast(L) }; }); }
+  for (const L of new Set([1, ...Object.keys(u.fp || {}).map(Number)])) if (!lv.includes(L)) pool += old(L);
+  u.packs = pool; delete u.fp;
 }
+function slEnsure(u, cat, now) { for (const t of Object.keys(cat)) { if (t === 'obj') continue; const k = slKey(cat, t); if (!u.fl[k]) u.fl[k] = { n: 1, last: now || Date.now() }; } } // collections hors lignes (provisoires) : 1 sachet offert pour commencer
+function tick(u) { const now = Date.now(); slMig(u, now); for (const [k, x] of Object.entries(u.fl)) tk1(x, slLv(u, k), now); }
 const shopOf = async (cat) => {
   const s = (await redis.get('shop')) || {};
   return Object.fromEntries(Object.entries(cat).filter(([, o]) => live(o)).map(([t]) => [t, { discount: int(s[(cat[t] && cat[t].base) || t] && s[(cat[t] && cat[t].base) || t].discount, 90), blocked: !!(s[(cat[t] && cat[t].base) || t] && s[(cat[t] && cat[t].base) || t].blocked) }]));
@@ -391,7 +396,7 @@ const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => x.seller === u.pseudo || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))), inbox: u.inbox || [],
   dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, pf: u.pf || null, sub: subOf(u) ? { t: u.sub.t, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial, subs: SUBS, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
   rw: (u.rw || []).map((x) => ({ rank: x.rank, name: x.name })), rws: (u.rw || [])[0] ? wSegs(u.rw[0].rank, u.rw[0].mult).map(wLabel) : null,
-  next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), fp: Object.fromEntries(Array.from({ length: maxLv(u) }, (_, i) => i + 1).map((L) => { const n = freeOf(u, L), last = L <= 1 ? u.last : ((u.fp || {})[L] || { last: Date.now() }).last; return [L, { n, next: n >= MAXP ? null : last + stepL(n, L) }]; })), cards: u.cards, bd: u.bd || {}, fav: u.fav, theme: u.theme || null,
+  fl: Object.fromEntries(Object.entries(u.fl || {}).map(([k, x]) => [k, { n: x.n, next: x.n >= MAXP ? null : x.last + stepL(x.n, slLv(u, k)) }])), cards: u.cards, bd: u.bd || {}, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
   shop: Object.fromEntries(Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s, t, cat), full: PRICE * 2 ** (lvOf(cat, t) - 1), lvl: lvOf(cat, t) }])), lv: Object.fromEntries(LINES.map((b) => [b, lineLv(u, b)])), lvn: Object.fromEntries(LINES.map((b) => [b, (cat[b + (lineLv(u, b) + 1)] || {}).name || null])),
   objs: cu.objs.filter((x) => !x.gone), themes: Object.fromEntries(Object.entries(cat).filter(([t]) => known(u, cat, t))),
@@ -528,7 +533,7 @@ async function botAccept(B, x, A, cat, cu) { // B = bot qui répond, A = joueur 
 async function botTurn(u, cat, cu, sh, mk) {
   const P = LV[u.bot], rnd = (a, c) => a + Math.random() * (c - a), V = (id) => val(u, id, cat, cu), pick = (a) => a[Math.floor(Math.random() * a.length)];
   const save = async (v) => redis.set(key(v.pseudo), v);
-  tick(u); sh = visShop(u, sh, cat);
+  tick(u); slEnsure(u, cat); sh = visShop(u, sh, cat);
   // 1. sachets : le fort n'en achète que s'ils sont rentables (valeur moyenne d'un sachet ~46 coins)
   const themes = Object.keys(sh).filter((t) => !sh[t].blocked && t !== 'obj');
   if (themes.length) {
@@ -538,11 +543,11 @@ async function botTurn(u, cat, cu, sh, mk) {
   for (let i = 0; i < 12; i++) {
     let t = Object.keys(u.bought).find((k) => u.bought[k] > 0 && sh[k] && !sh[k].blocked);
     if (t) u.bought[t]--; else {
-      const av = themes.filter((k) => freeOf(u, lvOf(cat, k)) > 0); // sachets gratuits : un stock par niveau
+      const av = themes.filter((k) => freeOf(u, cat, k) > 0); // sachets gratuits : un stock par sachet
       if (!av.length) break;
       const miss = (k) => cids(cat[k], k).filter((id) => !u.cards[id]).length;
       t = u.bot === 'fort' || u.bot === 'mf' ? av.sort((a, c) => miss(c) - miss(a))[0] : pick(av);
-      freeTake(u, lvOf(cat, t), 1);
+      freeTake(u, cat, t, 1);
     }
     const py = pity(u, cat[t], t);
     Array.from({ length: PACK }, () => draw(cat[t], t, lvOf(cat, t), 1, py)).forEach((id) => add(u, id, 1));
@@ -1171,7 +1176,7 @@ const handler = async (req, res) => {
     const u = await redis.get(key(s.p));
     if (!u) return fail('Session expirée, reconnecte-toi', 401);
     u.bought ||= {}; u.since ||= {}; u.fav ||= []; u.notifs ||= []; u.inbox ||= [];
-    tick(u);
+    tick(u); slEnsure(u, cat);
     u.seen = Date.now();
     raceNote(u);
     subCheck(u);
@@ -1199,10 +1204,10 @@ const handler = async (req, res) => {
       u.bought[b.theme] = (u.bought[b.theme] || 0) + 1;
     } else if (b.action === 'open') {
       const e = pack(); if (e) return fail(e);
-      const LV0 = lvOf(cat, b.theme), have = (u.bought[b.theme] || 0) + freeOf(u, LV0);
+      const LV0 = lvOf(cat, b.theme), have = (u.bought[b.theme] || 0) + freeOf(u, cat, b.theme);
       if (have < 1) return fail('Aucun sachet disponible');
       const n = Math.min(have, OPEN_MAX, b.all ? OPEN_MAX : Math.max(1, int(b.n, OPEN_MAX) || 1)); // plusieurs sachets de la même collection d'un coup
-      for (let i = 0; i < n; i++) { if (u.bought[b.theme] > 0) u.bought[b.theme] -= 1; else freeTake(u, LV0, 1); }
+      for (let i = 0; i < n; i++) { if (u.bought[b.theme] > 0) u.bought[b.theme] -= 1; else freeTake(u, cat, b.theme, 1); }
       const py = pity(u, cat[b.theme], b.theme), drawn = Array.from({ length: PACK * n }, () => draw(cat[b.theme], b.theme, LV0, subMult(u), py));
       const bad = drawn.map(() => rollBadge()); // 0 = aucun badge, 1 = Bronze, 2 = Argent, 3 = Or
       drawn.forEach((id, i) => (bad[i] ? addB(u, id, bad[i]) : add(u, id, 1)));
@@ -1478,8 +1483,10 @@ const handler = async (req, res) => {
       } else if (b.kind === 'pack') {
         const t = String(b.theme || 'free');
         if (t === 'free') {
-          if (u.packs < 1) return fail("Tu n'as aucun sachet gratuit");
-          tick(v); u.packs -= 1; v.packs += 1; what = 'un sachet gratuit';
+          if (freeAll(u) < 1) return fail("Tu n'as aucun sachet gratuit");
+          tick(v);
+          if ((u.packs || 0) > 0) u.packs -= 1; else { const big = Object.values(u.fl).sort((x, y) => y.n - x.n)[0]; big.n -= 1; }
+          v.packs = (v.packs || 0) + 1; what = 'un sachet gratuit';
         } else {
           if (t === 'obj' || !shAll[t]) return fail("Ce sachet n'existe pas");
           if (!(u.bought[t] > 0)) return fail("Tu n'as pas de sachet " + cat[t].name);
