@@ -26,6 +26,21 @@ const SKC_MAX = 12; // thèmes personnalisés que l'opérateur peut garder en r�
 const skinList = async () => { const l = await redis.get('skinc'); return Array.isArray(l) ? l : []; };
 // thème actif + (si personnalisé) sa définition, pour que les joueurs puissent l'afficher
 const skinState = async () => { const k = (await redis.get('skin')) || null; if (!k || SKINS.includes(k)) return { skin: k, skind: null }; const d = (await skinList()).find((x) => x.id === k); return d ? { skin: k, skind: d } : { skin: null, skind: null }; };
+// --- Questionnaires de l'opérateur : 'surveys' = [{ id, q, type: 'stars' (1 à 5 étoiles) | 'qcm', opts, t, open }]. Une réponse par joueur : clé sva:<id>:<pseudo en minuscules> + ensemble svr:<id> (résultats anonymes).
+const svList = async () => { const l = await redis.get('surveys'); return Array.isArray(l) ? l : []; };
+const svKey = (id, p) => 'sva:' + id + ':' + String(p).toLowerCase();
+const svNext = async (u) => { // prochain questionnaire ouvert auquel ce joueur n'a pas encore répondu
+  if (!u || u.bot || u.pseudo === OP_NAME) return null;
+  const open = (await svList()).filter((x) => x.open); if (!open.length) return null;
+  const got = await redis.mget(...open.map((x) => svKey(x.id, u.pseudo))), i = open.findIndex((x, k) => got[k] == null);
+  return i < 0 ? null : { id: open[i].id, q: open[i].q, type: open[i].type, opts: open[i].opts };
+};
+const svWipe = async (id) => { for (const p of await redis.smembers('svr:' + id)) await redis.del(svKey(id, p)); await redis.del('svr:' + id); };
+const svResults = async (x) => {
+  const ps = await redis.smembers('svr:' + x.id), vals = ps.length ? await redis.mget(...ps.map((p) => svKey(x.id, p))) : [], v = vals.filter(Boolean).map((a) => a.v), n = v.length;
+  if (x.type === 'stars') return { ...x, n, counts: [1, 2, 3, 4, 5].map((k) => v.filter((a) => a === k).length), avg: n ? Math.round((v.reduce((a, c) => a + c, 0) / n) * 100) / 100 : null };
+  return { ...x, n, counts: x.opts.map((_, k) => v.filter((a) => a === k).length) };
+};
 const RACE_HOUR = 36e5, CAR_COST = 200; // pas de ligne d'arrivée : celui qui est le plus loin à la fin de la semaine gagne
 const raceWeek0 = () => { const d = new Date(parisDay() + 'T12:00:00Z'); return new Date(d - ((d.getUTCDay() + 6) % 7) * DAY).toISOString().slice(0, 10); }; // lundi (Paris) de la semaine en cours
 const raceEnd0 = () => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(new Date()).map((x) => [x.type, x.value])), dow = (new Date(parisDay() + 'T12:00:00Z').getUTCDay() + 6) % 7; return Date.now() + ((6 - dow) * 86400 + 86400 - ((+p.hour % 24) * 3600 + +p.minute * 60 + +p.second)) * 1000; };
@@ -894,6 +909,27 @@ const handler = async (req, res) => {
         await redis.set('codes', codes);
         return ok({ done: true });
       }
+      if (b.action === 'svadd') { // envoyer un questionnaire à tous les joueurs : étoiles de 1 à 5 ou QCM (2 à 8 réponses)
+        const q = String(b.q || '').trim().slice(0, 200), type = b.type === 'qcm' ? 'qcm' : 'stars';
+        if (q.length < 3) return fail('Écris la question (3 caractères minimum)');
+        let opts = [];
+        if (type === 'qcm') { opts = (Array.isArray(b.opts) ? b.opts : []).map((x) => String(x || '').trim().slice(0, 60)).filter(Boolean).slice(0, 8); if (opts.length < 2) return fail('QCM : écris au moins 2 réponses (une par ligne)'); }
+        const L = await svList(), sv = { id: crypto.randomBytes(5).toString('hex'), q, type, opts, t: Date.now(), open: true };
+        L.push(sv);
+        while (L.length > 30) await svWipe(L.shift().id);
+        await redis.set('surveys', L);
+        if (b.notify !== false) await bcast('📋 Le staff te pose une question : ouvre le jeu pour répondre.', OP_NAME);
+        return ok({ done: true, id: sv.id });
+      }
+      if (b.action === 'svlist') { const L = await svList(); return ok({ surveys: await Promise.all(L.slice().reverse().map(svResults)) }); }
+      if (b.action === 'svclose') {
+        const L = await svList(), x = L.find((y) => y.id === b.id); if (!x) return fail('Questionnaire introuvable');
+        x.open = !!b.open; await redis.set('surveys', L); return ok({ done: true });
+      }
+      if (b.action === 'svdel') {
+        const L = await svList(); if (!L.some((y) => y.id === b.id)) return fail('Questionnaire introuvable');
+        await redis.set('surveys', L.filter((y) => y.id !== b.id)); await svWipe(b.id); return ok({ done: true });
+      }
       if (b.action === 'maint') {
         await redis.set('maint', !!b.on);
         if (b.on) await redis.set('maintinfo', { presets: (Array.isArray(b.presets) ? b.presets : []).filter((k) => MAINT_PRESETS[k]).slice(0, 6), msg: String(b.msg || '').trim().slice(0, 300) });
@@ -1660,11 +1696,18 @@ const handler = async (req, res) => {
       if (!x) return fail('Défi introuvable (déjà accepté ou expiré)');
       await redis.set('challenges', L.filter((y) => y !== x));
       refundCh(u, x, '↩️ Défi annulé : mise et cartes rendues');
+    } else if (b.action === 'svans') { // réponse à un questionnaire : une seule fois par joueur
+      if (u.bot || u.pseudo === OP_NAME) return fail('Action inconnue');
+      const sv = (await svList()).find((y) => y.id === b.id && y.open); if (!sv) return fail('Ce questionnaire est terminé');
+      const v = Math.floor(Number(b.v));
+      if (sv.type === 'stars' ? !(v >= 1 && v <= 5) : !(v >= 0 && v < sv.opts.length)) return fail('Réponse invalide');
+      if ((await redis.get(svKey(sv.id, u.pseudo))) != null) return fail('Tu as déjà répondu à ce questionnaire');
+      await redis.set(svKey(sv.id, u.pseudo), { v, t: Date.now() }); await redis.sadd('svr:' + sv.id, u.pseudo.toLowerCase());
     } else if (b.action !== 'me') return fail('Action inconnue');
 
     if (b.action === 'me') { extra = { notifs: u.notifs }; u.notifs = []; }
     await redis.set(key(u.pseudo), u);
-    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), maint: maintOn, maintinfo: maintOn ? await maintInfo() : null, ...(await skinState()) } });
+    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), maint: maintOn, maintinfo: maintOn ? await maintInfo() : null, sv: await svNext(u), ...(await skinState()) } });
   } catch (e) {
     console.error(e);
     return fail('Erreur serveur : ' + e.message, 500);
