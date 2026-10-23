@@ -215,6 +215,15 @@ details.lvc{border-color:#58a6ff}details.lvc>summary{color:#58a6ff}
 .car svg{display:block}
 .car .ph{position:absolute;left:18px;top:-17px;width:20px;height:20px;border-radius:50%;border:2px solid #fff;object-fit:cover;background:var(--c);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;margin:0;box-sizing:content-box}
 .car .wh{transform-box:fill-box;transform-origin:center}
+.car.sk-flames svg{filter:drop-shadow(-7px 0 3px #ff8a00) drop-shadow(-14px 0 6px #ff3b0099);animation:cfl .5s ease-in-out infinite alternate}
+.car.sk-glow svg{filter:drop-shadow(0 0 5px #ffd54a) drop-shadow(0 0 11px #ffb000)}
+.car.sk-rainbow svg{animation:chue 2.4s linear infinite}.car.sk-rainbow.mv svg{animation:cbob .25s ease-in-out infinite,chue 2.4s linear infinite}
+@keyframes chue{to{filter:hue-rotate(360deg)}}@keyframes cfl{to{filter:drop-shadow(-9px 0 4px #ffb400) drop-shadow(-17px 0 8px #ff2a0088)}}
+.wh-w{position:relative;width:min(78vw,320px);margin:6px auto 4px;aspect-ratio:1}
+.wh-w svg{width:100%;height:100%;transition:transform 5.2s cubic-bezier(.12,.62,.08,1)}
+.wh-w::after{content:'';position:absolute;left:50%;top:-6px;transform:translateX(-50%);border:11px solid transparent;border-top:20px solid #fff;filter:drop-shadow(0 2px 2px #0008)}
+.wh-w text{font:700 11px system-ui,sans-serif;fill:#fff;paint-order:stroke;stroke:#0007;stroke-width:2px}
+@media(prefers-reduced-motion:reduce){.wh-w svg{transition-duration:.01s}.car.sk-flames svg,.car.sk-rainbow svg{animation:none}}
 .car.mv svg{animation:cbob .25s ease-in-out infinite}.car.mv .wh{animation:cspin .35s linear infinite}
 .cgain{position:absolute;left:22px;top:-34px;font-weight:600;color:#3fb950;animation:cgo 1.6s ease-out forwards;white-space:nowrap}
 @keyframes cbob{50%{transform:translateY(-1px)}}@keyframes cspin{to{transform:rotate(360deg)}}@keyframes cgo{to{transform:translateY(-22px);opacity:0}}
@@ -425,9 +434,14 @@ function authView(msg) {
 }
 
 // --- Joueur
-const packsOf = (t) => (S.bought[t] || 0) + S.packs;
+// Sachets gratuits : un stock et un compteur par niveau de sachet (S.fp = { niveau: { n, next } })
+const freeN = (L) => { const f = (S.fp || {})[L]; return f ? f.n : L <= 1 ? S.packs : 0; };
+const freeTot = () => Object.values(S.fp || { 1: { n: S.packs } }).reduce((a, f) => a + f.n, 0);
+const lvT = (t) => (S.shop && S.shop[t] && S.shop[t].lvl) || (CAT[t] && CAT[t].lv) || 1;
+const packsOf = (t) => (S.bought[t] || 0) + freeN(lvT(t));
+const fpPill = () => '📦 ' + (Object.keys(S.fp || {}).length > 1 ? freeTot() : S.packs + '/10');
 function head() {
-  return '<div class="bar"><b style="display:flex;align-items:center;gap:6px"><img class="lg" src="/icon-192.png" alt="">' + S.pseudo + pfImg(S.pf) + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">📦 ' + S.packs + '/10</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button></span></div><div class="tabs">' +
+  return '<div class="bar"><b style="display:flex;align-items:center;gap:6px"><img class="lg" src="/icon-192.png" alt="">' + S.pseudo + pfImg(S.pf) + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">' + fpPill() + '</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button></span></div><div class="tabs">' +
     (S.ban ? [['set', 'Réglages']] : S.maint ? [['col', 'Collection'], ['rk', 'Classement'], ['set', 'Réglages']] : [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Social' + (dmUnread() ? ' 💬' + dmUnread() : '')], ['set', 'Réglages']]).map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
 }
 const subLeft = (ms) => { const d = Math.floor(ms / 864e5), h = Math.floor((ms % 864e5) / 36e5), m = Math.floor((ms % 36e5) / 6e4); return (d ? d + ' j ' : '') + (d || h ? h + ' h ' : '') + m + ' min'; };
@@ -457,7 +471,8 @@ function shopHTML() {
     return '<div class="box' + pkf(sh.lvl) + '"><div class="pk" style="--pc:' + pkc(o) + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (sh.lvl > 1 ? ' <span class="pill">Niveau ' + sh.lvl + '</span>' : '') + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes' + (sh.lvl > 1 ? ' d\'une collection différente à chaque niveau' : '') + '. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || sh.nobuy || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button>' + (packsOf(t) >= 2 && !sh.blocked ? '<input type="number" inputmode="numeric" data-nn="' + t + '" min="1" max="' + Math.min(50, packsOf(t)) + '" value="' + Math.min(5, packsOf(t)) + '" style="width:72px" aria-label="Nombre de sachets à ouvrir"><button class="g" data-om="' + t + '">Ouvrir ce nombre</button><button class="g" data-oa="' + t + '">Tout ouvrir (' + Math.min(50, packsOf(t)) + ')</button>' : '') + '</div></div>';
   }).join('');
   const objs = S.objs.length ? '<h2>Objets</h2><div class="grid2">' + S.objs.map((x) => '<div class="box"><b style="color:var(--' + x.r + ')">' + esc(x.name) + '</b> — ' + RN[x.r] + '<p>' + x.price + ' coins' + (x.stock != null ? (x.stock > 0 ? ' · Reste ' + x.stock : ' · Épuisé') : '') + '</p><button data-ob="' + esc('obj:' + x.name) + '"' + (S.coins < x.price || (x.stock != null && x.stock <= 0) ? ' disabled' : '') + '>Acheter</button></div>').join('') + '</div>' : '';
-  return '<div class="box"><p>Un sachet gratuit toutes les 10 à 14 minutes (10 maximum, 2 h pour tout remplir). Sachets gratuits : <b>' + S.packs + '/10</b>. <span id="cd"></span></p></div><div class="grid2">' + packs + '</div>' + objs;
+  const fr = '<div class="box"><p><b>Sachets gratuits</b> : un stock (10 maximum) et un compteur par niveau. Plus le niveau est haut, plus l’attente est longue.</p>' + Object.entries(S.fp || { 1: { n: S.packs } }).map(([L, f]) => '<div class="row" style="justify-content:space-between"><span><span class="pill">Niveau ' + L + '</span> <b>' + f.n + '/10</b></span><span class="sub">1 toutes les ' + Math.round(10 * (1 + 0.5 * (L - 1))) + ' à ' + Math.round(14 * (1 + 0.5 * (L - 1))) + ' min</span><span data-cd="' + L + '"></span></div>').join('') + '</div>';
+  return fr + '<div class="grid2">' + packs + '</div>' + objs;
 }
 function idsOf(t) {
   const ids = [...(sort === 'rar' ? RAREV : RA)].flatMap((r) => (CAT[t][r] || []).map((n) => t + ':' + n));
@@ -800,7 +815,7 @@ function chFormDraw(el) {
     try {
       if (f.sel.length !== f.fmt) throw new Error('Choisis ' + f.fmt + ' carte' + (f.fmt > 1 ? 's' : ''));
       if (acc) { const j = await api('chacc', { id: acc.id, stake: f.stake, cards: f.sel }); setS(j.state); chForm = null; playerView(); replay(j.res); }
-      else { const j = await api('chnew', { mode: f.mode, fmt: f.fmt, to: f.to, stake: f.stake, cards: f.sel }); setS(j.state); chForm = null; playerView(); msg('Défi envoyé ! Tes coins et tes cartes sont bloqués jusqu\'au résultat.', true); }
+      else { const j = await api('chnew', { mode: f.mode, fmt: f.fmt, to: f.to, stake: f.stake, cards: f.sel }); setS(j.state); chForm = null; playerView(); if (j.res) replay(j.res); else if (j.refused) msg(j.refused + ' a refusé ton défi : tes coins et tes cartes te sont rendus.'); else msg('Défi envoyé ! Tes coins et tes cartes sont bloqués jusqu\'au résultat.', true); }
     } catch (e) { er.textContent = e.message; }
   };
 }
@@ -853,10 +868,10 @@ function chRankInit() {
 // ================= COURSE DE LA SEMAINE =================
 let RC = null, raceN = 10, raceTk = null, carPick = null;
 const fmtT = (ms) => { const t = Math.ceil(ms / 1000), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), x = t % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
-const carSVG = (col, pf, nm) => '<div class="car" style="--c:' + col + '"><svg viewBox="0 0 56 28" width="56" height="28" aria-hidden="true"><path d="M3 21v-6c0-2 1.5-3.5 4-4l9-1.5 5-6c.8-1 1.8-1.5 3-1.5h11c1.3 0 2.4.6 3.2 1.6L44 9.5l6 1.3c2.2.5 3.5 2 3.5 4.2V21z" fill="' + col + '"/><path d="M22.5 9.5l3.2-4h10.4l3.6 4z" fill="#d6ecff"/><g class="wh"><circle cx="14" cy="21" r="5.5" fill="#1b1b1b"/><circle cx="14" cy="21" r="2" fill="#999"/><path d="M14 16v10M9 21h10" stroke="#777" stroke-width="1"/></g><g class="wh"><circle cx="43" cy="21" r="5.5" fill="#1b1b1b"/><circle cx="43" cy="21" r="2" fill="#999"/><path d="M43 16v10M38 21h10" stroke="#777" stroke-width="1"/></g></svg>' + (pf ? '<img class="ph" src="' + pf + '" alt="">' : '<span class="ph">' + esc([...nm][0].toUpperCase()) + '</span>') + '</div>';
+const carSVG = (col, pf, nm, sk) => '<div class="car' + (sk ? ' sk-' + sk : '') + '" style="--c:' + col + '"><svg viewBox="0 0 56 28" width="56" height="28" aria-hidden="true"><path d="M3 21v-6c0-2 1.5-3.5 4-4l9-1.5 5-6c.8-1 1.8-1.5 3-1.5h11c1.3 0 2.4.6 3.2 1.6L44 9.5l6 1.3c2.2.5 3.5 2 3.5 4.2V21z" fill="' + col + '"/><path d="M22.5 9.5l3.2-4h10.4l3.6 4z" fill="#d6ecff"/><g class="wh"><circle cx="14" cy="21" r="5.5" fill="#1b1b1b"/><circle cx="14" cy="21" r="2" fill="#999"/><path d="M14 16v10M9 21h10" stroke="#777" stroke-width="1"/></g><g class="wh"><circle cx="43" cy="21" r="5.5" fill="#1b1b1b"/><circle cx="43" cy="21" r="2" fill="#999"/><path d="M43 16v10M38 21h10" stroke="#777" stroke-width="1"/></g></svg>' + (pf ? '<img class="ph" src="' + pf + '" alt="">' : '<span class="ph">' + esc([...nm][0].toUpperCase()) + '</span>') + '</div>';
 function raceHTML() {
   if (!S.rc) return '<div class="box"><p>🏁 La course est réservée aux joueurs.</p></div>';
-  return '<div class="box"><h2>🏁 Course de la semaine</h2><div id="rhd"></div></div>'
+  return '<div class="box"><h2>🏁 ' + esc(S.rc.name || 'Course') + '</h2><div id="rhd"></div></div>'
     + '<div class="box" style="padding:10px"><div class="pills">' + [[5, 'Top 5'], [10, 'Top 10'], [0, 'Tous']].map(([n, l]) => '<button class="pill' + (raceN === n ? ' on' : '') + '" data-rn="' + n + '">' + l + '</button>').join('') + '</div><div id="rtk">Chargement…</div></div>'
     + '<div class="box"><h2>🎨 Ma voiture</h2><div id="rcar"></div><div class="err" id="e"></div></div>';
 }
@@ -864,10 +879,12 @@ function raceHead() {
   const el = $('#rhd'), r = S.rc; if (!el || !r) return;
   const left = Math.max(0, r.end - Date.now()), d = Math.floor(left / 864e5), h = Math.floor((left % 864e5) / 36e5), wait = Math.max(0, r.next - Date.now()), x = r.x || 0, avail = x + (wait > 0 ? 0 : 1);
   const me = RC && RC.rows.find((x) => x.pseudo === S.pseudo);
-  el.innerHTML = '<p style="margin:0 0 8px"><b>Le plus loin à la fin de la semaine gagne !</b> Fin de la course dans <b>' + (d ? d + ' j ' : '') + h + ' h</b> · ta voiture : <b>' + r.pos + ' point' + (r.pos > 1 ? 's' : '') + '</b>' + (me ? ' · ' + (me.rank === 1 ? '👑 1er' : me.rank + 'e') + ' sur ' + RC.total : '') + '</p>'
-    + (RC && RC.last ? '<p style="margin:0 0 8px">🏆 Gagnant de la semaine dernière : <b>' + esc(RC.last.pseudo) + '</b> (' + RC.last.pos + ' points)</p>' : '')
+  el.innerHTML = '<p style="margin:0 0 8px"><b>Le plus loin à la fin de la course gagne !</b> Fin dans <b>' + (d ? d + ' j ' : '') + h + ' h</b> · ta voiture : <b>' + r.pos + ' point' + (r.pos > 1 ? 's' : '') + '</b>' + (me ? ' · ' + (me.rank === 1 ? '👑 1er' : me.rank + 'e') + ' sur ' + RC.total : '') + '</p>'
+    + (RC && RC.last ? '<p style="margin:0 0 8px">🏆 Gagnant de la dernière course : <b>' + esc(RC.last.pseudo) + '</b> (' + RC.last.pos + ' points)</p>' : '')
     + (avail > 0 ? '<button id="rpk">🎁 Ouvrir mon pack de course' + (avail > 1 ? ' (' + avail + ')' : '') + '</button>' + (x > 0 ? '<p style="margin:8px 0 0"><small>🎁 Dont ' + x + ' offert' + (x > 1 ? 's' : '') + ' par le staff.' + (wait > 0 ? ' Prochain pack gratuit dans <span id="rcd">' + fmtT(wait) + '</span>.' : '') + '</small></p>' : '') : '<button id="rpk" disabled>⏳ Prochain pack dans <span id="rcd">' + fmtT(wait) + '</span></button>')
-    + '<p style="margin:8px 0 0"><small>1 pack par heure (il ne s’accumule pas). Chaque pack contient une carte qui fait avancer ta voiture de +1, +2, +5 ou +10 points : plus le bonus est gros, plus il est rare. Une course par semaine, remise à zéro chaque lundi.</small></p>';
+    + '<p style="margin:8px 0 0"><small>1 pack par heure (il ne s’accumule pas). Chaque pack contient une carte qui fait avancer ta voiture de +1, +2, +5 ou +10 points : plus le bonus est gros, plus il est rare. Les courses durent 3 jours, avec de temps en temps une course événement de 12 h ou 24 h. À la fin, le 1er et le 2e tournent une roue de récompenses (celle du 1er est la meilleure).</small></p>';
+  if (S.rw && S.rw.length) el.innerHTML = '<div style="margin:0 0 10px"><button id="rwb" style="width:100%">🎡 Tourner ma roue de récompenses !</button></div>' + el.innerHTML;
+  if ($('#rwb')) $('#rwb').onclick = () => wheelFlow();
   if ($('#rpk')) $('#rpk').onclick = () => run(async () => {
     const old = RC ? Object.fromEntries(RC.rows.map((x) => [x.pseudo, x.pos])) : {};
     const j = await api('racepack'); setS(j.state); old[S.pseudo] = j.from;
@@ -889,7 +906,7 @@ function drawRace(prev, gain) {
   const T = Math.max(50, Math.ceil((Math.max(0, ...RC.rows.map((x) => x.pos)) + 1) / 50) * 50), pT = drawRace.pT || T; drawRace.pT = T; // la piste s’allonge quand le leader avance
   el.innerHTML = RC.rows.map((x) => {
     const me = x.pseudo === S.pseudo;
-    return '<div class="rl' + (me ? ' me' : '') + '"><div class="ln"><span>' + (x.rank === 1 ? '👑' : x.rank + '.') + ' <b>' + esc(x.pseudo) + '</b></span><small>' + x.pos + '/' + T + '</small></div><div class="trk">' + carSVG(x.car || avCol(x.pseudo), me ? S.pf || x.pf : x.pf, x.pseudo) + '</div></div>';
+    return '<div class="rl' + (me ? ' me' : '') + '"><div class="ln"><span>' + (x.rank === 1 ? '👑' : x.rank + '.') + ' <b>' + esc(x.pseudo) + '</b></span><small>' + x.pos + '/' + T + '</small></div><div class="trk">' + carSVG(x.car || avCol(x.pseudo), me ? S.pf || x.pf : x.pf, x.pseudo, x.sk) + '</div></div>';
   }).join('') + '<small>Piste : de 0 à ' + T + ' points (elle s’allonge quand le leader avance)' + (RC.total > RC.rows.length ? ' · ' + RC.total + ' pilotes au total' : '') + '.</small>';
   const lanes = [...el.querySelectorAll('.rl')], left = (f) => 'calc((100% - 56px) * ' + Math.min(1, f) + ')';
   const from = (x) => (prev && prev[x.pseudo] != null ? prev[x.pseudo] / pT : 0);
@@ -906,14 +923,37 @@ function raceCarBox() {
   const el = $('#rcar'); if (!el || !S.rc) return;
   const col = carPick || S.rc.car || avCol(S.pseudo), hex = /^#[0-9a-f]{6}$/i.test(col) ? col : '#2a5bd7';
   const sw = ['#e11d48', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#0ea5e9', '#2a5bd7', '#7c3aed', '#d946ef', '#ec4899', '#64748b', '#111827'];
-  el.innerHTML = '<div class="trk" style="margin:22px 0 12px">' + carSVG(col, S.pf, S.pseudo) + '</div><div class="row" style="margin-bottom:10px">' + sw.map((c) => '<button type="button" data-cc="' + c + '" style="background:' + c + ';width:32px;height:32px;min-height:0;padding:0;border-radius:50%;border:2px solid ' + (hex.toLowerCase() === c ? '#fff' : 'transparent') + '" aria-label="Couleur ' + c + '"></button>').join('') + '<input type="color" id="ccu" value="' + hex + '" aria-label="Couleur personnalisée" style="width:44px;height:32px;padding:2px"></div><button id="ccb">Repeindre ma voiture (' + S.rc.cost + ' 🪙)</button>';
+  el.innerHTML = '<div class="trk" style="margin:22px 0 12px">' + carSVG(col, S.pf, S.pseudo, S.rc.sk) + '</div><div class="row" style="margin-bottom:10px">' + sw.map((c) => '<button type="button" data-cc="' + c + '" style="background:' + c + ';width:32px;height:32px;min-height:0;padding:0;border-radius:50%;border:2px solid ' + (hex.toLowerCase() === c ? '#fff' : 'transparent') + '" aria-label="Couleur ' + c + '"></button>').join('') + '<input type="color" id="ccu" value="' + hex + '" aria-label="Couleur personnalisée" style="width:44px;height:32px;padding:2px"></div><button id="ccb">Repeindre ma voiture (' + S.rc.cost + ' 🪙)</button>';
   el.querySelectorAll('[data-cc]').forEach((b) => (b.onclick = () => { carPick = b.dataset.cc; raceCarBox(); }));
   $('#ccu').onchange = (e) => { carPick = e.target.value.toLowerCase(); raceCarBox(); };
+  { const tier = S.sub ? S.sub.t : 0, SK = [['', 'Aucun', 0], ['flames', '🔥 Flammes', 1], ['rainbow', '🌈 Arc-en-ciel', 2], ['glow', '✨ Doré', 3]], d = document.createElement('div');
+    d.innerHTML = '<h3 style="margin:14px 0 6px">⭐ Skins d’abonné</h3><div class="row">' + SK.map(([k, l, t]) => '<button type="button" class="' + ((S.rc.sk || '') === k ? '' : 'g') + '" data-sk="' + k + '"' + (tier < t ? ' disabled' : '') + '>' + l + (tier < t ? ' 🔒' : '') + '</button>').join('') + '</div>' + (tier ? '' : '<p style="margin:6px 0 0"><small>Réservé aux abonnés : Bronze 🔥, Argent 🌈, Or ✨.</small></p>');
+    el.append(d); d.querySelectorAll('[data-sk]').forEach((b) => (b.onclick = () => run(async () => { const j = await api('carskin', { skin: b.dataset.sk }); setS(j.state); raceCarBox(); raceInit(); }))); }
   $('#ccb').onclick = () => run(async () => {
     if (!carPick) throw new Error('Choisis d’abord une couleur');
     if (!confirm('Repeindre ta voiture coûte ' + S.rc.cost + ' 🪙. Continuer ?')) return;
     const j = await api('carcolor', { color: carPick }); setS(j.state); carPick = null; updHead(); raceCarBox(); raceInit(); msg('Voiture repeinte !', true);
   });
+}
+const WCOL = ['#e5484d', '#f5b301', '#2ea043', '#2a7de1', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+let wheelOn = false, wheelAsked = '';
+function wheelFlow() {
+  if (wheelOn || !S.rw || !S.rw.length || !S.rws) return; wheelOn = true;
+  const rank = S.rw[0].rank, labs = S.rws, n = labs.length, a = 360 / n;
+  const pt = (k, r) => { const t = (k * a - 90) * Math.PI / 180; return [(100 + r * Math.cos(t)).toFixed(2), (100 + r * Math.sin(t)).toFixed(2)]; };
+  const seg = labs.map((l, i) => { const [x1, y1] = pt(i, 96), [x2, y2] = pt(i + 1, 96), tr = i * a + a / 2; return '<path d="M100 100L' + x1 + ' ' + y1 + 'A96 96 0 0 1 ' + x2 + ' ' + y2 + 'Z" fill="' + WCOL[i % WCOL.length] + '" stroke="#fff" stroke-width="1.5"/><text x="100" y="30" text-anchor="middle" transform="rotate(' + tr + ' 100 100)">' + esc(l) + '</text>'; }).join('');
+  const ov = overlay('<div class="dyn" style="text-align:center"><h2 style="margin:0">🎡 ' + (rank === 1 ? 'Roue du 1er' : 'Roue du 2e') + '</h2><p style="color:var(--dim);margin:4px 0">' + esc(S.rw[0].name || 'Course') + ' terminée : tu finis ' + (rank === 1 ? '<b>1er</b> 👑' : '<b>2e</b> 🥈') + ' !</p><div class="wh-w"><svg viewBox="0 0 200 200" id="whs"><g>' + seg + '</g><circle cx="100" cy="100" r="14" fill="#fff"/></svg></div><div id="whr" style="min-height:48px;margin:8px 0;font-weight:700"></div><button id="whb" style="width:100%">Tourner la roue !</button><div class="err" id="whe"></div></div>');
+  const close = () => { ov.remove(); wheelOn = false; playerView(); };
+  ov.querySelector('#whb').onclick = async (e) => {
+    e.target.disabled = true;
+    try {
+      const j = await api('wheelspin'); setS(j.state);
+      const svg = ov.querySelector('#whs'), jit = (Math.random() - 0.5) * a * 0.6, to = 360 * 6 - (j.idx * a + a / 2) + jit;
+      svg.style.transform = 'rotate(' + to + 'deg)';
+      setTimeout(() => { ov.querySelector('#whr').innerHTML = '🎉 Tu gagnes <b>' + esc(j.text) + '</b> !'; const b = ov.querySelector('#whb'); b.disabled = false; b.textContent = S.rw && S.rw.length ? 'Roue suivante' : 'Fermer'; b.onclick = () => { ov.remove(); wheelOn = false; updHead(); if (S.rw && S.rw.length) wheelFlow(); else playerView(); }; }, 5400);
+    } catch (er) { e.target.disabled = false; ov.querySelector('#whe').textContent = er.message; }
+  };
+  const x = document.createElement('div'); x.style.cssText = 'text-align:center;margin-top:8px'; x.innerHTML = '<button class="g" id="whx">Plus tard</button>'; ov.firstChild.append(x); x.firstChild.onclick = close;
 }
 function raceInit() {
   clearInterval(raceTk);
@@ -1095,10 +1135,11 @@ function playerView() {
     const openN = (t, n, all) => run(async () => { const was = { ...S.cards }; const j = await api('open', { theme: t, ...(all ? { all: 1 } : { n }) }); setS(j.state); reveal(j.drawn, t, j.n, was, j.bad); });
     app.querySelectorAll('[data-om]').forEach((b) => (b.onclick = () => { const i = app.querySelector('[data-nn="' + b.dataset.om + '"]'); openN(b.dataset.om, Math.max(1, Math.min(50, parseInt(i && i.value, 10) || 1))); }));
     app.querySelectorAll('[data-oa]').forEach((b) => (b.onclick = () => openN(b.dataset.oa, 0, true)));
-    if (S.next) {
-      const tk = () => { const s = Math.ceil((S.next - Date.now()) / 1000); if (s <= 0) { clearInterval(timer); refresh(); return; } $('#cd').textContent = 'Prochain dans ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+    {
+      const cds = [...app.querySelectorAll('[data-cd]')];
+      const tk = () => { let go = false; cds.forEach((c) => { const f = (S.fp || {})[c.dataset.cd]; if (!f || !f.next) { c.textContent = 'Stock plein'; return; } const s = Math.ceil((f.next - Date.now()) / 1000); if (s <= 0) { go = true; return; } c.textContent = 'Prochain dans ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }); if (go) { clearInterval(timer); refresh(); } };
       tk(); timer = setInterval(tk, 1000);
-    } else $('#cd').textContent = 'Stock plein : ouvre un sachet pour relancer le compteur.';
+    }
   } else if (tab === 'col') {
     app.querySelectorAll('[data-rb]').forEach((b) => (b.onclick = () => rebirthFlow(b.dataset.rb)));
     app.querySelectorAll('[data-cs]').forEach((b) => (b.onclick = () => { colSub = b.dataset.cs; playerView(); }));
@@ -1273,6 +1314,15 @@ function playerView() {
 // # `v` doit être unique et change à chaque mise à jour (ex. la date AAAA-MM-JJ, avec -2, -3… s'il y en a plusieurs le même jour).
 // =====================================================================================================================
 const UPDATES = [
+  { v: '2026-10-23', title: 'Sachets gratuits par niveau', items: [
+    '⏱️ Chaque niveau de sachet a maintenant son propre stock de sachets gratuits (10 maximum) et son propre compteur.',
+    '🐢 Plus le niveau est haut, plus le compteur est long : ×1 au niveau 1, ×1,5 au niveau 2, jusqu’à ×5 au niveau 9. Ouvrir un sachet d’un niveau n’enlève que celui de ce niveau.',
+    '💎 Plus tu approches de la fin d’une collection (niveau 6 et plus), plus tu as de chances de tirer les cartes Mythique, Céleste et Unique.',
+    '🤖 Les bots font désormais des renaissances et acceptent (ou lancent) des défis : tu peux les défier dans Social → Défis.',
+    '🎡 Courses : elles durent maintenant 3 jours, avec de temps en temps une course événement de 12 h ou 24 h. À la fin, le 1er et le 2e tournent une roue de récompenses (celle du 1er est la meilleure).',
+    '⭐ Skins de voiture pour les abonnés : flammes (Bronze), arc-en-ciel (Argent) et doré (Or).',
+    '🏁 Course : tu reçois une notification dès que ton pack de course est prêt à ouvrir, et les bots participent à la course (sans jamais passer premiers).',
+  ] },
   { v: '2026-10-21', title: 'Niveau 6 !', items: [
     '🚀 Un nouveau niveau de sachets : le niveau 6, avec 200 cartes par collection.',
     '💎 Les cartes Mythique, Céleste et Unique peuvent enfin sortir des sachets, avec une chance minuscule, à partir du niveau 6.',
@@ -1369,7 +1419,7 @@ function notify(l) {
 }
 function updHead() {
   if (!$('#pc')) return;
-  $('#pc').textContent = '🪙 ' + S.coins; $('#pp').textContent = '📦 ' + S.packs + '/10'; $('#bl').textContent = '🔔' + (S.inbox.length ? ' ' + S.inbox.length : '');
+  $('#pc').textContent = '🪙 ' + S.coins; $('#pp').textContent = fpPill(); $('#bl').textContent = '🔔' + (S.inbox.length ? ' ' + S.inbox.length : '');
 }
 function inbox() {
   document.querySelectorAll('.ovn').forEach((x) => x.remove());
@@ -2228,6 +2278,7 @@ async function poll() {
     if (was !== !!S.maint || wb !== !!S.ban) { if (j.notifs && j.notifs.length) notify(j.notifs); return playerView(); }
     updHead();
     updTabBadge();
+    if (S.rw && S.rw.length && !wheelOn && wheelAsked !== S.rw.length + ':' + S.rw[0].name && !document.querySelector('.ov,#rbo') && !S.maint && !S.ban) { wheelAsked = S.rw.length + ':' + S.rw[0].name; wheelFlow(); }
     if (S.dy && !S.dy.claimed && dyAsked !== new Date().toDateString() && tab !== 'jeu' && !document.getElementById('splash')) dailyPopup();
     if (tab === 'rk' && rkSub === 'm' && dmWith) { if (j.notifs && j.notifs.length) notify(j.notifs); dmLoad(false).catch(() => {}); return; }
     if (j.notifs && j.notifs.length) { notify(j.notifs); if (!document.querySelector('.ov') && tab !== 'jeu' && tab !== 'set' && !(tab === 'rk' && rkSub === 'd' && chForm)) playerView(); }
@@ -2271,7 +2322,7 @@ const TIPS = [
   "☕ Le temps d'un café, tes sachets t'attendent.",
   "🧮 Un sachet coûte 100 coins : garde toujours de quoi en acheter un.",
   "🔍 Dans le Marché, cherche une carte précise grâce à la barre de recherche.",
-  "🏁 Social → Course : un pack par heure fait avancer ta voiture. Le plus loin à la fin de la semaine gagne !",
+  "🏁 Social → Course : un pack par heure fait avancer ta voiture. Le plus loin à la fin de la course gagne, et le 1er et le 2e tournent une roue de récompenses !",
   "🚗 Repeins ta voiture de course pour 200 🪙 : ta photo de profil trône sur le toit !",
   "🚀 Ton classeur arrive, encore un instant…",
   "🎉 Bienvenue sur Cardex, le serveur chill où l'on collectionne tout !",
