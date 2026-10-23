@@ -344,9 +344,8 @@ async function dmDrop(u) { // suppression d'un compte : fils et résumés chez l
   }
 }
 // Sachets gratuits : un stock (10 max) et un compteur PAR NIVEAU de sachet. Niveau 1 = u.packs / u.last ; niveaux 2+ = u.fp[niveau] = { n, last }.
-// Temps total pour remplir le stock : ×1 (niveau 1), ×1,5, ×2 … ×5 (niveau 9). Ouvrir un sachet d'un niveau retire 1 sachet de CE niveau seulement.
-// Le 1er sachet de chaque niveau est TOUJOURS à 10 min. Les suivants s'allongent régulièrement pour que le stock de 10 se remplisse en 2 h × FM(L) (niveau 1 = 2 h … niveau 9 = 10 h).
-const FM = (L) => 1 + 0.5 * (L - 1), stepL = (k, L) => Math.round((10 + (k * (120 * FM(L) - 100)) / 45) * 60000);
+// L'attente s'allonge avec le niveau : ×1 (niveau 1), ×1,5, ×2 … ×5 (niveau 9). Ouvrir un sachet d'un niveau retire 1 sachet de CE niveau seulement.
+const FM = (L) => 1 + 0.5 * (L - 1), stepL = (k, L) => Math.round(stepOf(k) * FM(L));
 const maxLv = (u) => Math.max(1, ...LINES.map((b) => lineLv(u, b)));
 const freeOf = (u, L) => (L <= 1 ? u.packs : ((u.fp || {})[L] || { n: 0 }).n);
 const freeTake = (u, L, n) => { if (L <= 1) u.packs -= n; else u.fp[L].n -= n; };
