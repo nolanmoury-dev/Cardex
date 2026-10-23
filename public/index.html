@@ -434,13 +434,12 @@ function authView(msg) {
 }
 
 // --- Joueur
-// Sachets gratuits : un stock et un compteur PAR SACHET (S.fl = { collection: { n, next } }) + une réserve commune S.packs (sachets offerts, utilisables sur n'importe quel sachet)
-const slK = (t) => (CAT[t] && CAT[t].base) || t;
-const freeN = (t) => { const f = (S.fl || {})[slK(t)]; return (f ? f.n : 0) + (S.packs || 0); };
-const freeTot = () => Object.values(S.fl || {}).reduce((a, f) => a + f.n, 0) + (S.packs || 0);
+// Sachets gratuits : un stock et un compteur par niveau de sachet (S.fp = { niveau: { n, next } })
+const freeN = (L) => { const f = (S.fp || {})[L]; return f ? f.n : L <= 1 ? S.packs : 0; };
+const freeTot = () => Object.values(S.fp || { 1: { n: S.packs } }).reduce((a, f) => a + f.n, 0);
 const lvT = (t) => (S.shop && S.shop[t] && S.shop[t].lvl) || (CAT[t] && CAT[t].lv) || 1;
-const packsOf = (t) => (S.bought[t] || 0) + freeN(t);
-const fpPill = () => '📦 ' + freeTot();
+const packsOf = (t) => (S.bought[t] || 0) + freeN(lvT(t));
+const fpPill = () => '📦 ' + (Object.keys(S.fp || {}).length > 1 ? freeTot() : S.packs + '/10');
 function head() {
   return '<div class="bar"><b style="display:flex;align-items:center;gap:6px"><img class="lg" src="/icon-192.png" alt="">' + S.pseudo + pfImg(S.pf) + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">' + fpPill() + '</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button></span></div><div class="tabs">' +
     (S.ban ? [['set', 'Réglages']] : S.maint ? [['col', 'Collection'], ['rk', 'Classement'], ['set', 'Réglages']] : [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Social' + (dmUnread() ? ' 💬' + dmUnread() : '')], ['set', 'Réglages']]).map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
@@ -469,10 +468,11 @@ function shopHTML() {
   const packs = Object.entries(S.shop).map(([t, sh]) => {
     const o = CAT[t];
     const pr = sh.nobuy ? '<b>Ancien niveau</b> : plus en vente, tu peux ouvrir ceux qu\'il te reste' : sh.blocked ? '<b class="err">Indisponible pour le moment</b>' : sh.discount ? '<s>' + sh.full + '</s> <b>' + sh.price + ' coins</b> <span class="pill">-' + sh.discount + '%</span>' : '<b>' + sh.price + ' coins</b>';
-    return '<div class="box' + pkf(sh.lvl) + '"><div class="pk" style="--pc:' + pkc(o) + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (sh.lvl > 1 ? ' <span class="pill">Niveau ' + sh.lvl + '</span>' : '') + ' <span class="pill" data-cd="' + slK(t) + '" style="font-variant-numeric:tabular-nums"></span>' + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes' + (sh.lvl > 1 ? ' d\'une collection différente à chaque niveau' : '') + '. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || sh.nobuy || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button>' + (packsOf(t) >= 2 && !sh.blocked ? '<input type="number" inputmode="numeric" data-nn="' + t + '" min="1" max="' + Math.min(50, packsOf(t)) + '" value="' + Math.min(5, packsOf(t)) + '" style="width:72px" aria-label="Nombre de sachets à ouvrir"><button class="g" data-om="' + t + '">Ouvrir ce nombre</button><button class="g" data-oa="' + t + '">Tout ouvrir (' + Math.min(50, packsOf(t)) + ')</button>' : '') + '</div></div>';
+    return '<div class="box' + pkf(sh.lvl) + '"><div class="pk" style="--pc:' + pkc(o) + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (sh.lvl > 1 ? ' <span class="pill">Niveau ' + sh.lvl + '</span>' : '') + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes' + (sh.lvl > 1 ? ' d\'une collection différente à chaque niveau' : '') + '. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || sh.nobuy || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button>' + (packsOf(t) >= 2 && !sh.blocked ? '<input type="number" inputmode="numeric" data-nn="' + t + '" min="1" max="' + Math.min(50, packsOf(t)) + '" value="' + Math.min(5, packsOf(t)) + '" style="width:72px" aria-label="Nombre de sachets à ouvrir"><button class="g" data-om="' + t + '">Ouvrir ce nombre</button><button class="g" data-oa="' + t + '">Tout ouvrir (' + Math.min(50, packsOf(t)) + ')</button>' : '') + '</div></div>';
   }).join('');
   const objs = S.objs.length ? '<h2>Objets</h2><div class="grid2">' + S.objs.map((x) => '<div class="box"><b style="color:var(--' + x.r + ')">' + esc(x.name) + '</b> — ' + RN[x.r] + '<p>' + x.price + ' coins' + (x.stock != null ? (x.stock > 0 ? ' · Reste ' + x.stock : ' · Épuisé') : '') + '</p><button data-ob="' + esc('obj:' + x.name) + '"' + (S.coins < x.price || (x.stock != null && x.stock <= 0) ? ' disabled' : '') + '>Acheter</button></div>').join('') + '</div>' : '';
-  return '<div class="grid2">' + packs + '</div>' + objs;
+  const fr = '<div class="box"><p><b>Sachets gratuits</b> : un stock (10 maximum) et un compteur par niveau. Plus le niveau est haut, plus l’attente est longue.</p>' + Object.entries(S.fp || { 1: { n: S.packs } }).map(([L, f]) => '<div class="row" style="justify-content:space-between"><span><span class="pill">Niveau ' + L + '</span> <span data-cd="' + L + '" style="font-variant-numeric:tabular-nums"></span> <b>' + f.n + '/10</b></span><span class="sub">1er : 10 min · 10e : ' + Math.round(10 + 9 * (120 * (1 + 0.5 * (L - 1)) - 100) / 45) + ' min</span></div>').join('') + '</div>';
+  return fr + '<div class="grid2">' + packs + '</div>' + objs;
 }
 function idsOf(t) {
   const ids = [...(sort === 'rar' ? RAREV : RA)].flatMap((r) => (CAT[t][r] || []).map((n) => t + ':' + n));
@@ -638,7 +638,7 @@ function giftInit() {
   const fill = () => { const t = ggc.value; gl = t ? idsOf(t) : []; gid = null; gg.innerHTML = '<option value="">Carte à ajouter</option>' + gl.map((id, i) => '<option value="' + i + '">' + mark(id) + esc(nm(id)) + ' (' + RN[RAR[id] || 'c'] + ')' + (S.cards[id] > 1 ? ' ×' + S.cards[id] : '') + '</option>').join(''); info(); };
   const fillPack = () => {
     const have = (n) => (n > 0 ? '✅ ' : '❌ ');
-    $('#gt').innerHTML = '<option value="free">' + have(freeTot()) + '📦 Sachet gratuit (×' + freeTot() + ')</option>' + Object.keys(S.shop || {}).filter((t) => t !== 'obj' && CAT[t]).map((t) => '<option value="' + t + '">' + have((S.bought || {})[t] || 0) + CAT[t].icon + ' ' + esc(CAT[t].name) + ' (×' + ((S.bought || {})[t] || 0) + ')</option>').join('');
+    $('#gt').innerHTML = '<option value="free">' + have(S.packs) + '📦 Sachet gratuit (×' + S.packs + ')</option>' + Object.keys(S.shop || {}).filter((t) => t !== 'obj' && CAT[t]).map((t) => '<option value="' + t + '">' + have((S.bought || {})[t] || 0) + CAT[t].icon + ' ' + esc(CAT[t].name) + ' (×' + ((S.bought || {})[t] || 0) + ')</option>').join('');
   };
   const renderLot = () => {
     const box = $('#glot'), u = [...new Set(lot)];
@@ -674,7 +674,7 @@ function giftInit() {
       if (c > S.coins) return msg('Pas assez de coins (tu as ' + S.coins + ' 🪙)');
       body.amount = c; what = c + ' 🪙';
     } else if (kind === 'pack') {
-      const t = $('#gt').value, n = t === 'free' ? freeTot() : (S.bought || {})[t] || 0;
+      const t = $('#gt').value, n = t === 'free' ? S.packs : (S.bought || {})[t] || 0;
       if (!n) return msg('Tu n\'as pas ce sachet (❌)');
       body.theme = t; what = t === 'free' ? 'un sachet gratuit' : 'un sachet ' + CAT[t].name;
     } else {
@@ -1137,7 +1137,7 @@ function playerView() {
     app.querySelectorAll('[data-oa]').forEach((b) => (b.onclick = () => openN(b.dataset.oa, 0, true)));
     {
       const cds = [...app.querySelectorAll('[data-cd]')];
-      const tk = () => { let go = false; cds.forEach((c) => { const f = (S.fl || {})[c.dataset.cd]; if (!f || !f.next) { c.textContent = '⏱ plein'; return; } const s = Math.ceil((f.next - Date.now()) / 1000); if (s <= 0) { go = true; return; } c.textContent = '⏱ ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }); if (go) { clearInterval(timer); refresh(); } };
+      const tk = () => { let go = false; cds.forEach((c) => { const f = (S.fp || {})[c.dataset.cd]; if (!f || !f.next) { c.textContent = '⏱ plein'; return; } const s = Math.ceil((f.next - Date.now()) / 1000); if (s <= 0) { go = true; return; } c.textContent = '⏱ ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }); if (go) { clearInterval(timer); refresh(); } };
       tk(); timer = setInterval(tk, 1000);
     }
   } else if (tab === 'col') {
@@ -1315,13 +1315,12 @@ function playerView() {
 // =====================================================================================================================
 const UPDATES = [
   { v: '2026-10-23', title: 'Sachets gratuits par niveau', items: [
-    '⏱️ Chaque sachet (foot, vélo, espace…) a maintenant son propre stock de sachets gratuits (10 maximum) et son propre compteur. Ouvrir un sachet n’en retire plus aux autres.',
-    '🐢 Le premier sachet de chaque niveau revient toujours en 10 minutes. Les suivants sont un peu plus longs : le stock de 10 est plein en 2 h au niveau 1, jusqu’à 10 h au niveau 9. Chaque sachet a son propre stock et son propre compteur, affiché à côté : ouvrir un sachet ne retire rien aux autres.',
+    '⏱️ Chaque niveau de sachet a maintenant son propre stock de sachets gratuits (10 maximum) et son propre compteur.',
+    '🐢 Plus le niveau est haut, plus le compteur est long : ×1 au niveau 1, ×1,5 au niveau 2, jusqu’à ×5 au niveau 9. Ouvrir un sachet d’un niveau n’enlève que celui de ce niveau.',
     '💎 Plus tu approches de la fin d’une collection (niveau 6 et plus), plus tu as de chances de tirer les cartes Mythique, Céleste et Unique.',
     '🤖 Les bots font désormais des renaissances et acceptent (ou lancent) des défis : tu peux les défier dans Social → Défis.',
     '🎡 Courses : elles durent maintenant 3 jours, avec de temps en temps une course événement de 12 h ou 24 h. À la fin, le 1er et le 2e tournent une roue de récompenses (celle du 1er est la meilleure).',
     '⭐ Skins de voiture pour les abonnés : flammes (Bronze), arc-en-ciel (Argent) et doré (Or).',
-    '📋 Questionnaires : le staff peut te poser une question (étoiles de 1 à 5 ou choix multiples). Une fenêtre s’ouvre, tu réponds une seule fois, et tes réponses restent anonymes.',
     '🏁 Course : tu reçois une notification dès que ton pack de course est prêt à ouvrir, et les bots participent à la course (sans jamais passer premiers).',
   ] },
   { v: '2026-10-21', title: 'Niveau 6 !', items: [
@@ -1492,36 +1491,6 @@ function nudge() {
 }
 // --- Connexion quotidienne (jour 1 à 7) : popup animée à la première ouverture du jour
 let dyAsked = '';
-let svAsked = null;
-function svPopup(after) {
-  const q = S && S.sv;
-  if (!q || !tok || (isOp && !asP) || S.maint || S.ban || document.querySelector('.ov,#rbo')) return false;
-  svAsked = q.id;
-  const ov = overlay(''); let pick = null;
-  const close = () => { ov.remove(); if (after) after(); };
-  const body = q.type === 'stars'
-    ? '<div id="svs" style="display:flex;justify-content:center;gap:6px;font-size:38px;margin:14px 0">' + [1, 2, 3, 4, 5].map((k) => '<button type="button" class="g" data-sv="' + k + '" style="font-size:34px;padding:2px 8px;line-height:1" aria-label="' + k + ' étoile' + (k > 1 ? 's' : '') + '">☆</button>').join('') + '</div><div id="svh" style="text-align:center;color:var(--dim);margin-bottom:10px">Touche une étoile (1 = pas bien, 5 = super)</div>'
-    : '<div style="display:grid;gap:8px;margin:14px 0">' + q.opts.map((o, k) => '<button type="button" class="g" data-sv="' + k + '" style="text-align:left">' + esc(o) + '</button>').join('') + '</div>';
-  ov.innerHTML = '<div class="dyn"><div class="dyh"><b>📋 Questionnaire</b></div><div style="font-size:17px;line-height:1.4"><b>' + esc(q.q) + '</b></div>' + body
-    + '<button id="svok" style="width:100%" disabled>Envoyer ma réponse</button><div style="text-align:center;margin-top:8px"><button class="g" id="svx">Plus tard</button></div><div class="err" id="sve"></div></div>';
-  const paint = () => ov.querySelectorAll('[data-sv]').forEach((b) => {
-    const k = +b.dataset.sv, on = q.type === 'stars' ? pick != null && k <= pick : k === pick;
-    if (q.type === 'stars') b.textContent = on ? '★' : '☆'; else b.style.borderColor = on ? 'var(--acc, #58a6ff)' : '';
-    if (q.type !== 'stars') b.style.fontWeight = on ? '700' : '';
-    if (q.type === 'stars' && on) b.style.color = '#f5c518'; else if (q.type === 'stars') b.style.color = '';
-  });
-  ov.querySelectorAll('[data-sv]').forEach((b) => (b.onclick = () => { pick = +b.dataset.sv; ov.querySelector('#svok').disabled = false; paint(); }));
-  ov.querySelector('#svx').onclick = close;
-  ov.querySelector('#svok').onclick = async (e) => {
-    if (pick == null) return; e.target.disabled = true;
-    try {
-      const j = await api('svans', { id: q.id, v: pick }); setS(j.state);
-      ov.querySelector('.dyn').innerHTML = '<div style="text-align:center;padding:14px 0"><div style="font-size:42px">🙏</div><b style="font-size:18px">Merci pour ta réponse !</b></div><button id="svc" style="width:100%">Fermer</button>';
-      ov.querySelector('#svc').onclick = () => { ov.remove(); if (S.sv) { if (!svPopup(after)) { if (after) after(); } } else if (after) after(); };
-    } catch (er) { e.target.disabled = false; ov.querySelector('#sve').textContent = er.message; }
-  };
-  return true;
-}
 function dailyPopup(after) {
   const d = S && S.dy;
   if (!d || d.claimed || !tok || (isOp && !asP) || S.maint || S.ban || document.querySelector('.ov,#rbo')) return false;
@@ -2003,12 +1972,6 @@ async function opView(m) {
     + '<div class="row"><select id="cds" aria-label="Abonnement"><option value="0">Pas d’abonnement</option>' + (j.subs || []).map((x) => '<option value="' + x.t + '">' + x.ico + ' ' + esc(x.name) + '</option>').join('') + '</select><input id="cdsd" type="number" min="1" max="365" value="7" style="width:90px" aria-label="Jours d’abonnement"> jours</div>'
     + '<div class="row"><input id="cdm" type="number" min="1" placeholder="Utilisations max (vide = illimité)" style="flex:1;min-width:180px"><input id="cde" type="number" min="1" placeholder="Expire dans… jours (vide = jamais)" style="flex:1;min-width:180px"></div>'
     + '<button>Créer le code</button><div class="err" id="ecd"></div><div id="cdl">Chargement…</div></form>' +
-    '<form class="box" id="fsv" style="display:grid;gap:10px"><h2>📋 Questionnaire</h2><p><small>Envoyé à tous les joueurs : une fenêtre s’ouvre à leur prochaine connexion. Une seule réponse par joueur, résultats anonymes.</small></p>'
-    + '<input id="svq" placeholder="Ta question (ex : Tu aimes la nouvelle course ?)" maxlength="200">'
-    + '<select id="svt" aria-label="Type de réponse"><option value="stars">⭐ Étoiles de 1 à 5</option><option value="qcm">🔘 QCM (choix multiples)</option></select>'
-    + '<textarea id="svo" rows="4" placeholder="Une réponse par ligne (2 à 8)" style="display:none"></textarea>'
-    + '<label class="row" style="gap:8px"><input id="svn" type="checkbox" checked> Envoyer aussi une notification</label>'
-    + '<button>Envoyer le questionnaire</button><div class="err" id="esv"></div><div id="svl">Chargement…</div></form>' +
     '<div class="box"><h2>Signalements (' + reports.length + (reports.some((r) => r.cat === 'idea') ? ' dont ' + reports.filter((r) => r.cat === 'idea').length + ' idée(s)' : '') + ')</h2>' + reps + '</div>';
   app.querySelectorAll('.rt').forEach((el, i) => (el.textContent = reports[i].text));
   $('#pv').onclick = () => { asP = true; localStorage.asp = '1'; start(); };
@@ -2241,7 +2204,7 @@ async function opView(m) {
     opTabs.querySelectorAll('[data-oc]').forEach((b) => (b.onclick = () => { opTab = b.dataset.oc; showOc(); }));
     [...app.children].forEach((el) => { if (el !== bar && el !== opTabs) el.style.display = el.dataset.oc === opTab ? '' : 'none'; });
     if (opTab === 'm') opDmList();
-    if (opTab === 'o') { opCodes(); opSurveys(); }
+    if (opTab === 'o') opCodes();
   };
   const opDmList = async () => {
     const box = $('#opdl'), th = $('#opdt'); th.innerHTML = '';
@@ -2288,27 +2251,6 @@ async function opView(m) {
       }));
     } catch (er) { box.textContent = er.message; }
   }
-  async function opSurveys() {
-    const box = $('#svl'); if (!box) return;
-    try {
-      const { surveys } = await api('svlist');
-      const bar = (n, tot, lab) => '<div style="display:flex;align-items:center;gap:8px;margin:3px 0"><span style="min-width:34px">' + lab + '</span><div style="flex:1;background:var(--line);border-radius:6px;height:10px;overflow:hidden"><div style="width:' + (tot ? Math.round((n / tot) * 100) : 0) + '%;height:100%;background:#58a6ff"></div></div><span style="min-width:64px;text-align:right">' + n + ' (' + (tot ? Math.round((n / tot) * 100) : 0) + '%)</span></div>';
-      box.innerHTML = '<h3 style="margin:8px 0 4px">Questionnaires (' + surveys.length + ')</h3>' + (surveys.map((x) => '<div style="border-top:1px solid var(--line);padding:10px 0"><div class="row" style="justify-content:space-between;gap:8px"><b>' + esc(x.q) + '</b><span class="pill">' + (x.open ? '🟢 ouvert' : '⚪ clos') + '</span></div>'
-        + '<small>' + new Date(x.t).toLocaleDateString('fr-FR') + ' · ' + x.n + ' réponse' + (x.n > 1 ? 's' : '') + (x.type === 'stars' ? (x.avg != null ? ' · moyenne ⭐ ' + String(x.avg).replace('.', ',') + ' / 5' : '') : '') + '</small>'
-        + (x.type === 'stars' ? [5, 4, 3, 2, 1].map((k) => bar(x.counts[k - 1], x.n, k + ' ★')).join('') : x.opts.map((o, k) => '<div style="margin-top:4px">' + esc(o) + '</div>' + bar(x.counts[k], x.n, '')).join(''))
-        + '<div class="row" style="margin-top:6px"><button type="button" class="g" data-svc="' + x.id + '" data-svo="' + (x.open ? 0 : 1) + '">' + (x.open ? 'Clore' : 'Rouvrir') + '</button><button type="button" class="g" data-svd="' + x.id + '">Supprimer</button></div></div>').join('') || '<p><small>Aucun questionnaire pour le moment.</small></p>');
-      box.querySelectorAll('[data-svc]').forEach((b) => (b.onclick = async () => { try { await api('svclose', { id: b.dataset.svc, open: b.dataset.svo === '1' }); await opSurveys(); } catch (er) { $('#esv').style.color = ''; $('#esv').textContent = er.message; } }));
-      box.querySelectorAll('[data-svd]').forEach((b) => (b.onclick = async () => { if (!confirm('Supprimer ce questionnaire et ses réponses ?')) return; try { await api('svdel', { id: b.dataset.svd }); await opSurveys(); } catch (er) { $('#esv').style.color = ''; $('#esv').textContent = er.message; } }));
-    } catch (er) { box.textContent = er.message; }
-  }
-  $('#svt').onchange = () => { $('#svo').style.display = $('#svt').value === 'qcm' ? '' : 'none'; };
-  $('#fsv').onsubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await api('svadd', { q: $('#svq').value, type: $('#svt').value, opts: $('#svo').value.split('\n'), notify: $('#svn').checked });
-      await opView('esv|Questionnaire envoyé à tous les joueurs');
-    } catch (er) { $('#esv').style.color = ''; $('#esv').textContent = er.message; }
-  };
   cdDrawD();
   $('#cdta').onclick = () => { const t = $('#cdt').value; if (!t) return; cdDraft.bought[t] = (cdDraft.bought[t] || 0) + Math.max(1, parseInt($('#cdtn').value, 10) || 1); cdDrawD(); };
   $('#cdka').onclick = () => { const id = $('#cdk').value; if (!id) return; cdDraft.cards[id] = (cdDraft.cards[id] || 0) + Math.max(1, parseInt($('#cdkn').value, 10) || 1); cdDrawD(); };
@@ -2338,7 +2280,6 @@ async function poll() {
     updTabBadge();
     if (S.rw && S.rw.length && !wheelOn && wheelAsked !== S.rw.length + ':' + S.rw[0].name && !document.querySelector('.ov,#rbo') && !S.maint && !S.ban) { wheelAsked = S.rw.length + ':' + S.rw[0].name; wheelFlow(); }
     if (S.dy && !S.dy.claimed && dyAsked !== new Date().toDateString() && tab !== 'jeu' && !document.getElementById('splash')) dailyPopup();
-    if (S.sv && svAsked !== S.sv.id && tab !== 'jeu' && !document.getElementById('splash')) svPopup();
     if (tab === 'rk' && rkSub === 'm' && dmWith) { if (j.notifs && j.notifs.length) notify(j.notifs); dmLoad(false).catch(() => {}); return; }
     if (j.notifs && j.notifs.length) { notify(j.notifs); if (!document.querySelector('.ov') && tab !== 'jeu' && tab !== 'set' && !(tab === 'rk' && rkSub === 'd' && chForm)) playerView(); }
   } catch {}
@@ -2404,7 +2345,7 @@ const splashDone = new Promise((resolve) => {
   }, 100);
 });
 async function start() {
-  try { if (isOp && !asP) { await opView(); checkPush({ as: 'player' }).catch(() => {}); } else { await refresh(); checkPush().then(() => { if (pushOn && tab === 'set') playerView(); splashDone.then(() => setTimeout(() => { const nx = () => { if (!svPopup(nudge)) nudge(); }; if (!dailyPopup(nx)) nx(); }, 600)); }); } } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); } finally { appReady = true; }
+  try { if (isOp && !asP) { await opView(); checkPush({ as: 'player' }).catch(() => {}); } else { await refresh(); checkPush().then(() => { if (pushOn && tab === 'set') playerView(); splashDone.then(() => setTimeout(() => { if (!dailyPopup(nudge)) nudge(); }, 600)); }); } } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); } finally { appReady = true; }
 }
 if (tok) start(); else { authView(); appReady = true; }
 </script>
