@@ -284,6 +284,7 @@ details.fvb{border-color:var(--l)}details.fvb>summary{color:var(--l)}
 .skc{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:12px;text-align:left;min-height:0}
 .skc.on{border-color:var(--ac);box-shadow:inset 0 0 0 2px var(--ac)}
 .sw3{display:flex;gap:4px}.sw3 i{width:26px;height:26px;border-radius:6px;border:1px solid #8888}
+.qzo{display:block;width:100%;text-align:left;margin:6px 0;background:var(--panel);color:var(--txt);border:1px solid var(--line)}.qzo.on{outline:2px solid var(--l)}.qzst{font-size:32px;line-height:1;background:none!important;border:0!important;padding:2px 4px;cursor:pointer;box-shadow:none}.qzbar{height:8px;background:var(--line);border-radius:4px;overflow:hidden}.qzbar i{display:block;height:100%;background:var(--l)}
 </style>
 </head>
 <body><main id="app"></main>
@@ -1052,6 +1053,7 @@ function setHTML() {
   const th = document.documentElement.dataset.th;
   return (pushOn || S.maint || S.ban ? '' : '<div class="box"><h2>🔔 Notifications</h2><p>Messages du staff, nouveaux objets et nouvelles cartes au Marché, même app fermée. <b>Sur iPhone</b> : ajoute d\'abord le site à l\'écran d\'accueil (Partager → « Sur l\'écran d\'accueil »), ouvre-le depuis l\'icône, puis appuie ici.</p><button id="pn2">Activer</button></div>') +
     '<div class="box"><h2>Apparence</h2><select id="tsel"><option value="dark"' + (th === 'dark' ? ' selected' : '') + '>Sombre</option><option value="light"' + (th === 'light' ? ' selected' : '') + '>Clair</option></select></div>' +
+    '<div class="box"><h2>🔊 Son des notifications</h2><label class="row" style="gap:8px"><input type="checkbox" id="sndt"' + (sndOn() ? ' checked' : '') + '> Jouer un son à chaque notification</label><p><small>Le son joue quand l’app est ouverte. App fermée, ton téléphone utilise son propre son.</small></p></div>' +
     (S.maint || S.ban ? '' : subHTML()) +
     (S.maint || S.ban ? '' : '<form class="box" id="fcode" style="display:grid;gap:10px;max-width:400px"><h2>🎟️ Code</h2><p>Tu as un code ? Entre-le ici pour recevoir sa récompense. Un même code ne s’utilise qu’une fois par joueur.</p><input id="cdi" placeholder="Ton code" maxlength="24" autocomplete="off" autocapitalize="characters" required><button>Valider</button></form>') +
     pfpBox() +
@@ -1300,6 +1302,7 @@ function playerView() {
     if ($('#subcs')) $('#subcs').onclick = () => subCol($('#subcol').value);
     if ($('#subcr')) $('#subcr').onclick = () => subCol('');
     if ($('#fcode')) $('#fcode').onsubmit = (e) => { e.preventDefault(); run(async () => { const j = await api('redeem', { code: $('#cdi').value }); setS(j.state); playerView(); msg('🎟️ Code validé : tu as reçu ' + j.redeemed, true); }); };
+    $('#sndt').onchange = (e) => { localStorage.nsnd = e.target.checked ? '1' : '0'; if (e.target.checked) playSnd('account'); };
     $('#tsel').onchange = (e) => run(async () => { setTheme(e.target.value); await api('settings', { theme: e.target.value }); });
     if ($('#frn')) $('#frn').onsubmit = (e) => { e.preventDefault(); if (!$('#rn2') || !confirm('Un seul changement gratuit. Continuer ?')) return; run(async () => { setS((await api('rename', { name: $('#rn2').value })).state); playerView(); msg('Pseudo changé', true); }); };
     $('#fpw').onsubmit = (e) => { e.preventDefault(); run(async () => { await api('settings', { old: $('#po').value, pw: $('#pn').value }); msg('Mot de passe changé', true); $('#fpw').reset(); }); };
@@ -1314,6 +1317,11 @@ function playerView() {
 // # `v` doit être unique et change à chaque mise à jour (ex. la date AAAA-MM-JJ, avec -2, -3… s'il y en a plusieurs le même jour).
 // =====================================================================================================================
 const UPDATES = [
+  { v: '2026-10-24', title: 'Questionnaires et sons', items: [
+    '📋 Le staff peut maintenant t’envoyer un questionnaire : des questions à choix, ou à noter de 1 à 5 étoiles. Il s’affiche quand tu ouvres le jeu, et revient jusqu’à ce que tu répondes.',
+    '🔊 Chaque type de notification a maintenant sa propre sonnerie (sachet, échange, défi, cadeau…). Elle joue quand l’app est ouverte ; app fermée, c’est le son de ton téléphone.',
+    '⚙️ Tu peux couper ces sons dans Réglages → Son des notifications.',
+  ] },
   { v: '2026-10-23', title: 'Sachets gratuits par niveau', items: [
     '⏱️ Chaque niveau de sachet a maintenant son propre stock de sachets gratuits (10 maximum) et son propre compteur.',
     '🐢 Plus le niveau est haut, plus le compteur est long : ×1 au niveau 1, ×1,5 au niveau 2, jusqu’à ×5 au niveau 9. Ouvrir un sachet d’un niveau n’enlève que celui de ce niveau.',
@@ -1415,7 +1423,8 @@ function reveal(ids, t, n, was, bad) {
 }
 function notify(l) {
   let c = $('#toasts'); if (!c) { c = document.createElement('div'); c.id = 'toasts'; document.body.append(c); }
-  l.forEach((x) => { const t = document.createElement('div'); t.className = 'toast'; t.textContent = x; t.onclick = () => t.remove(); c.append(t); setTimeout(() => t.remove(), 8000); });
+  l.forEach((x) => { const t = document.createElement('div'); t.className = 'toast'; t.textContent = typeof x === 'string' ? x : x.x; t.onclick = () => t.remove(); c.append(t); setTimeout(() => t.remove(), 8000); });
+  const ks = l.map(sndOf); if (sndOn() && !ks.every((k) => k === 'none')) playSnd(ks.find((k) => k !== 'none'));
 }
 function updHead() {
   if (!$('#pc')) return;
@@ -1930,6 +1939,173 @@ function opInbox() {
   const pn = ov.querySelector('#opn'); if (pn) pn.onclick = async () => { try { await enablePush({ as: 'player' }); opInbox(); } catch (e) { ov.querySelector('#ne2').textContent = e.message; } };
 }
 let cdDraft = { bought: {}, cards: {} }; // récompenses en cours de préparation dans Opérateur → Codes
+// --- Sonneries des notifications (jouées quand l'app est ouverte ; app fermée, le téléphone utilise son propre son)
+const SND_NAMES = { pack: 'Sachet prêt', trade: 'Échange', defi: 'Défi', course: 'Sachet de course', gift: 'Cadeau', account: 'Compte modifié', qz: 'Questionnaire', none: 'Aucun son' };
+let actx = null;
+const audioCtx = () => { try { const AC = window.AudioContext || window.webkitAudioContext; actx = actx || new AC(); if (actx.state === 'suspended') actx.resume(); } catch {} return actx; };
+['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, audioCtx, { once: true, passive: true }));
+const sndOn = () => localStorage.nsnd !== '0';
+function tone(f, t0, d, type, v) { const o = actx.createOscillator(), g = actx.createGain(); o.type = type || 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(v || 0.25, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.001, t0 + d); o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + d + 0.05); }
+function flick(t0) { const n = actx.sampleRate * 0.06, b = actx.createBuffer(1, n, actx.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n); const s = actx.createBufferSource(); s.buffer = b; const f = actx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 3500; const g = actx.createGain(); g.gain.value = 0.5; s.connect(f).connect(g).connect(actx.destination); s.start(t0); }
+function playSnd(k) {
+  if (k === 'none' || !audioCtx()) return;
+  try {
+    const t = actx.currentTime + 0.02; flick(t);
+    if (k === 'pack') { flick(t + 0.1); tone(523, t + 0.18, 0.3, 'triangle', 0.25); tone(784, t + 0.3, 0.5, 'triangle', 0.25); }
+    else if (k === 'trade') { tone(988, t + 0.08, 0.15, 'square', 0.08); tone(740, t + 0.22, 0.3, 'triangle', 0.22); }
+    else if (k === 'defi') { tone(523, t + 0.08, 0.12, 'square', 0.1); tone(523, t + 0.2, 0.12, 'square', 0.1); tone(784, t + 0.32, 0.15, 'square', 0.1); tone(1047, t + 0.46, 0.5, 'triangle', 0.25); }
+    else if (k === 'course') { [0, 0.18, 0.36].forEach((d) => tone(660, t + 0.08 + d, 0.1, 'square', 0.09)); tone(1320, t + 0.62, 0.5, 'triangle', 0.25); tone(1760, t + 0.62, 0.4, 'sine', 0.08); }
+    else if (k === 'gift') { [880, 1175, 1568, 2093].forEach((f, i) => { tone(f, t + 0.1 + i * 0.09, 0.9, 'sine', 0.2); tone(f * 2.01, t + 0.1 + i * 0.09, 0.5, 'sine', 0.04); }); }
+    else if (k === 'qz') { tone(523, t + 0.12, 0.3, 'sine', 0.2); tone(659, t + 0.27, 0.3, 'sine', 0.2); tone(784, t + 0.42, 0.7, 'sine', 0.22); }
+    else { tone(784, t + 0.1, 0.35, 'sine', 0.22); tone(587, t + 0.3, 0.6, 'sine', 0.22); }
+  } catch {}
+}
+// sonnerie d'une notif : celle choisie par le staff ; sinon d'après l'emoji du début du texte
+const sndOf = (x) => { if (x && typeof x === 'object' && x.s) return x.s; const t = typeof x === 'string' ? x : (x && x.x) || ''; return /^🏁/.test(t) ? 'course' : /^⚔/.test(t) ? 'defi' : /^(🔁|🔄)/.test(t) ? 'trade' : /^🎁/.test(t) ? 'gift' : /^📋/.test(t) ? 'qz' : 'account'; };
+
+// --- Questionnaire côté joueur : pop-up bloquant, revient à chaque arrivée jusqu'à la réponse
+let qzOn = false;
+function qzPopup(after) {
+  const q = S && S.qz;
+  if (!q || qzOn || !tok || (isOp && !asP) || S.maint || S.ban || document.querySelector('.ov,#rbo') || document.getElementById('splash')) return false;
+  qzOn = true;
+  const ans = q.qs.map((x) => (x.t === 'star' ? 0 : [])), ov = overlay('');
+  ov.innerHTML = '<div class="box" style="max-width:480px;margin:5vh auto;max-height:90vh;overflow:auto"><h2>📋 ' + esc(q.title) + '</h2><p><small>Réponds à toutes les questions pour continuer. Après l’envoi, tes réponses ne peuvent plus être modifiées.</small></p><div id="qzb"></div><button id="qzs" style="width:100%;margin-top:10px">Envoyer mes réponses</button><div class="err" id="qze"></div></div>';
+  const draw = () => {
+    ov.querySelector('#qzb').innerHTML = q.qs.map((x, i) => '<div style="margin:14px 0"><b>' + (i + 1) + '. ' + esc(x.q) + '</b>' + (x.t === 'star'
+      ? '<div style="display:flex;gap:2px;margin-top:6px">' + [1, 2, 3, 4, 5].map((n) => '<button type="button" class="qzst" data-s="' + i + ':' + n + '" aria-label="' + n + ' étoile' + (n > 1 ? 's' : '') + '">' + (n <= ans[i] ? '⭐' : '☆') + '</button>').join('') + '</div>'
+      : (x.multi ? '<small style="display:block;color:var(--dim)">Plusieurs réponses possibles</small>' : '') + x.opts.map((o, k) => '<button type="button" class="qzo' + (ans[i].includes(k) ? ' on' : '') + '" data-o="' + i + ':' + k + '">' + (ans[i].includes(k) ? '✓ ' : '') + esc(o) + '</button>').join('')) + '</div>').join('');
+  };
+  draw();
+  ov.querySelector('#qzb').onclick = (e) => {
+    const s = e.target.closest('[data-s]'), o = e.target.closest('[data-o]');
+    if (s) { const [i, n] = s.dataset.s.split(':').map(Number); ans[i] = n; }
+    else if (o) { const [i, k] = o.dataset.o.split(':').map(Number), x = q.qs[i]; ans[i] = x.multi ? (ans[i].includes(k) ? ans[i].filter((v) => v !== k) : [...ans[i], k]) : [k]; }
+    else return;
+    draw();
+  };
+  ov.querySelector('#qzs').onclick = async (e) => {
+    const er = ov.querySelector('#qze'); er.textContent = '';
+    if (q.qs.some((x, i) => (x.t === 'star' ? !ans[i] : !ans[i].length))) { er.textContent = 'Choisis une réponse à chaque question.'; return; }
+    e.target.disabled = true;
+    try {
+      const j = await api('qzanswer', { id: q.id, a: ans }); setS(j.state);
+      ov.remove(); qzOn = false; notify([{ x: '🙏 Merci pour tes réponses !', s: 'none' }]);
+      if (!qzPopup(after) && after) after();
+    } catch (ex) {
+      e.target.disabled = false; er.textContent = ex.message;
+      if (/plus disponible|déjà répondu/.test(ex.message)) { ov.remove(); qzOn = false; refresh().catch(() => {}); }
+    }
+  };
+  return true;
+}
+
+// --- Espace opérateur : sélection de joueurs, notifications (immédiates ou programmées), questionnaires
+const parisInput = (ms) => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ms)).map((x) => [x.type, x.value])); return p.year + '-' + p.month + '-' + p.day + 'T' + p.hour + ':' + p.minute; };
+const parisShow = (ms) => new Date(ms).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'short', timeStyle: 'short' });
+const rpHTML = (id, users) => '<div class="rp" id="rp-' + id + '"><div class="row" style="gap:14px;flex-wrap:wrap"><label class="row" style="gap:6px"><input type="radio" name="rpm-' + id + '" value="all" checked> Tout le monde</label><label class="row" style="gap:6px"><input type="radio" name="rpm-' + id + '" value="sel"> Une sélection</label></div>'
+  + '<div class="rps" style="display:none"><input class="rpq" placeholder="🔎 Chercher un joueur" style="width:100%;margin:6px 0" autocomplete="off"><div style="max-height:170px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px 8px">'
+  + users.filter((u) => !u.bot).map((u) => '<label class="row rpl" data-n="' + esc(u.pseudo.toLowerCase()) + '" style="gap:8px;padding:3px 0"><input type="checkbox" value="' + esc(u.pseudo) + '"> ' + esc(u.pseudo) + '</label>').join('') + '</div><small class="rpc">0 joueur choisi</small></div></div>';
+function rpWire(id) {
+  const r = document.getElementById('rp-' + id); if (!r) return;
+  const upd = () => { const n = r.querySelectorAll('.rps input[type=checkbox]:checked').length; r.querySelector('.rpc').textContent = n + ' joueur' + (n > 1 ? 's' : '') + ' choisi' + (n > 1 ? 's' : ''); };
+  r.querySelectorAll('input[type=radio]').forEach((x) => (x.onchange = () => { r.querySelector('.rps').style.display = r.querySelector('input[type=radio]:checked').value === 'sel' ? '' : 'none'; }));
+  r.querySelector('.rpq').oninput = (e) => { const q = e.target.value.trim().toLowerCase(); r.querySelectorAll('.rpl').forEach((l) => (l.style.display = !q || l.dataset.n.includes(q) ? '' : 'none')); };
+  r.querySelectorAll('.rps input[type=checkbox]').forEach((x) => (x.onchange = upd));
+}
+const rpGet = (id) => { const r = document.getElementById('rp-' + id); if (r.querySelector('input[type=radio]:checked').value === 'all') return '*'; const l = [...r.querySelectorAll('.rps input[type=checkbox]:checked')].map((x) => x.value); if (!l.length) throw new Error('Choisis au moins un joueur'); return l; };
+const rpSet = (id, to) => { const r = document.getElementById('rp-' + id); r.querySelector('input[value=' + (to === '*' ? 'all' : 'sel') + ']').checked = true; r.querySelector('.rps').style.display = to === '*' ? 'none' : ''; r.querySelectorAll('.rps input[type=checkbox]').forEach((x) => (x.checked = to !== '*' && to.some((p) => p.toLowerCase() === x.value.toLowerCase()))); r.querySelector('.rpc').textContent = to === '*' ? '0 joueur choisi' : to.length + ' joueur' + (to.length > 1 ? 's' : '') + ' choisi' + (to.length > 1 ? 's' : ''); };
+
+const ntOpHTML = (users) => '<div class="box" id="ntb" style="display:grid;gap:10px"><h2>🔔 Notifications</h2><p><small>Écris ce que tu veux, choisis qui la reçoit et la sonnerie (jouée quand l’app est ouverte ; app fermée, c’est le son du téléphone).</small></p>'
+  + '<input id="mx" maxlength="200" placeholder="Message">'
+  + '<div class="row" style="gap:8px"><select id="nts" aria-label="Sonnerie" style="flex:1"><option value="">🔔 Son automatique</option>' + Object.entries(SND_NAMES).map(([k, n]) => '<option value="' + k + '">' + esc(n) + '</option>').join('') + '</select><button type="button" class="g" id="ntp">▶ Écouter</button></div>'
+  + rpHTML('nt', users)
+  + '<div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" id="nsend">Envoyer maintenant</button></div>'
+  + '<div class="row" style="gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px"><input type="datetime-local" id="ntw" aria-label="Jour et heure"><button type="button" class="g" id="nsch">⏰ Programmer</button><button type="button" class="g" id="nscx" style="display:none">Annuler la modification</button></div><small>Heure de Paris. Elle part à la minute près si ton cron appelle le jeu chaque minute, sinon dès qu’un joueur ouvre le jeu après l’heure.</small>'
+  + '<div class="err" id="e5"></div><b>⏰ Programmées</b><div id="ntl">Chargement…</div><b>📨 Déjà envoyées</b><div id="nth"></div></div>';
+let ntEdit = null;
+function ntWire(act) {
+  rpWire('nt');
+  $('#ntp').onclick = () => playSnd($('#nts').value || 'account');
+  const body = () => { const text = $('#mx').value.trim(); if (!text) throw new Error('Message vide'); return { text, snd: $('#nts').value, to: rpGet('nt') }; };
+  $('#nsend').onclick = act('e5', async () => { const x = body(); await api('msg', { text: x.text, snd: x.snd, ...(x.to === '*' ? { pseudo: '*' } : { pseudos: x.to }) }); }, 'Notification envoyée');
+  $('#nsch').onclick = act('e5', async () => { const x = body(), when = $('#ntw').value; if (!when) throw new Error('Choisis un jour et une heure'); await api('schedadd', { ...x, when, id: ntEdit }); ntEdit = null; }, 'Notification programmée');
+  $('#nscx').onclick = () => { ntEdit = null; $('#nscx').style.display = 'none'; $('#nsch').textContent = '⏰ Programmer'; };
+  api('schedlist').then((j) => {
+    const nm = (to) => (to === '*' ? 'tout le monde' : to.length + ' joueur' + (to.length > 1 ? 's' : ''));
+    $('#ntl').innerHTML = j.pending.map((x) => '<div class="row" style="border-top:1px solid var(--line);padding:6px 0;gap:6px"><div style="flex:1"><b>' + parisShow(x.at) + '</b> · ' + esc(nm(x.to)) + (x.snd ? ' · ' + esc(SND_NAMES[x.snd] || '') : '') + '<br><small>' + esc(x.text) + '</small></div><button type="button" class="g" data-ne="' + x.id + '">✏️</button><button type="button" class="g" data-nd="' + x.id + '">✕</button></div>').join('') || '<small>Aucune.</small>';
+    $('#nth').innerHTML = j.hist.map((x) => '<div style="border-top:1px solid var(--line);padding:6px 0"><small>' + parisShow(x.sent) + ' · envoyée à ' + x.n + ' joueur' + (x.n > 1 ? 's' : '') + '</small><br>' + esc(x.text) + '</div>').join('') || '<small>Rien pour l’instant.</small>';
+    document.querySelectorAll('[data-ne]').forEach((b) => (b.onclick = () => { const x = j.pending.find((y) => y.id === b.dataset.ne); if (!x) return; ntEdit = x.id; $('#mx').value = x.text; $('#nts').value = x.snd || ''; $('#ntw').value = parisInput(x.at); rpSet('nt', x.to); $('#nsch').textContent = '💾 Enregistrer la modification'; $('#nscx').style.display = ''; $('#ntb').scrollIntoView({ behavior: 'smooth' }); }));
+    document.querySelectorAll('[data-nd]').forEach((b) => (b.onclick = act('e5', () => api('scheddel', { id: b.dataset.nd }), 'Notification annulée')));
+  }).catch((er) => { $('#ntl').textContent = er.message; });
+}
+
+let qzDraft = [{ t: 'mc', q: '', opts: '', multi: false }], qzTitle = '';
+const qzOpHTML = (users) => '<div class="box" id="qzbox" style="display:grid;gap:10px"><h2>📋 Questionnaires</h2><p><small>Il s’affiche chez chaque joueur à chaque arrivée, jusqu’à sa réponse (une seule, nominative). Tu le clos quand tu veux.</small></p>'
+  + '<input id="qzt" maxlength="60" placeholder="Titre du questionnaire"><div id="qzqs"></div><div class="row"><button type="button" class="g" id="qza">➕ Ajouter une question</button></div>'
+  + rpHTML('qz', users) + '<button type="button" id="qzsend">Envoyer le questionnaire</button><div class="err" id="eq1"></div>'
+  + '<b>Mes questionnaires</b><div id="qzl0">Chargement…</div><div id="qzr"></div></div>';
+function qzWire(act) {
+  rpWire('qz');
+  $('#qzt').value = qzTitle; $('#qzt').oninput = (e) => (qzTitle = e.target.value);
+  const drawQ = () => {
+    $('#qzqs').innerHTML = qzDraft.map((x, i) => '<div style="border:1px solid var(--line);border-radius:10px;padding:8px;margin-bottom:8px;display:grid;gap:6px"><div class="row" style="gap:6px"><b>' + (i + 1) + '.</b><select data-qt="' + i + '"><option value="mc"' + (x.t === 'mc' ? ' selected' : '') + '>Choix multiple</option><option value="star"' + (x.t === 'star' ? ' selected' : '') + '>Étoiles (1 à 5)</option></select><span style="flex:1"></span><button type="button" class="g" data-qx="' + i + '">✕</button></div>'
+      + '<input data-qq="' + i + '" maxlength="150" placeholder="Question" value="' + esc(x.q) + '">'
+      + (x.t === 'mc' ? '<textarea data-qo="' + i + '" rows="4" placeholder="Une réponse par ligne (2 à 10)">' + esc(x.opts) + '</textarea><label class="row" style="gap:6px"><input type="checkbox" data-qm="' + i + '"' + (x.multi ? ' checked' : '') + '> Plusieurs réponses possibles</label>' : '') + '</div>').join('');
+    $('#qzqs').querySelectorAll('[data-qt]').forEach((e) => (e.onchange = () => { qzDraft[+e.dataset.qt].t = e.value; drawQ(); }));
+    $('#qzqs').querySelectorAll('[data-qx]').forEach((e) => (e.onclick = () => { qzDraft.splice(+e.dataset.qx, 1); drawQ(); }));
+    $('#qzqs').querySelectorAll('[data-qq]').forEach((e) => (e.oninput = () => (qzDraft[+e.dataset.qq].q = e.value)));
+    $('#qzqs').querySelectorAll('[data-qo]').forEach((e) => (e.oninput = () => (qzDraft[+e.dataset.qo].opts = e.value)));
+    $('#qzqs').querySelectorAll('[data-qm]').forEach((e) => (e.onchange = () => (qzDraft[+e.dataset.qm].multi = e.checked)));
+  };
+  drawQ();
+  $('#qza').onclick = () => { if (qzDraft.length >= 10) return; qzDraft.push({ t: 'mc', q: '', opts: '', multi: false }); drawQ(); };
+  $('#qzsend').onclick = act('eq1', async () => {
+    const to = rpGet('qz'), qs = qzDraft.map((x) => ({ t: x.t, q: x.q, opts: x.opts.split('\n'), multi: x.multi }));
+    await api('qzadd', { title: qzTitle, qs, to });
+    qzDraft = [{ t: 'mc', q: '', opts: '', multi: false }]; qzTitle = '';
+  }, 'Questionnaire envoyé');
+  api('qzlist').then((j) => {
+    $('#qzl0').innerHTML = j.list.map((q) => '<div class="row" style="border-top:1px solid var(--line);padding:6px 0;gap:6px;flex-wrap:wrap"><div style="flex:1;min-width:150px"><b>' + esc(q.title) + '</b> ' + (q.open ? '🟢' : '🔒 clos') + '<br><small>' + q.nq + ' question' + (q.nq > 1 ? 's' : '') + ' · ' + (q.to === '*' ? 'tous les joueurs' : q.to + ' joueur' + (q.to > 1 ? 's' : '')) + ' · ' + q.ans + ' réponse' + (q.ans > 1 ? 's' : '') + '</small></div><button type="button" class="g" data-qr="' + q.id + '">📊 Résultats</button><button type="button" class="g" data-qc="' + q.id + '" data-o="' + (q.open ? 0 : 1) + '">' + (q.open ? 'Clore' : 'Rouvrir') + '</button><button type="button" class="g" data-qd="' + q.id + '">🗑</button></div>').join('') || '<small>Aucun questionnaire.</small>';
+    document.querySelectorAll('[data-qr]').forEach((b) => (b.onclick = () => qzRes(b.dataset.qr)));
+    document.querySelectorAll('[data-qc]').forEach((b) => (b.onclick = act('eq1', () => api('qzclose', { id: b.dataset.qc, open: b.dataset.o === '1' }), 'Questionnaire mis à jour')));
+    document.querySelectorAll('[data-qd]').forEach((b) => (b.onclick = () => { if (confirm('Supprimer ce questionnaire et toutes ses réponses ?')) act('eq1', () => api('qzdel', { id: b.dataset.qd }), 'Questionnaire supprimé')(); }));
+  }).catch((er) => { $('#qzl0').textContent = er.message; });
+}
+async function qzRes(id) {
+  const box = $('#qzr'); box.textContent = 'Chargement…';
+  try {
+    const j = await api('qzres', { id }), { q, answers, missing } = j, N = answers.length;
+    let h = '<div style="border-top:2px solid var(--line);margin-top:10px;padding-top:10px"><h3>📊 ' + esc(q.title) + '</h3><p>' + N + ' réponse' + (N > 1 ? 's' : '') + ' · ' + missing.length + ' sans réponse</p>' + (missing.length ? '<details><summary>Sans réponse (' + missing.length + ')</summary><small>' + missing.map(esc).join(', ') + '</small></details>' : '');
+    q.qs.forEach((x, i) => {
+      h += '<div style="margin:14px 0"><b>' + (i + 1) + '. ' + esc(x.q) + '</b>';
+      if (x.t === 'mc') {
+        x.opts.forEach((o, k) => { const who = answers.filter((a) => a.a[i].includes(k)).map((a) => a.p), pc = N ? Math.round(who.length / N * 100) : 0; h += '<div style="margin:6px 0"><div class="row" style="gap:6px"><span style="flex:1">' + esc(o) + '</span><b>' + who.length + '</b><small>' + pc + ' %</small></div><div class="qzbar"><i style="width:' + pc + '%"></i></div>' + (who.length ? '<small style="color:var(--dim)">' + who.map(esc).join(', ') + '</small>' : '') + '</div>'; });
+      } else {
+        const v = answers.map((a) => a.a[i]), avg = N ? (v.reduce((s, n) => s + n, 0) / N).toFixed(2).replace('.', ',') : '–';
+        h += '<div>Moyenne : <b>' + avg + ' ⭐</b></div>' + [5, 4, 3, 2, 1].map((n) => { const c = v.filter((y) => y === n).length; return '<div class="row" style="gap:6px"><span style="width:34px">' + n + ' ⭐</span><div class="qzbar" style="flex:1"><i style="width:' + (N ? Math.round(c / N * 100) : 0) + '%"></i></div><b>' + c + '</b></div>'; }).join('')
+          + '<div style="margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:8px"><label class="row" style="gap:8px;flex-wrap:wrap">Inférieur ou égal à <input type="range" min="1" max="5" value="2" data-sl="' + i + '" style="flex:1;min-width:100px"> <b id="slv' + i + '">2 ⭐</b></label><div id="slw' + i + '" style="margin:6px 0"></div>'
+          + '<div id="slf' + i + '" style="display:grid;gap:6px"><input maxlength="200" id="slt' + i + '" placeholder="Message de suivi du staff"><button type="button" id="slb' + i + '">Envoyer un suivi</button><div class="err" id="sle' + i + '"></div></div></div>';
+      }
+      h += '</div>';
+    });
+    box.innerHTML = h + '</div>';
+    q.qs.forEach((x, i) => {
+      if (x.t !== 'star') return;
+      const sl = box.querySelector('[data-sl="' + i + '"]'), draw = () => {
+        const m = +sl.value, hit = answers.filter((a) => a.a[i] <= m);
+        $('#slv' + i).textContent = m + ' ⭐'; $('#slw' + i).innerHTML = hit.length ? hit.map((a) => '<span style="display:inline-block;border:1px solid var(--line);border-radius:12px;padding:2px 8px;margin:2px">' + esc(a.p) + ' · ' + a.a[i] + '⭐</span>').join('') : '<small>Personne.</small>';
+        $('#slb' + i).textContent = 'Envoyer un suivi à ces ' + hit.length + ' joueur' + (hit.length > 1 ? 's' : ''); $('#slb' + i).disabled = !hit.length;
+      };
+      sl.oninput = draw; draw();
+      $('#slb' + i).onclick = async () => {
+        const er = $('#sle' + i); er.style.color = ''; er.textContent = '';
+        try { const r = await api('qzfollow', { id, qi: i, max: +sl.value, text: $('#slt' + i).value }); er.style.color = '#3fb950'; er.textContent = '✅ Suivi envoyé à ' + r.n + ' joueur' + (r.n > 1 ? 's' : ''); $('#slt' + i).value = ''; } catch (ex) { er.textContent = ex.message; }
+      };
+    });
+  } catch (er) { box.textContent = er.message; }
+}
+
 async function opView(m) {
   const j = await api('users'), { users, shop, custom, reports } = j; setCat(j.themes); (j.skinc || []).forEach((d) => (SKC[d.id] = d)); setSkin(j.skin);
   const opts = Object.entries(CAT).map(([t, o]) => '<optgroup label="' + esc(o.name) + '">' + [...RA].flatMap((r) => (o[r] || []).map((n) => '<option value="' + esc(t + ':' + n) + '">' + RN[r] + ' — ' + esc(n) + '</option>')).join('') + '</optgroup>').join('');
@@ -1959,7 +2135,8 @@ async function opView(m) {
     skinOpHTML() +
     pfbox +
     '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + ' — 🪙 ' + u.coins + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="cac" aria-label="Collection"></select><select id="ca" multiple size="6" aria-label="Cartes"></select><select id="cab" aria-label="Badge"><option value="0">Sans badge</option><option value="1">🥉 Badge Bronze</option><option value="2">🥈 Badge Argent</option><option value="3">🥇 Badge Or</option></select><small id="ch"></small><button>Valider</button><div class="err" id="e"></div></form>' +
-    '<form class="box" id="fm" style="display:grid;gap:10px"><h2>Envoyer une notification</h2><select id="mt"><option value="*">Tous les joueurs</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="mx" maxlength="200" placeholder="Message" required><button>Envoyer</button><div class="err" id="e5"></div></form>' +
+    ntOpHTML(users) +
+    qzOpHTML(users) +
     '<div class="box"><h2>🔧 Maintenance</h2><p>' + (j.maint ? 'ACTIVE : les joueurs voient « maintenance », peuvent seulement regarder leurs cartes, aller dans Réglages et te contacter.' : 'Désactivée.') + '</p><p><small>Explication montrée aux joueurs (facultatif, plusieurs choix possibles) :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible">' + j.maintPresets.map((p) => '<button type="button" class="pill mp' + ((j.maintinfo.presets || []).includes(p.k) ? ' on' : '') + '" data-mp="' + p.k + '">' + p.label + '</button>').join('') + '</div><textarea id="mmsg" rows="2" maxlength="300" placeholder="Message du staff (facultatif)" style="margin:8px 0"></textarea><div class="row"><button id="mnt" class="' + (j.maint ? '' : 'g') + '">' + (j.maint ? 'Désactiver la maintenance' : 'Activer la maintenance (tout verrouiller)') + '</button>' + (j.maint ? '<button class="g" id="mnu">Mettre à jour le message</button>' : '') + '</div><div class="err" id="e7"></div></div>' +
     '<form class="box" id="fr" style="display:grid;gap:10px"><h2>Changer le pseudo d\'un joueur</h2><select id="ru" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="rnn" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button><div class="err" id="e6"></div></form>' +
     '<div class="box" id="cpn"><h2>🎴 Panneau Cartes</h2><input id="cq" placeholder="🔎 Nom d\'une carte (objets compris)" style="width:100%;margin-bottom:8px" autocomplete="off"><div id="cres"></div><div id="cinf"></div></div>' +
@@ -2179,7 +2356,7 @@ async function opView(m) {
   };
   $('#fo').onsubmit = act('e4', () => api('addobj', { name: $('#on').value, rarity: $('#or').value, price: $('#op').value, stock: $('#os').value, img: $('#oi').value }), 'Objet ajouté à la boutique');
   $('#f').onsubmit = act('e', () => api('give', { pseudo: $('#u').value, mode: $('#m').value, coins: $('#co').value, packs: $('#pk').value, badge: $('#cab').value, cards: [...$('#ca').selectedOptions].map((o) => o.value) }), 'Fait');
-  $('#fm').onsubmit = act('e5', () => api('msg', { pseudo: $('#mt').value, text: $('#mx').value }), 'Notification envoyée');
+  ntWire(act); qzWire(act);
   const mpSel = () => [...app.querySelectorAll('.mp.on')].map((b) => b.dataset.mp);
   app.querySelectorAll('.mp').forEach((b) => (b.onclick = () => b.classList.toggle('on')));
   $('#mmsg').value = (j.maintinfo || {}).msg || '';
@@ -2280,6 +2457,7 @@ async function poll() {
     updTabBadge();
     if (S.rw && S.rw.length && !wheelOn && wheelAsked !== S.rw.length + ':' + S.rw[0].name && !document.querySelector('.ov,#rbo') && !S.maint && !S.ban) { wheelAsked = S.rw.length + ':' + S.rw[0].name; wheelFlow(); }
     if (S.dy && !S.dy.claimed && dyAsked !== new Date().toDateString() && tab !== 'jeu' && !document.getElementById('splash')) dailyPopup();
+    qzPopup();
     if (tab === 'rk' && rkSub === 'm' && dmWith) { if (j.notifs && j.notifs.length) notify(j.notifs); dmLoad(false).catch(() => {}); return; }
     if (j.notifs && j.notifs.length) { notify(j.notifs); if (!document.querySelector('.ov') && tab !== 'jeu' && tab !== 'set' && !(tab === 'rk' && rkSub === 'd' && chForm)) playerView(); }
   } catch {}
@@ -2345,7 +2523,7 @@ const splashDone = new Promise((resolve) => {
   }, 100);
 });
 async function start() {
-  try { if (isOp && !asP) { await opView(); checkPush({ as: 'player' }).catch(() => {}); } else { await refresh(); checkPush().then(() => { if (pushOn && tab === 'set') playerView(); splashDone.then(() => setTimeout(() => { if (!dailyPopup(nudge)) nudge(); }, 600)); }); } } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); } finally { appReady = true; }
+  try { if (isOp && !asP) { await opView(); checkPush({ as: 'player' }).catch(() => {}); } else { await refresh(); checkPush().then(() => { if (pushOn && tab === 'set') playerView(); splashDone.then(() => setTimeout(() => { const nx = () => { if (!qzPopup(nudge)) nudge(); }; if (!dailyPopup(nx)) nx(); }, 600)); }); } } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); } finally { appReady = true; }
 }
 if (tok) start(); else { authView(); appReady = true; }
 </script>
