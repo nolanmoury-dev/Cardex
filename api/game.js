@@ -103,7 +103,7 @@ async function flush() {
   try {
     const wp = require('web-push'), v = await vapid();
     wp.setVapidDetails('mailto:noreply@example.com', v.pub, v.priv);
-    await Promise.all(items.flatMap(([subs, text]) => subs.map((s) => wp.sendNotification(s, JSON.stringify({ title: 'Cardex', body: text })).catch(() => {}))));
+    await Promise.all(items.flatMap(([subs, text, snd]) => subs.map((s) => wp.sendNotification(s, JSON.stringify({ title: 'Cardex', body: text, ...(snd ? { sound: snd } : {}) })).catch(() => {}))));
   } catch (e) { console.error('push', e.message); }
 }
 async function bcast(text, except) {
@@ -310,13 +310,13 @@ async function expireCh() { // défis sans réponse au bout de 48 h : mise et ca
   for (const x of dead) { const A = await redis.get(key(x.from)); if (!A) continue; refundCh(A, x, '⌛ Ton défi ' + (x.to ? 'contre ' + x.to : 'ouvert') + " est resté sans réponse : mise et cartes rendues"); await redis.set(key(A.pseudo), A); }
 }
 
-function note(u, text, quiet) {
+function note(u, text, quiet, snd) { // snd = sonnerie choisie (pack, trade, defi, course, gift, account, qz, none) ; sans sonnerie : le site choisit selon l'emoji du texte
   if (!quiet) {
-    (u.notifs ||= []).push(text);
-    (u.inbox ||= []).unshift({ id: Date.now() + Math.random().toString(36).slice(2, 6), text, t: Date.now() });
+    (u.notifs ||= []).push(snd ? { x: text, s: snd } : text);
+    (u.inbox ||= []).unshift({ id: Date.now() + Math.random().toString(36).slice(2, 6), text, t: Date.now(), ...(snd ? { s: snd } : {}) });
     u.inbox = u.inbox.slice(0, 30);
   }
-  if ((u.subs || []).length) pend.push([u.subs, text]);
+  if ((u.subs || []).length) pend.push([u.subs, text, snd]);
 }
 // --- Messages privés : fil "dm:a|b" (200 derniers messages) ; chaque joueur garde un résumé dans u.dm = { pseudo_minuscule: { p, t, x, f, n } } (n = non lus)
 const dmKey = (a, b) => 'dm:' + [a.toLowerCase(), b.toLowerCase()].sort().join('|');
@@ -658,6 +658,52 @@ async function dailyPush() {
   return { sent: n };
 }
 
+// --- Sonneries des notifications (jouées par le site quand l'app est ouverte ; app fermée, c'est le son du téléphone)
+const SNDS = ['pack', 'trade', 'defi', 'course', 'gift', 'account', 'qz', 'none'];
+const sndOk = (v) => (SNDS.includes(v) ? v : '');
+const realUsers = async () => { const names = await redis.smembers('users'), l = names.length ? await redis.mget(...names.map(key)) : []; return l.filter((v) => v && !v.bot && v.pseudo !== OP_NAME); };
+const pickNames = (v) => (Array.isArray(v) ? [...new Set(v.map((x) => String(x).trim()).filter(Boolean))].slice(0, 500) : null);
+
+// --- Notifications programmées (heure de Paris) : envoyées par le cron (GET /api/game?cron=1, ex. chaque minute via cron-job.org)
+// ET en rattrapage : à chaque fois qu'un joueur utilise le jeu, celles dont l'heure est passée partent.
+const parisMs = (str) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(String(str || '')); if (!m) return NaN;
+  const [y, mo, d, h, mi] = m.slice(1).map(Number), want = Date.UTC(y, mo - 1, d, h, mi); let t = want;
+  for (let i = 0; i < 2; i++) {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(t)).map((x) => [x.type, x.value]));
+    t += want - Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute);
+  }
+  return t;
+};
+let schedChk = 0;
+async function runSched(force) {
+  const now = Date.now(); if (!force && now - schedChk < 15000) return 0; schedChk = now;
+  const L = (await redis.get('sched')) || [], due = L.filter((x) => x.at <= now);
+  if (!due.length) return 0;
+  await redis.set('sched', L.filter((x) => x.at > now)); // retirées avant l'envoi : jamais envoyées deux fois
+  const H = (await redis.get('schedh')) || [];
+  for (const x of due) {
+    let n = 0;
+    const names = x.to === '*' ? (await realUsers()).map((v) => v.pseudo) : x.to;
+    for (const p of names) { const u = await redis.get(key(p)); if (!u || u.bot) continue; note(u, '📢 Staff : ' + x.text, false, x.snd); await redis.set(key(u.pseudo), u); n++; }
+    H.unshift({ id: x.id, text: x.text, snd: x.snd, at: x.at, sent: Date.now(), n });
+  }
+  await redis.set('schedh', H.slice(0, 30));
+  await flush();
+  return due.length;
+}
+
+// --- Questionnaires : 1 à 10 questions (choix multiple ou étoiles 1-5), envoyés à tous (même ceux qui s'inscrivent ensuite) ou à une sélection.
+// Le joueur le voit à chaque arrivée jusqu'à sa réponse (une seule, définitive). Seul le staff le clôt. Réponses nominatives dans le hash 'qza:<id>'.
+const qzL = async () => { const l = await redis.get('qzl'); return Array.isArray(l) ? l : []; };
+const qzFor = (q, u) => q.to === '*' || q.to.includes(u.pseudo.toLowerCase());
+const qzPend = async (u) => {
+  if (u.bot || u.pseudo === OP_NAME) return null;
+  const d = u.qd || [], q = (await qzL()).find((x) => x.open && !d.includes(x.id) && qzFor(x, u));
+  return q ? { id: q.id, title: q.title, qs: q.qs } : null;
+};
+const qzAns = async (id) => { const h = await redis.hgetall('qza:' + id); return Object.values(h || {}).map((v) => (typeof v === 'string' ? JSON.parse(v) : v)).sort((a, b) => a.t - b.t); };
+
 const handler = async (req, res) => {
   const fail = (m, c = 400) => res.status(c).json({ error: m });
   const ok = (d) => res.status(200).json(d);
@@ -681,7 +727,8 @@ const handler = async (req, res) => {
       res.setHeader('Content-Type', 'image/' + m[1]); res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       return res.status(200).send(Buffer.from(m[2], 'base64'));
     }
-    if (cron) return ok(await dailyPush());
+    if (cron) { const sc = await runSched(true).catch((e) => { console.error('sched', e.message); return 0; }); return ok({ ...(await dailyPush()), sched: sc }); }
+    await runSched().catch((e) => console.error('sched', e.message));
     await raceSync().catch((e) => console.error('raceSync', e.message));
     await ensureBots().catch((e) => console.error('ensureBots', e.message));
     await runBots().catch((e) => console.error('bots', e.message));
@@ -838,14 +885,75 @@ const handler = async (req, res) => {
         await redis.set('custom', cu);
         return ok({ done: true });
       }
+      if (b.action === 'schedlist') return ok({ pending: ((await redis.get('sched')) || []).sort((x, y) => x.at - y.at), hist: (await redis.get('schedh')) || [] });
+      if (b.action === 'schedadd') { // programmer une notification (id fourni = modifier l'existante)
+        const text = String(b.text || '').trim().slice(0, 200), at = parisMs(b.when), to = b.to === '*' ? '*' : pickNames(b.to);
+        if (!text) return fail('Message vide');
+        if (!to || !to.length) return fail('Choisis au moins un joueur');
+        if (!Number.isFinite(at) || at < Date.now() - 30000) return fail('Choisis un jour et une heure dans le futur (heure de Paris)');
+        let L = (await redis.get('sched')) || [];
+        const id = b.id && L.some((x) => x.id === b.id) ? b.id : Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+        L = L.filter((x) => x.id !== id);
+        if (L.length >= 50) return fail('50 notifications programmées au maximum');
+        L.push({ id, text, snd: sndOk(b.snd), to, at, c: Date.now() });
+        await redis.set('sched', L);
+        return ok({ done: true, id });
+      }
+      if (b.action === 'scheddel') { await redis.set('sched', ((await redis.get('sched')) || []).filter((x) => x.id !== b.id)); return ok({ done: true }); }
+      if (b.action === 'qzlist') {
+        const L = await qzL();
+        return ok({ list: await Promise.all(L.map(async (q) => ({ id: q.id, title: q.title, open: q.open, t: q.t, nq: q.qs.length, to: q.to === '*' ? '*' : q.to.length, ans: await redis.hlen('qza:' + q.id) }))) });
+      }
+      if (b.action === 'qzadd') {
+        const title = String(b.title || '').trim().slice(0, 60), raw = Array.isArray(b.qs) ? b.qs.slice(0, 10) : [];
+        if (!title) return fail('Donne un titre au questionnaire');
+        if (!raw.length) return fail('Ajoute au moins une question');
+        const qs = [];
+        for (const x of raw) {
+          const q = String((x && x.q) || '').trim().slice(0, 150);
+          if (!q) return fail('Chaque question doit avoir un texte');
+          if (x.t === 'star') { qs.push({ t: 'star', q }); continue; }
+          const opts = (Array.isArray(x.opts) ? x.opts : []).map((o) => String(o).trim().slice(0, 80)).filter(Boolean).slice(0, 10);
+          if (opts.length < 2) return fail('Un choix multiple a besoin d\'au moins 2 réponses : « ' + q + ' »');
+          qs.push({ t: 'mc', q, opts, multi: !!x.multi });
+        }
+        const all = await realUsers(), to = b.to === '*' ? '*' : (pickNames(b.to) || []).map((p) => p.toLowerCase()).filter((p) => all.some((v) => v.pseudo.toLowerCase() === p));
+        if (to !== '*' && !to.length) return fail('Choisis au moins un joueur');
+        const L = await qzL(); if (L.length >= 30) return fail('30 questionnaires au maximum : supprime les anciens');
+        const q = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), title, qs, to, open: true, t: Date.now() };
+        await redis.set('qzl', [q, ...L]);
+        let n = 0;
+        for (const v of all) { if (to !== '*' && !to.includes(v.pseudo.toLowerCase())) continue; const u = await redis.get(key(v.pseudo)); if (!u) continue; note(u, '📋 Nouveau questionnaire : ' + title, false, 'qz'); await redis.set(key(u.pseudo), u); n++; }
+        return ok({ done: true, id: q.id, n });
+      }
+      if (b.action === 'qzres') {
+        const q = (await qzL()).find((x) => x.id === b.id); if (!q) return fail('Questionnaire introuvable');
+        const answers = await qzAns(q.id), done = new Set(answers.map((a) => a.p.toLowerCase()));
+        const rec = (await realUsers()).filter((v) => q.to === '*' || q.to.includes(v.pseudo.toLowerCase()));
+        return ok({ q, answers, missing: rec.filter((v) => !done.has(v.pseudo.toLowerCase())).map((v) => v.pseudo) });
+      }
+      if (b.action === 'qzclose') { const L = await qzL(), q = L.find((x) => x.id === b.id); if (!q) return fail('Questionnaire introuvable'); q.open = !!b.open; await redis.set('qzl', L); return ok({ done: true }); }
+      if (b.action === 'qzdel') { await redis.set('qzl', (await qzL()).filter((x) => x.id !== b.id)); await redis.del('qza:' + b.id); return ok({ done: true }); }
+      if (b.action === 'qzfollow') { // suivi : message du staff aux joueurs qui ont mis au plus `max` étoiles à la question `qi`
+        const text = String(b.text || '').trim().slice(0, 200), q = (await qzL()).find((x) => x.id === b.id), qi = int(b.qi, 50), max = int(b.max, 5);
+        if (!text) return fail('Message vide');
+        if (!q || !q.qs[qi] || q.qs[qi].t !== 'star') return fail('Question à étoiles introuvable');
+        let n = 0;
+        for (const a of await qzAns(q.id)) {
+          if (!(a.a[qi] >= 1 && a.a[qi] <= max)) continue;
+          const u = await redis.get(key(a.p)); if (!u) continue;
+          note(u, '📢 Staff : ' + text); await redis.set(key(u.pseudo), u); n++;
+        }
+        return ok({ done: true, n });
+      }
       if (b.action === 'msg') {
         const text = String(b.text || '').trim().slice(0, 200);
         if (!text) return fail('Message vide');
-        const names = b.pseudo === '*' ? await redis.smembers('users') : [String(b.pseudo || '')];
+        const names = pickNames(b.pseudos) || (b.pseudo === '*' ? await redis.smembers('users') : [String(b.pseudo || '')]), snd = sndOk(b.snd);
         let n = 0;
         for (const p of names) {
           const u = await redis.get(key(p)); if (!u) continue;
-          note(u, '📢 Staff : ' + text); await redis.set(key(u.pseudo), u); n++;
+          note(u, '📢 Staff : ' + text, false, snd); await redis.set(key(u.pseudo), u); n++;
         }
         if (!n) return fail('Joueur introuvable');
         return ok({ done: true, n });
@@ -1659,11 +1767,27 @@ const handler = async (req, res) => {
       if (!x) return fail('Défi introuvable (déjà accepté ou expiré)');
       await redis.set('challenges', L.filter((y) => y !== x));
       refundCh(u, x, '↩️ Défi annulé : mise et cartes rendues');
+    } else if (b.action === 'qzanswer') {
+      const q = (await qzL()).find((x) => x.id === b.id);
+      if (!q || !q.open || !qzFor(q, u) || u.pseudo === OP_NAME) return fail('Ce questionnaire n\'est plus disponible');
+      if ((u.qd || []).includes(q.id)) return fail('Tu as déjà répondu à ce questionnaire');
+      const A = Array.isArray(b.a) ? b.a : [], out = [];
+      for (let i = 0; i < q.qs.length; i++) {
+        const x = q.qs[i], v = A[i];
+        if (x.t === 'star') { const n = Number(v); if (!Number.isInteger(n) || n < 1 || n > 5) return fail('Réponds à toutes les questions'); out.push(n); }
+        else {
+          const set = [...new Set([].concat(v == null ? [] : v).map(Number))].sort((p, r) => p - r);
+          if (!set.length || set.some((k) => !Number.isInteger(k) || k < 0 || k >= x.opts.length) || (!x.multi && set.length > 1)) return fail('Réponds à toutes les questions');
+          out.push(set);
+        }
+      }
+      await redis.hset('qza:' + q.id, { [u.pseudo.toLowerCase()]: { p: u.pseudo, t: Date.now(), a: out } });
+      (u.qd ||= []).push(q.id);
     } else if (b.action !== 'me') return fail('Action inconnue');
 
     if (b.action === 'me') { extra = { notifs: u.notifs }; u.notifs = []; }
     await redis.set(key(u.pseudo), u);
-    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), maint: maintOn, maintinfo: maintOn ? await maintInfo() : null, ...(await skinState()) } });
+    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), qz: maintOn || banned ? null : await qzPend(u), maint: maintOn, maintinfo: maintOn ? await maintInfo() : null, ...(await skinState()) } });
   } catch (e) {
     console.error(e);
     return fail('Erreur serveur : ' + e.message, 500);
