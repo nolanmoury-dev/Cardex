@@ -185,6 +185,29 @@ main{padding:8px 8px calc(84px + env(safe-area-inset-bottom))}
 .bkc{aspect-ratio:5/7;border-radius:6px;border:2px solid #f5c518;background:linear-gradient(160deg,#3d3210,#16110a);box-shadow:0 0 12px #f5c51840;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;text-align:center;color:#f5c518;overflow:hidden}
 .bkc .bke{font-size:30px;line-height:1}.bkc b{font-size:12px}.bkc small{display:block;color:#e8d9a0;font-size:10px}
 .mbx ul{margin:4px 0 8px;padding-left:20px}.mbx li{margin:2px 0}
+/* Écrans « Maintenance » et « Erreur réseau » : de petites cartes aux couleurs de rareté rebondissent sur un sachet fermé */
+.es{--im:#222b3b;max-width:440px;margin:4vh auto 0;padding:0 4px;text-align:center}
+:root[data-th=light] .es{--im:#d8dfeb}
+.es h3{font-family:'Barlow Condensed',Impact,sans-serif;font-weight:700;font-size:22px;letter-spacing:.5px;margin:0 0 2px}
+.es-st{position:relative;height:236px;overflow:hidden;margin:4px 0 6px}
+.es-pk{position:absolute;left:50%;top:100px;width:96px;height:132px;margin-left:-48px;background:var(--panel);border:3px solid var(--c);border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.es-pk .cr{position:absolute;left:0;right:0;top:0;height:16px;background:var(--c)}
+.es-pk svg{width:34px;height:34px;margin-top:12px;color:var(--dim)}
+.es.net .es-pk svg{color:var(--lo)}
+.es-mc{position:absolute;left:50%;top:8px;width:34px;height:48px;margin-left:-17px;border-radius:5px;border:2px solid var(--k);background:var(--cb);opacity:0;animation:esb 3.2s ease-in-out infinite}
+.es-mc.glow{box-shadow:0 0 10px var(--k)}
+.es-mc::before{content:"";position:absolute;left:3px;right:3px;top:3px;height:23px;border-radius:2px;background:var(--im)}
+.es-mc::after{content:"";position:absolute;left:4px;right:4px;bottom:4px;height:5px;border-radius:2px;background:var(--k)}
+@keyframes esb{0%{transform:translate(var(--sx),-10px) rotate(var(--rot));opacity:0}12%{opacity:1}40%{transform:translate(0,44px) rotate(0deg);opacity:1}48%{transform:translate(0,48px) scale(1.06,.88);opacity:1}66%{transform:translate(calc(var(--sx)*-.5),2px) rotate(calc(var(--rot)*-1));opacity:1}100%{transform:translate(calc(var(--sx)*-1),150px) rotate(calc(var(--rot)*-3));opacity:0}}
+@media(prefers-reduced-motion:reduce){.es-mc{animation:none;opacity:1;transform:translate(calc(var(--sx)*.55),24px) rotate(var(--rot))}}
+.es-msg{background:var(--panel);border:1px solid var(--l);border-radius:12px;padding:14px 16px}
+.es.net .es-msg{border-color:var(--lo)}
+.es-msg>b{display:block;font-family:'Barlow Condensed',Impact,sans-serif;font-weight:700;font-size:24px;line-height:1.1;margin-bottom:6px}
+.es-msg p{margin:6px 0 0;font-size:15px;line-height:1.45;color:var(--dim)}
+.es-msg p.es-un{color:var(--txt);font-weight:500}
+.es-msg ul{text-align:left;margin:4px 0 0;padding-left:20px;font-size:15px;color:var(--dim)}.es-msg li{margin:2px 0}
+.es-rt{margin-top:12px;min-height:44px;padding:10px 20px}
+.nso{position:fixed;inset:0;z-index:100000;overflow:auto;background:var(--bg);color:var(--txt);padding:16px}
 details.lvc{border-color:#58a6ff}details.lvc>summary{color:#58a6ff}
 .opf .row{margin:8px 0}.opf label{display:flex;align-items:center;gap:6px}.opf input[type=number]{width:96px}.opf table{width:100%;border-collapse:collapse}.opf td{padding:3px 4px;border-top:1px solid var(--line)}.opf td:last-child{text-align:right;white-space:nowrap}
 .stt{padding:0 8px 6px;text-align:center;font-size:13px;color:var(--dim)}.hpb{height:8px;background:var(--line);border-radius:4px;overflow:hidden}.hpb i{display:block;height:100%;background:#3fb950;transition:width .45s}.csel{outline:3px solid var(--l);outline-offset:-3px}.dmgf{height:24px;font-weight:700;color:#f85149;font-size:18px}
@@ -352,9 +375,31 @@ async function flip() {
 function setCat(c) { CAT = c; RAR = {}; for (const [t, o] of Object.entries(CAT)) [...RA].forEach((r) => (o[r] || []).forEach((n) => (RAR[t + ':' + n] = r))); }
 function setS(s) { S = s; setSub(s.sub); setCat(s.themes); if (s.theme && s.theme !== localStorage.th) setTheme(s.theme); if (s.skin !== undefined && !SKPV) { if (s.skind) SKC[s.skind.id] = s.skind; if ((s.skin || '') !== SKK || (s.skind && localStorage.skd !== JSON.stringify(s.skind))) setSkin(s.skin); } }
 
-async function api(action, d = {}) {
-  const r = await fetch('/api/game', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, token: tok, ...(isOp && asP ? { as: 'player' } : {}), ...d }) });
-  const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = { error: 'Réponse invalide (code ' + r.status + ') : ' + t.slice(0, 120) }; if (r.ok) throw new Error(j.error); }
+// Erreur réseau automatique : serveur injoignable, plus de connexion, base saturée (limite Upstash), page d’erreur, code 5xx ou 429.
+// Le texte technique n’est jamais montré : un écran « Erreur réseau » avec « Réessayer » le remplace (o.quiet = sans écran, utilisé par le suivi automatique).
+let netOn = false, pollFail = 0;
+function netFail(o, why) { console.warn('Erreur réseau :', why); const e = new Error('Erreur réseau'); e.net = true; if (!o.quiet) netScreen(); throw e; }
+function netScreen() {
+  if (netOn) return; netOn = true;
+  const el = document.createElement('div'); el.id = 'netscr'; el.className = 'nso'; el.innerHTML = esHTML({ type: 'net' }); document.body.append(el);
+  el.querySelector('#esr').onclick = () => netRetry(false);
+}
+async function netRetry(auto) {
+  if (!netOn) return;
+  const b = document.querySelector('#netscr #esr'); if (b && !auto) b.disabled = true;
+  try { await api('me', {}, { quiet: true }); } catch (e) { if (e.net) { if (b) b.disabled = false; return; } }
+  netOn = false; pollFail = 0; const el = document.getElementById('netscr'); if (el) el.remove();
+  if (tok) start(); else if (!$('#f')) authView();
+}
+setInterval(() => { if (netOn && !document.hidden) netRetry(true); }, 5000);
+async function api(action, d = {}, o = {}) {
+  let r, t;
+  try {
+    r = await fetch('/api/game', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, token: tok, ...(isOp && asP ? { as: 'player' } : {}), ...d }) });
+    t = await r.text();
+  } catch (e) { return netFail(o, e.message); }
+  let j; try { j = JSON.parse(t); } catch { j = null; }
+  if (!j || r.status >= 500 || r.status === 429) return netFail(o, 'code ' + r.status);
   if (!r.ok) { if (r.status === 401 && tok) logout(); throw new Error(j.error || 'Erreur'); }
   return j;
 }
@@ -480,12 +525,39 @@ function idsOf(t) {
   if (sort === 'fav') ids.sort((a, b) => S.fav.includes(b) - S.fav.includes(a));
   return ids;
 }
-function maintBox() {
-  const mi = S.maintinfo || {}, ms = mi.msgs || [];
-  return '<div class="box mbx" style="border-color:var(--l)"><h2>🔧 Maintenance</h2><p>Nous sommes en maintenance : une mise à jour arrive bientôt. En attendant, tu peux regarder tes cartes (onglet Collection) et utiliser les Réglages. Tes cartes, tes pièces et ton compte ne sont pas touchés, et tout revient dès la fin de la mise à jour.</p>'
+// --- Écran « Maintenance » / « Erreur réseau » (le joueur ne voit aucun bouton de catégorie ; il disparaît tout seul à la fin de la maintenance ou à la date de retour)
+const ES_LOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M11 16a1 1 0 1 0 2 0a1 1 0 0 0-2 0"/><path d="M8 11V7a4 4 0 1 1 8 0v4"/></svg>';
+const ES_NET = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18v-3"/><path d="M10 18v-6"/><path d="M14 18v-4"/><path d="M14 10V9"/><path d="M18 14V6"/><path d="M3 3l18 18"/></svg>';
+const PARIS = { timeZone: 'Europe/Paris' };
+const esUntil = (ts) => { const d = new Date(ts); return 'Retour prévu le ' + d.toLocaleDateString('fr-FR', { ...PARIS, day: 'numeric', month: 'long' }) + ' à ' + d.toLocaleTimeString('fr-FR', { ...PARIS, hour: '2-digit', minute: '2-digit' }).replace(':', 'h'); };
+// Champ « datetime-local » (heure de Paris) <-> horodatage
+const tsParis = (ts) => { const p = new Intl.DateTimeFormat('en-CA', { ...PARIS, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ts)), g = (k) => p.find((x) => x.type === k).value; return g('year') + '-' + g('month') + '-' + g('day') + 'T' + g('hour') + ':' + g('minute'); };
+const parisTs = (v) => {
+  const m = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)$/.exec(v || ''); if (!m) return null;
+  const u = Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]), f = new Intl.DateTimeFormat('en-CA', { ...PARIS, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+  const off = (t) => { const p = f.formatToParts(new Date(t)), g = (k) => +p.find((x) => x.type === k).value; return Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute'), g('second')) - t; };
+  return u - off(u - off(u));
+};
+function esHTML(o) {
+  const net = o.type === 'net', ms = o.msgs || [];
+  const cards = [['l', -92, -25, 0, 1], ['r', 82, 20, .64, 0], ['e', -62, -15, 1.28, 1], ['c', 96, 28, 1.92, 0], ['m', -80, -30, 2.56, 1]].map(([k, sx, rot, dl, g]) => '<div class="es-mc' + (g ? ' glow' : '') + '" style="--k:var(--' + k + ');--sx:' + sx + 'px;--rot:' + rot + 'deg;animation-delay:' + dl + 's"></div>').join('');
+  return '<div class="es' + (net ? ' net' : '') + '"><h3>Cardex</h3><div class="es-st" aria-hidden="true">' + cards + '<div class="es-pk"><div class="cr"></div>' + (net ? ES_NET : ES_LOCK) + '</div></div>'
+    + '<div class="es-msg" role="status"><b>' + (net ? 'Erreur réseau' : 'Maintenance en cours') + '</b>'
+    + '<p>' + (net ? 'Le serveur est indisponible ou ta connexion a coupé. Réessaie dans un moment.' : 'Une mise à jour arrive bientôt. Tes cartes, tes pièces et ton compte ne sont pas touchés.') + '</p>'
+    + (o.until ? '<p class="es-un">' + esUntil(o.until) + '</p>' : '')
+    + (o.code ? '<p class="es-un">' + (net ? 'Code d’erreur' : 'Code de maintenance') + ' : <b>' + esc(o.code) + '</b></p>' : '')
     + (ms.length ? '<p><b>Au programme :</b></p><ul>' + ms.map((m) => '<li>' + esc(m) + '</li>').join('') + '</ul>' : '')
-    + (mi.msg ? '<p>💬 <b>Message du staff :</b> ' + esc(mi.msg) + '</p>' : '')
-    + '<button id="mct">💬 Contacter le staff</button></div>';
+    + (o.msg ? '<p>💬 <b>Message du staff :</b> ' + esc(o.msg) + '</p>' : '')
+    + (net ? '<button id="esr" type="button" class="es-rt">Réessayer</button>' : '')
+    + (o.op ? '<div><button id="eso" type="button" class="g es-rt">⚙️ Espace opérateur</button></div>' : '')
+    + '</div></div>';
+}
+function maintView() {
+  clearInterval(timer); app.classList.remove('mt');
+  const mi = S.maintinfo || {};
+  app.innerHTML = esHTML({ type: mi.type, msgs: mi.msgs, msg: mi.msg, until: mi.until, code: mi.code, op: isOp });
+  const r = app.querySelector('#esr'); if (r) r.onclick = async () => { r.disabled = true; try { await refresh(); } catch { r.disabled = false; } };
+  const o = app.querySelector('#eso'); if (o) o.onclick = () => { asP = false; localStorage.asp = '0'; start(); };
 }
 const fmtDur = (s) => { const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60); return (d ? d + ' j ' : '') + [h, m, s % 60].map((n) => String(n).padStart(2, '0')).join(':'); };
 function banBox() {
@@ -1120,12 +1192,12 @@ function ownedEl(id) {
   return el;
 }
 function playerView() {
+  if (S.maint) return maintView();
   clearInterval(timer); setTimeout(showUpdate, 600);
-  if (S.ban) tab = 'set'; else if (S.maint && tab !== 'col' && tab !== 'set' && tab !== 'rk') tab = 'col';
-  app.classList.toggle('mt', !!(S.maint || S.ban));
-  app.innerHTML = head() + (S.ban ? banBox() : S.maint ? maintBox() : '') + { shop: shopHTML, col: colHTML, mk: mkHTML, jeu: jeuHTML, rk: rkHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
+  if (S.ban) tab = 'set';
+  app.classList.toggle('mt', !!S.ban);
+  app.innerHTML = head() + (S.ban ? banBox() : '') + { shop: shopHTML, col: colHTML, mk: mkHTML, jeu: jeuHTML, rk: rkHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
   $('#th').onclick = flip; if ($('#lo')) $('#lo').onclick = logout;
-  if ($('#mct')) $('#mct').onclick = () => { tab = 'set'; playerView(); setTimeout(() => { const r = $('#rt'); if (r) { r.scrollIntoView({ block: 'center' }); r.focus(); } }, 0); };
   if (isOp) $('#ob').onclick = () => { asP = false; localStorage.asp = '0'; start(); };
   $('#bl').onclick = inbox;
   if (S.ban && S.ban.until) { const tkb = () => { const s = Math.ceil((S.ban.until - Date.now()) / 1000); if (s <= 0) { clearInterval(timer); refresh(); return; } const el = $('#bc'); if (el) el.textContent = fmtDur(s); }; tkb(); timer = setInterval(tkb, 1000); }
@@ -1317,6 +1389,11 @@ function playerView() {
 // # `v` doit être unique et change à chaque mise à jour (ex. la date AAAA-MM-JJ, avec -2, -3… s'il y en a plusieurs le même jour).
 // =====================================================================================================================
 const UPDATES = [
+  { v: '2026-11-01', title: 'Maintenance et erreur réseau', items: [
+    '🔧 Quand le jeu est en maintenance, tu vois maintenant un écran dédié : de petites cartes rebondissent sur un sachet fermé, avec le message du staff, ce qui est prévu et, parfois, l’heure de retour prévue.',
+    '🔢 Le staff peut aussi afficher un code (d’erreur ou de maintenance) : donne-le si tu contactes le staff.',
+    '📡 Si le serveur ne répond pas ou si ta connexion coupe, le jeu affiche « Erreur réseau » avec un bouton Réessayer, à la place d’un message compliqué. Il revient tout seul dès que ça remarche.',
+  ] },
   { v: '2026-10-24', title: 'Questionnaires et sons', items: [
     '📋 Le staff peut maintenant t’envoyer un questionnaire : des questions à choix, ou à noter de 1 à 5 étoiles. Il s’affiche quand tu ouvres le jeu, et revient jusqu’à ce que tu répondes.',
     '🔊 Chaque type de notification a maintenant sa propre sonnerie (sachet, échange, défi, cadeau…). Elle joue quand l’app est ouverte ; app fermée, c’est le son de ton téléphone.',
@@ -1474,7 +1551,7 @@ async function enablePush(ax = {}) {
   pushOn = true; localStorage.pushOk = '1';
 }
 function nudge() {
-  if (!tok || (isOp && !asP) || document.querySelector('.ov')) return;
+  if (!tok || (isOp && !asP) || S.maint || document.querySelector('.ov')) return;
   if (!(MOB && !standalone()) && pushOn) return;
   const ov = overlay('');
   const render = () => {
@@ -2113,7 +2190,7 @@ async function opView(m) {
     const nb = u.packs + Object.values(u.bought).reduce((a, b) => a + b, 0);
     return '<div class="dm" data-pu="' + esc(u.pseudo) + '" data-pn="' + esc(u.pseudo.toLowerCase()) + '">' + avEl(u.pseudo) + '<div class="tx"><b>' + dotOf(u.seen) + (u.bot ? '🤖 ' : '') + (u.banned ? '⛔ ' : '') + esc(u.pseudo) + (u.push ? ' <span title="Notifications activées">🔔</span>' : '') + '</b><small>🪙 ' + u.coins + ' · 📦 ' + nb + ' · ' + Object.keys(u.cards).length + ' cartes</small></div><small>Ouvrir ›</small></div>';
   }).join('') || '<p>Aucun joueur pour le moment.</p>';
-  const now = Date.now();
+  const now = Date.now(), mnf = j.maintinfo || {};
   const cols = custom.cols.filter((c) => c.until > now).map((c) => '<div class="row">' + c.icon + ' <b>' + esc(c.name) + '</b> jusqu\'au ' + new Date(c.until).toLocaleDateString('fr-FR') + ' <input type="date" data-ed="' + c.key + '" value="' + dstr(c.until) + '" min="' + dstr(Date.now() + 864e5) + '"> <button class="g" data-ee="' + c.key + '">Changer la fin</button> <button class="g" data-ec="' + c.key + '">Terminer maintenant</button></div>').join('');
   const objs = custom.objs.filter((o) => !o.gone).map((o) => '<div class="row">🎁 <b>' + esc(o.name) + '</b> ' + RN[o.r] + ' — ' + o.price + ' coins' + (o.stock != null ? ' (reste ' + o.stock + ')' : '') + ' <button class="g" data-do="' + esc(o.name) + '">Retirer</button></div>').join('');
   const reps = reports.map((r) => '<div class="row" style="border-top:1px solid var(--line);padding:8px 0"><div style="flex:1"><b>' + esc(r.pseudo) + '</b> <small>' + new Date(r.t).toLocaleString('fr-FR') + '</small><br><span class="rt"></span></div><button class="g" data-dr="' + r.id + '">Supprimer</button></div>').join('') || '<p>Aucun signalement.</p>';
@@ -2137,7 +2214,7 @@ async function opView(m) {
     '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + ' — 🪙 ' + u.coins + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="cac" aria-label="Collection"></select><select id="ca" multiple size="6" aria-label="Cartes"></select><select id="cab" aria-label="Badge"><option value="0">Sans badge</option><option value="1">🥉 Badge Bronze</option><option value="2">🥈 Badge Argent</option><option value="3">🥇 Badge Or</option></select><small id="ch"></small><button>Valider</button><div class="err" id="e"></div></form>' +
     ntOpHTML(users) +
     qzOpHTML(users) +
-    '<div class="box"><h2>🔧 Maintenance</h2><p>' + (j.maint ? 'ACTIVE : les joueurs voient « maintenance », peuvent seulement regarder leurs cartes, aller dans Réglages et te contacter.' : 'Désactivée.') + '</p><p><small>Explication montrée aux joueurs (facultatif, plusieurs choix possibles) :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible">' + j.maintPresets.map((p) => '<button type="button" class="pill mp' + ((j.maintinfo.presets || []).includes(p.k) ? ' on' : '') + '" data-mp="' + p.k + '">' + p.label + '</button>').join('') + '</div><textarea id="mmsg" rows="2" maxlength="300" placeholder="Message du staff (facultatif)" style="margin:8px 0"></textarea><div class="row"><button id="mnt" class="' + (j.maint ? '' : 'g') + '">' + (j.maint ? 'Désactiver la maintenance' : 'Activer la maintenance (tout verrouiller)') + '</button>' + (j.maint ? '<button class="g" id="mnu">Mettre à jour le message</button>' : '') + '</div><div class="err" id="e7"></div></div>' +
+    '<div class="box"><h2>🔧 Maintenance / 📡 Erreur réseau</h2><p>' + (j.maint ? 'ACTIVE (' + (mnf.type === 'net' ? 'Erreur réseau' : 'Maintenance') + ') : les joueurs ne voient que l’écran d’attente, sans aucun accès au jeu. ' + (mnf.until ? esUntil(mnf.until) + ' : l’écran se lève tout seul à ce moment, ou tu peux le lever à la main.' : 'Sans date de retour : à lever à la main.') + (mnf.type === 'net' ? ' En mode joueur, tu es bloqué toi aussi ; ton espace opérateur reste ouvert.' : ' Toi, tu continues à jouer normalement.') : 'Désactivée.') + '</p><p><small>Type d’écran :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible"><button type="button" class="pill mtp' + (mnf.type === 'net' ? '' : ' on') + '" data-mtp="maint">🔧 Maintenance</button><button type="button" class="pill mtp' + (mnf.type === 'net' ? ' on' : '') + '" data-mtp="net">📡 Erreur réseau</button></div><p><small>Retour prévu, heure de Paris (facultatif) :</small></p><div class="row" style="margin-bottom:8px"><input type="datetime-local" id="mun" aria-label="Date et heure de retour prévu"><button type="button" class="g" id="muc">Effacer la date</button></div><p><small>Code affiché aux joueurs (facultatif, ex. E503 ou M12) :</small></p><input id="mcd" maxlength="20" autocomplete="off" placeholder="Code d’erreur ou de maintenance" style="width:100%;margin-bottom:8px"><p><small>Explication montrée aux joueurs (facultatif, plusieurs choix possibles) :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible">' + j.maintPresets.map((p) => '<button type="button" class="pill mp' + ((j.maintinfo.presets || []).includes(p.k) ? ' on' : '') + '" data-mp="' + p.k + '">' + p.label + '</button>').join('') + '</div><textarea id="mmsg" rows="2" maxlength="300" placeholder="Message du staff (facultatif)" style="margin:8px 0"></textarea><div class="row"><button id="mnt" class="' + (j.maint ? '' : 'g') + '">' + (j.maint ? 'Lever l’écran maintenant' : 'Activer l’écran (tout verrouiller)') + '</button>' + (j.maint ? '<button class="g" id="mnu">Mettre à jour (type, date, messages)</button>' : '') + '</div><div class="err" id="e7"></div></div>' +
     '<form class="box" id="fr" style="display:grid;gap:10px"><h2>Changer le pseudo d\'un joueur</h2><select id="ru" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="rnn" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button><div class="err" id="e6"></div></form>' +
     '<div class="box" id="cpn"><h2>🎴 Panneau Cartes</h2><input id="cq" placeholder="🔎 Nom d\'une carte (objets compris)" style="width:100%;margin-bottom:8px" autocomplete="off"><div id="cres"></div><div id="cinf"></div></div>' +
     '<form class="box" id="fcd" style="display:grid;gap:10px"><h2>🎟️ Codes</h2><p><small>Les joueurs les entrent dans Réglages → Code. Un même code ne s’utilise qu’une fois par joueur.</small></p>'
@@ -2359,9 +2436,14 @@ async function opView(m) {
   ntWire(act); qzWire(act);
   const mpSel = () => [...app.querySelectorAll('.mp.on')].map((b) => b.dataset.mp);
   app.querySelectorAll('.mp').forEach((b) => (b.onclick = () => b.classList.toggle('on')));
-  $('#mmsg').value = (j.maintinfo || {}).msg || '';
-  $('#mnt').onclick = act('e7', () => api('maint', { on: !j.maint, presets: mpSel(), msg: $('#mmsg').value }), j.maint ? 'Maintenance désactivée' : 'Maintenance activée');
-  if ($('#mnu')) $('#mnu').onclick = act('e7', () => api('maint', { on: true, presets: mpSel(), msg: $('#mmsg').value }), 'Message de maintenance mis à jour');
+  $('#mmsg').value = mnf.msg || '';
+  $('#mun').value = mnf.until ? tsParis(mnf.until) : '';
+  $('#mcd').value = mnf.code || '';
+  $('#muc').onclick = () => { $('#mun').value = ''; };
+  app.querySelectorAll('.mtp').forEach((b) => (b.onclick = () => { app.querySelectorAll('.mtp').forEach((x) => x.classList.toggle('on', x === b)); }));
+  const mArgs = () => ({ presets: mpSel(), msg: $('#mmsg').value, type: (app.querySelector('.mtp.on') || {}).dataset.mtp || 'maint', until: parisTs($('#mun').value), code: $('#mcd').value });
+  $('#mnt').onclick = act('e7', () => api('maint', { on: !j.maint, ...mArgs() }), j.maint ? 'Écran levé' : 'Écran activé');
+  if ($('#mnu')) $('#mnu').onclick = act('e7', () => api('maint', { on: true, ...mArgs() }), 'Écran mis à jour');
   $('#fr').onsubmit = act('e6', () => api('rename', { pseudo: $('#ru').value, name: $('#rnn').value }), 'Pseudo changé');
   app.querySelectorAll('[data-du]').forEach((b) => (b.onclick = (e) => { if (confirm('Supprimer définitivement le compte ' + b.dataset.du + ' ?')) act('e', () => api('deluser', { pseudo: b.dataset.du }), 'Compte supprimé')(e); }));
   // --- Catégories (au lieu d'une seule longue page) : 5 onglets qui tiennent sur 2 lignes maximum, sans glisser
@@ -2448,11 +2530,12 @@ async function opView(m) {
 }
 
 async function poll() {
-  if (!tok || document.hidden) return;
+  if (!tok || document.hidden || netOn) return;
   if (isOp && !asP) { if (opOn) opBell().catch(() => {}); return; }
   try {
-    const was = !!S.maint, wb = !!S.ban, j = await api('me'); setS(j.state);
-    if (was !== !!S.maint || wb !== !!S.ban) { if (j.notifs && j.notifs.length) notify(j.notifs); return playerView(); }
+    const sig = () => { const m = S.maintinfo || {}; return S.maint ? [m.type, m.until, m.code, m.msg, (m.msgs || []).join('|')].join('~') : ''; };
+    const was = sig(), wb = !!S.ban, j = await api('me', {}, { quiet: true }); pollFail = 0; setS(j.state);
+    if (was !== sig() || wb !== !!S.ban) { if (j.notifs && j.notifs.length) notify(j.notifs); return playerView(); }
     updHead();
     updTabBadge();
     if (S.rw && S.rw.length && !wheelOn && wheelAsked !== S.rw.length + ':' + S.rw[0].name && !document.querySelector('.ov,#rbo') && !S.maint && !S.ban) { wheelAsked = S.rw.length + ':' + S.rw[0].name; wheelFlow(); }
@@ -2460,7 +2543,7 @@ async function poll() {
     qzPopup();
     if (tab === 'rk' && rkSub === 'm' && dmWith) { if (j.notifs && j.notifs.length) notify(j.notifs); dmLoad(false).catch(() => {}); return; }
     if (j.notifs && j.notifs.length) { notify(j.notifs); if (!document.querySelector('.ov') && tab !== 'jeu' && tab !== 'set' && !(tab === 'rk' && rkSub === 'd' && chForm)) playerView(); }
-  } catch {}
+  } catch (e) { if (e.net && ++pollFail >= 2) netScreen(); }
 }
 setInterval(poll, 5000);
 document.addEventListener('visibilitychange', poll);
@@ -2523,7 +2606,7 @@ const splashDone = new Promise((resolve) => {
   }, 100);
 });
 async function start() {
-  try { if (isOp && !asP) { await opView(); checkPush({ as: 'player' }).catch(() => {}); } else { await refresh(); checkPush().then(() => { if (pushOn && tab === 'set') playerView(); splashDone.then(() => setTimeout(() => { const nx = () => { if (!qzPopup(nudge)) nudge(); }; if (!dailyPopup(nx)) nx(); }, 600)); }); } } catch (e) { if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); } finally { appReady = true; }
+  try { if (isOp && !asP) { await opView(); checkPush({ as: 'player' }).catch(() => {}); } else { await refresh(); checkPush().then(() => { if (pushOn && tab === 'set') playerView(); splashDone.then(() => setTimeout(() => { const nx = () => { if (!qzPopup(nudge)) nudge(); }; if (!dailyPopup(nx)) nx(); }, 600)); }); } } catch (e) { if (e.net) { /* l’écran « Erreur réseau » est déjà affiché */ } else if (tok) app.textContent = 'Erreur de chargement : ' + e.message; else authView(e.message); } finally { appReady = true; }
 }
 if (tok) start(); else { authView(); appReady = true; }
 </script>
