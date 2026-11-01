@@ -148,6 +148,16 @@ const MAINT_PRESETS = {
   set: ['⚙️ Réglages', 'Mise à jour des Réglages.'],
 };
 const maintInfo = async () => { const i = (await redis.get('maintinfo')) || {}; return { msgs: (i.presets || []).filter((k) => MAINT_PRESETS[k]).map((k) => MAINT_PRESETS[k][1]), msg: i.msg || '' }; };
+// Interrupteur « maintenance / erreur réseau » : une seule lecture Redis donne l'état, le type ('maint' ou 'net') et la date de retour (ms, facultative).
+// Quand la date de retour est passée, l'écran se lève tout seul (et le réglage est nettoyé).
+async function maintGet() {
+  const m = await redis.get('maint');
+  if (!m) return null;
+  const o = typeof m === 'object' ? { type: m.type === 'net' ? 'net' : 'maint', until: Number(m.until) || null, code: String(m.code || '') } : { type: 'maint', until: null, code: '' };
+  if (o.until && o.until <= Date.now()) { try { await redis.set('maint', false); await redis.del('maintinfo'); } catch {} return null; }
+  return o;
+}
+const maintOp = async () => { const mt = await maintGet(); return { maint: !!mt, maintinfo: { presets: [], msg: '', ...((await redis.get('maintinfo')) || {}), type: mt ? mt.type : 'maint', until: mt ? mt.until : null, code: mt ? mt.code : '' } }; };
 const cn = (c) => c.slice(c.indexOf(':') + 1);
 async function checkName(nn, u) {
   if (!/^[A-Za-z0-9_]{3,20}$/.test(nn)) return 'Pseudo : 3 à 20 lettres, chiffres ou _';
@@ -615,7 +625,7 @@ async function runBots() {
   const now = Date.now();
   if (now - botChk < 30000) return;
   botChk = now;
-  if (await redis.get('maint')) return;
+  if (await maintGet()) return;
   const t = await redis.get('bots:t');
   if (t && now - t < 90000) return;
   await redis.set('bots:t', now);
@@ -648,7 +658,7 @@ async function dailyPush() {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(new Date());
   const g = (t) => parts.find((p) => p.type === t).value, day = g('year') + '-' + g('month') + '-' + g('day'), mins = +g('hour') * 60 + +g('minute');
   if (mins < 720 || mins >= 840) return { sent: 0, skipped: 'hors de la fenêtre 12h-14h (Paris)' };
-  if (await redis.get('maint')) return { sent: 0, skipped: 'maintenance' };
+  if (await maintGet()) return { sent: 0, skipped: 'maintenance' };
   if ((await redis.get('daily:last')) === day) return { sent: 0, skipped: 'déjà envoyée aujourd\'hui' };
   await redis.set('daily:last', day);
   const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
@@ -743,7 +753,7 @@ const handler = async (req, res) => {
       }
       if (!/^[A-Za-z0-9_]{3,20}$/.test(pseudo)) return fail('Pseudo : 3 à 20 lettres, chiffres ou _');
       if (!pw) return fail('Entre un mot de passe');
-      if (b.action === 'register' && (await redis.get('maint'))) return fail('🔧 Maintenance : les inscriptions reviennent bientôt');
+      if (b.action === 'register' && (await maintGet())) return fail('🔧 Maintenance : les inscriptions reviennent bientôt');
       let u = await redis.get(key(pseudo));
       const ih = ipHash(req);
       if (b.action === 'register') {
@@ -784,7 +794,7 @@ const handler = async (req, res) => {
         const names = (await redis.smembers('users')).sort();
         const list = names.length ? await redis.mget(...names.map(key)) : [];
         const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, bd: u.bd || {}, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u), pf: !!u.pf, push: (u.subs || []).length > 0 }; });
-        return ok({ ...(await skinState()), skinc: await skinList(), maint: !!(await redis.get('maint')), maintinfo: (await redis.get('maintinfo')) || { presets: [], msg: '' }, maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), subs: SUBS, users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
+        return ok({ ...(await skinState()), skinc: await skinList(), ...(await maintOp()), maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), subs: SUBS, users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
       }
       if (b.action === 'shop') {
         if (!cat[b.theme] || b.theme === 'obj') return fail('Thème inconnu');
@@ -1002,7 +1012,17 @@ const handler = async (req, res) => {
         return ok({ done: true });
       }
       if (b.action === 'maint') {
-        await redis.set('maint', !!b.on);
+        const mtype = b.type === 'net' ? 'net' : 'maint';
+        let until = null;
+        if (b.on && b.until != null && b.until !== '') {
+          until = Number(b.until);
+          if (!Number.isFinite(until)) return fail('Date de retour invalide');
+          if (until <= Date.now()) return fail('La date de retour est déjà passée');
+          if (until > Date.now() + 90 * DAY) return fail('Date de retour trop lointaine (90 jours maximum)');
+        }
+        const code = b.on ? String(b.code || '').trim() : '';
+        if (!/^[A-Za-z0-9 _.:#-]{0,20}$/.test(code)) return fail('Code : 20 caractères maximum (lettres, chiffres, espace, - _ . : #)');
+        await redis.set('maint', b.on ? { type: mtype, until, code } : false);
         if (b.on) await redis.set('maintinfo', { presets: (Array.isArray(b.presets) ? b.presets : []).filter((k) => MAINT_PRESETS[k]).slice(0, 6), msg: String(b.msg || '').trim().slice(0, 300) });
         else await redis.del('maintinfo');
         return ok({ done: true });
@@ -1249,8 +1269,9 @@ const handler = async (req, res) => {
     if (u.ban && u.ban.until != null && u.ban.until <= Date.now()) { delete u.ban; note(u, '✅ Ton bannissement est terminé : bon retour !'); }
     const banned = !!banOf(u);
     if (banned && !['me', 'report', 'settings', 'delnote'].includes(b.action)) return fail('⛔ Compte banni : seuls les Réglages sont accessibles');
-    const maintOn = !!(await redis.get('maint')) && u.pseudo !== OP_NAME;
-    if (maintOn && !['me', 'report', 'settings', 'rank', 'chrank'].includes(b.action)) return fail('🔧 Maintenance : une mise à jour arrive bientôt');
+    const mt = await maintGet();
+    const maintOn = !!mt && (mt.type === 'net' || u.pseudo !== OP_NAME);
+    if (maintOn && !['me', 'report', 'settings', 'rank', 'chrank'].includes(b.action)) return fail(mt.type === 'net' ? '📡 Erreur réseau : réessaie dans un moment' : '🔧 Maintenance : une mise à jour arrive bientôt');
     const shAll = await shopOf(cat), sh = visShop(u, shAll, cat);
     let mk = (await redis.get('market')) || [];
     let extra = {};
@@ -1787,7 +1808,7 @@ const handler = async (req, res) => {
 
     if (b.action === 'me') { extra = { notifs: u.notifs }; u.notifs = []; }
     await redis.set(key(u.pseudo), u);
-    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), qz: maintOn || banned ? null : await qzPend(u), maint: maintOn, maintinfo: maintOn ? await maintInfo() : null, ...(await skinState()) } });
+    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), qz: maintOn || banned ? null : await qzPend(u), maint: maintOn, maintinfo: maintOn ? { ...(await maintInfo()), type: mt.type, until: mt.until, code: mt.code } : null, ...(await skinState()) } });
   } catch (e) {
     console.error(e);
     return fail('Erreur serveur : ' + e.message, 500);
