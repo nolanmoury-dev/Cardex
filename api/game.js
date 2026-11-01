@@ -147,17 +147,27 @@ const MAINT_PRESETS = {
   rk: ['🏆 Social', 'Mise à jour du Social : classement et messages.'],
   set: ['⚙️ Réglages', 'Mise à jour des Réglages.'],
 };
+// Menus que l'opérateur peut laisser ouverts pendant une maintenance (mêmes clés que MAINT_PRESETS) : actions serveur débloquées par chaque menu.
+const MENU_ACTS = {
+  shop: ['buy', 'buyobj', 'open', 'daily'],
+  col: ['fav', 'sell', 'sellbd', 'list', 'rebirth', 'open'],
+  mk: ['buymk', 'unlist', 'list', 'players', 'peek', 'gift', 'tradeoffer', 'tradeaccept', 'tradecounter', 'tradeconfirm', 'tradedecline'],
+  jeu: ['bet', 'betend', 'roulette', 'slots', 'flip', 'scratch', 'battle', 'racepack', 'racelb', 'carcolor', 'carskin', 'wheelspin'],
+  rk: ['rank', 'chrank', 'chlist', 'chnew', 'chacc', 'chdec', 'chcancel', 'dmget', 'dmsend', 'players', 'peek', 'racelb'],
+  set: ['settings', 'report', 'delnote'],
+};
+const menuOk = (mt, action) => !!mt && mt.type !== 'net' && (mt.open || []).some((k) => (MENU_ACTS[k] || []).includes(action));
 const maintInfo = async () => { const i = (await redis.get('maintinfo')) || {}; return { msgs: (i.presets || []).filter((k) => MAINT_PRESETS[k]).map((k) => MAINT_PRESETS[k][1]), msg: i.msg || '' }; };
 // Interrupteur « maintenance / erreur réseau » : une seule lecture Redis donne l'état, le type ('maint' ou 'net') et la date de retour (ms, facultative).
 // Quand la date de retour est passée, l'écran se lève tout seul (et le réglage est nettoyé).
 async function maintGet() {
   const m = await redis.get('maint');
   if (!m) return null;
-  const o = typeof m === 'object' ? { type: m.type === 'net' ? 'net' : 'maint', until: Number(m.until) || null, code: String(m.code || '') } : { type: 'maint', until: null, code: '' };
+  const o = typeof m === 'object' ? { type: m.type === 'net' ? 'net' : 'maint', until: Number(m.until) || null, code: String(m.code || ''), open: m.type === 'net' ? [] : (Array.isArray(m.open) ? m.open : []).filter((k) => MENU_ACTS[k]) } : { type: 'maint', until: null, code: '', open: [] };
   if (o.until && o.until <= Date.now()) { try { await redis.set('maint', false); await redis.del('maintinfo'); } catch {} return null; }
   return o;
 }
-const maintOp = async () => { const mt = await maintGet(); return { maint: !!mt, maintinfo: { presets: [], msg: '', ...((await redis.get('maintinfo')) || {}), type: mt ? mt.type : 'maint', until: mt ? mt.until : null, code: mt ? mt.code : '' } }; };
+const maintOp = async () => { const mt = await maintGet(); return { maint: !!mt, maintinfo: { presets: [], msg: '', ...((await redis.get('maintinfo')) || {}), type: mt ? mt.type : 'maint', until: mt ? mt.until : null, code: mt ? mt.code : '', open: mt ? mt.open : [] } }; };
 const cn = (c) => c.slice(c.indexOf(':') + 1);
 async function checkName(nn, u) {
   if (!/^[A-Za-z0-9_]{3,20}$/.test(nn)) return 'Pseudo : 3 à 20 lettres, chiffres ou _';
@@ -1022,7 +1032,8 @@ const handler = async (req, res) => {
         }
         const code = b.on ? String(b.code || '').trim() : '';
         if (!/^[A-Za-z0-9 _.:#-]{0,20}$/.test(code)) return fail('Code : 20 caractères maximum (lettres, chiffres, espace, - _ . : #)');
-        await redis.set('maint', b.on ? { type: mtype, until, code } : false);
+        const open = b.on && mtype === 'maint' ? [...new Set(Array.isArray(b.open) ? b.open : [])].filter((k) => MENU_ACTS[k]) : [];
+        await redis.set('maint', b.on ? { type: mtype, until, code, open } : false);
         if (b.on) await redis.set('maintinfo', { presets: (Array.isArray(b.presets) ? b.presets : []).filter((k) => MAINT_PRESETS[k]).slice(0, 6), msg: String(b.msg || '').trim().slice(0, 300) });
         else await redis.del('maintinfo');
         return ok({ done: true });
@@ -1271,7 +1282,7 @@ const handler = async (req, res) => {
     if (banned && !['me', 'report', 'settings', 'delnote'].includes(b.action)) return fail('⛔ Compte banni : seuls les Réglages sont accessibles');
     const mt = await maintGet();
     const maintOn = !!mt && (mt.type === 'net' || u.pseudo !== OP_NAME);
-    if (maintOn && !['me', 'report', 'settings', 'rank', 'chrank'].includes(b.action)) return fail(mt.type === 'net' ? '📡 Erreur réseau : réessaie dans un moment' : '🔧 Maintenance : une mise à jour arrive bientôt');
+    if (maintOn && !['me', 'report', 'settings', 'rank', 'chrank'].includes(b.action) && !menuOk(mt, b.action)) return fail(mt.type === 'net' ? '📡 Erreur réseau : réessaie dans un moment' : '🔧 Maintenance : une mise à jour arrive bientôt');
     const shAll = await shopOf(cat), sh = visShop(u, shAll, cat);
     let mk = (await redis.get('market')) || [];
     let extra = {};
@@ -1808,7 +1819,7 @@ const handler = async (req, res) => {
 
     if (b.action === 'me') { extra = { notifs: u.notifs }; u.notifs = []; }
     await redis.set(key(u.pseudo), u);
-    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), qz: maintOn || banned ? null : await qzPend(u), maint: maintOn, maintinfo: maintOn ? { ...(await maintInfo()), type: mt.type, until: mt.until, code: mt.code } : null, ...(await skinState()) } });
+    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), qz: maintOn || banned ? null : await qzPend(u), maint: maintOn, maintinfo: maintOn ? { ...(await maintInfo()), type: mt.type, until: mt.until, code: mt.code, open: mt.open } : null, ...(await skinState()) } });
   } catch (e) {
     console.error(e);
     return fail('Erreur serveur : ' + e.message, 500);
