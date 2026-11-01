@@ -488,7 +488,7 @@ const packsOf = (t) => (S.bought[t] || 0) + freeN(lvT(t));
 const fpPill = () => '📦 ' + (Object.keys(S.fp || {}).length > 1 ? freeTot() : S.packs + '/10');
 function head() {
   return '<div class="bar"><b style="display:flex;align-items:center;gap:6px"><img class="lg" src="/icon-192.png" alt="">' + S.pseudo + pfImg(S.pf) + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">' + fpPill() + '</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button></span></div><div class="tabs">' +
-    (S.ban ? [['set', 'Réglages']] : S.maint ? [['col', 'Collection'], ['rk', 'Classement'], ['set', 'Réglages']] : [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Social' + (dmUnread() ? ' 💬' + dmUnread() : '')], ['set', 'Réglages']]).map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
+    (S.ban ? [['set', 'Réglages']] : [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Social' + (dmUnread() ? ' 💬' + dmUnread() : '')], ['set', 'Réglages']].filter(([k]) => !S.maint || mOpen().includes(k))).map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
 }
 const subLeft = (ms) => { const d = Math.floor(ms / 864e5), h = Math.floor((ms % 864e5) / 36e5), m = Math.floor((ms % 36e5) / 6e4); return (d ? d + ' j ' : '') + (d || h ? h + ' h ' : '') + m + ' min'; };
 const fmtLeg = (x) => String(x).replace('.', ',');
@@ -551,6 +551,16 @@ function esHTML(o) {
     + (net ? '<button id="esr" type="button" class="es-rt">Réessayer</button>' : '')
     + (o.op ? '<div><button id="eso" type="button" class="g es-rt">⚙️ Espace opérateur</button></div>' : '')
     + '</div></div>';
+}
+// Menus laissés ouverts par le staff pendant une maintenance (jamais pour l’erreur réseau)
+const mOpen = () => (S && S.maint && S.maintinfo && S.maintinfo.type !== 'net' ? S.maintinfo.open || [] : []);
+function maintBanner() {
+  const mi = S.maintinfo || {}, ms = mi.msgs || [];
+  return '<div class="box" style="border-color:#d29922" role="status"><h2>🔧 Maintenance en cours</h2><p>Seuls les menus ci-dessus sont disponibles pour le moment. Tes cartes, tes pièces et ton compte ne sont pas touchés.</p>'
+    + (mi.until ? '<p>' + esUntil(mi.until) + '</p>' : '')
+    + (mi.code ? '<p>Code de maintenance : <b>' + esc(mi.code) + '</b></p>' : '')
+    + (ms.length ? '<p><b>Au programme :</b></p><ul>' + ms.map((m) => '<li>' + esc(m) + '</li>').join('') + '</ul>' : '')
+    + (mi.msg ? '<p>💬 <b>Message du staff :</b> ' + esc(mi.msg) + '</p>' : '') + '</div>';
 }
 function maintView() {
   clearInterval(timer); app.classList.remove('mt');
@@ -1045,8 +1055,8 @@ function raceInit() {
 }
 function rkHTML() {
   const un = dmUnread();
-  if (S.maint && rkSub !== 'r' && rkSub !== 'k') rkSub = 'r';
-  return '<div class="pills">' + [['r', '🏆 Classement'], ['k', '🏅 Classement défis'], ['c', '🏁 Course'], ['d', '⚔️ Défis'], ['m', '💬 Messages' + (un ? ' (' + un + ')' : '')]].filter(([k]) => !S.maint || k === 'r' || k === 'k').map(([k, l]) => '<button class="pill' + (rkSub === k ? ' on' : '') + '" data-rs="' + k + '">' + l + '</button>').join('') + '</div>' + (rkSub === 'm' ? dmHTML() : rkSub === 'd' ? chHTML() : rkSub === 'k' ? chRankHTML() : rkSub === 'c' ? raceHTML() : rankHTML());
+  if (S.maint && rkSub === 'c' && !mOpen().includes('jeu')) rkSub = 'r';
+  return '<div class="pills">' + [['r', '🏆 Classement'], ['k', '🏅 Classement défis'], ['c', '🏁 Course'], ['d', '⚔️ Défis'], ['m', '💬 Messages' + (un ? ' (' + un + ')' : '')]].filter(([k]) => !S.maint || k !== 'c' || mOpen().includes('jeu')).map(([k, l]) => '<button class="pill' + (rkSub === k ? ' on' : '') + '" data-rs="' + k + '">' + l + '</button>').join('') + '</div>' + (rkSub === 'm' ? dmHTML() : rkSub === 'd' ? chHTML() : rkSub === 'k' ? chRankHTML() : rkSub === 'c' ? raceHTML() : rankHTML());
 }
 function dmHTML() {
   if (dmWith) return '<div class="box"><div class="row" style="margin-bottom:8px"><button class="g" id="dmb">← Retour</button>' + avEl(dmWith) + '<b>' + esc(dmWith) + '</b><button class="g" id="dmsg" style="margin-left:auto">🎁 Abonnement</button><button class="g" id="dmch">⚔️ Défier</button></div><div id="dmt"></div><div class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="dmx" maxlength="500" placeholder="Écrire un message…" style="flex:1;min-width:0"><button id="dms">Envoyer</button></div></div>';
@@ -1192,11 +1202,12 @@ function ownedEl(id) {
   return el;
 }
 function playerView() {
-  if (S.maint) return maintView();
+  if (S.maint && !mOpen().length) return maintView();
+  if (S.maint && !mOpen().includes(tab)) tab = mOpen()[0];
   clearInterval(timer); setTimeout(showUpdate, 600);
   if (S.ban) tab = 'set';
   app.classList.toggle('mt', !!S.ban);
-  app.innerHTML = head() + (S.ban ? banBox() : '') + { shop: shopHTML, col: colHTML, mk: mkHTML, jeu: jeuHTML, rk: rkHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
+  app.innerHTML = head() + (S.ban ? banBox() : '') + (S.maint ? maintBanner() : '') + { shop: shopHTML, col: colHTML, mk: mkHTML, jeu: jeuHTML, rk: rkHTML, set: setHTML }[tab]() + '<div class="err" id="e"></div>';
   $('#th').onclick = flip; if ($('#lo')) $('#lo').onclick = logout;
   if (isOp) $('#ob').onclick = () => { asP = false; localStorage.asp = '0'; start(); };
   $('#bl').onclick = inbox;
@@ -1391,6 +1402,7 @@ function playerView() {
 const UPDATES = [
   { v: '2026-11-01', title: 'Maintenance et erreur réseau', items: [
     '🔧 Quand le jeu est en maintenance, tu vois maintenant un écran dédié : de petites cartes rebondissent sur un sachet fermé, avec le message du staff, ce qui est prévu et, parfois, l’heure de retour prévue.',
+    '🔓 Pendant une maintenance, le staff peut laisser certains menus ouverts (Boutique, Collection, Marché, Jeux, Social, Réglages) : tu les vois alors normalement, les autres restent fermés.',
     '🔢 Le staff peut aussi afficher un code (d’erreur ou de maintenance) : donne-le si tu contactes le staff.',
     '📡 Si le serveur ne répond pas ou si ta connexion coupe, le jeu affiche « Erreur réseau » avec un bouton Réessayer, à la place d’un message compliqué. Il revient tout seul dès que ça remarche.',
   ] },
@@ -2214,7 +2226,7 @@ async function opView(m) {
     '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + ' — 🪙 ' + u.coins + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="cac" aria-label="Collection"></select><select id="ca" multiple size="6" aria-label="Cartes"></select><select id="cab" aria-label="Badge"><option value="0">Sans badge</option><option value="1">🥉 Badge Bronze</option><option value="2">🥈 Badge Argent</option><option value="3">🥇 Badge Or</option></select><small id="ch"></small><button>Valider</button><div class="err" id="e"></div></form>' +
     ntOpHTML(users) +
     qzOpHTML(users) +
-    '<div class="box"><h2>🔧 Maintenance / 📡 Erreur réseau</h2><p>' + (j.maint ? 'ACTIVE (' + (mnf.type === 'net' ? 'Erreur réseau' : 'Maintenance') + ') : les joueurs ne voient que l’écran d’attente, sans aucun accès au jeu. ' + (mnf.until ? esUntil(mnf.until) + ' : l’écran se lève tout seul à ce moment, ou tu peux le lever à la main.' : 'Sans date de retour : à lever à la main.') + (mnf.type === 'net' ? ' En mode joueur, tu es bloqué toi aussi ; ton espace opérateur reste ouvert.' : ' Toi, tu continues à jouer normalement.') : 'Désactivée.') + '</p><p><small>Type d’écran :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible"><button type="button" class="pill mtp' + (mnf.type === 'net' ? '' : ' on') + '" data-mtp="maint">🔧 Maintenance</button><button type="button" class="pill mtp' + (mnf.type === 'net' ? ' on' : '') + '" data-mtp="net">📡 Erreur réseau</button></div><p><small>Retour prévu, heure de Paris (facultatif) :</small></p><div class="row" style="margin-bottom:8px"><input type="datetime-local" id="mun" aria-label="Date et heure de retour prévu"><button type="button" class="g" id="muc">Effacer la date</button></div><p><small>Code affiché aux joueurs (facultatif, ex. E503 ou M12) :</small></p><input id="mcd" maxlength="20" autocomplete="off" placeholder="Code d’erreur ou de maintenance" style="width:100%;margin-bottom:8px"><p><small>Explication montrée aux joueurs (facultatif, plusieurs choix possibles) :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible">' + j.maintPresets.map((p) => '<button type="button" class="pill mp' + ((j.maintinfo.presets || []).includes(p.k) ? ' on' : '') + '" data-mp="' + p.k + '">' + p.label + '</button>').join('') + '</div><textarea id="mmsg" rows="2" maxlength="300" placeholder="Message du staff (facultatif)" style="margin:8px 0"></textarea><div class="row"><button id="mnt" class="' + (j.maint ? '' : 'g') + '">' + (j.maint ? 'Lever l’écran maintenant' : 'Activer l’écran (tout verrouiller)') + '</button>' + (j.maint ? '<button class="g" id="mnu">Mettre à jour (type, date, messages)</button>' : '') + '</div><div class="err" id="e7"></div></div>' +
+    '<div class="box"><h2>🔧 Maintenance / 📡 Erreur réseau</h2><p>' + (j.maint ? 'ACTIVE (' + (mnf.type === 'net' ? 'Erreur réseau' : 'Maintenance') + ') : ' + ((mnf.open || []).length && mnf.type !== 'net' ? 'les joueurs gardent seulement les menus cochés ci-dessous. ' : 'les joueurs ne voient que l’écran d’attente, sans aucun accès au jeu. ') + (mnf.until ? esUntil(mnf.until) + ' : l’écran se lève tout seul à ce moment, ou tu peux le lever à la main.' : 'Sans date de retour : à lever à la main.') + (mnf.type === 'net' ? ' En mode joueur, tu es bloqué toi aussi ; ton espace opérateur reste ouvert.' : ' Toi, tu continues à jouer normalement.') : 'Désactivée.') + '</p><p><small>Type d’écran :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible"><button type="button" class="pill mtp' + (mnf.type === 'net' ? '' : ' on') + '" data-mtp="maint">🔧 Maintenance</button><button type="button" class="pill mtp' + (mnf.type === 'net' ? ' on' : '') + '" data-mtp="net">📡 Erreur réseau</button></div><p><small>Retour prévu, heure de Paris (facultatif) :</small></p><div class="row" style="margin-bottom:8px"><input type="datetime-local" id="mun" aria-label="Date et heure de retour prévu"><button type="button" class="g" id="muc">Effacer la date</button></div><p><small>Code affiché aux joueurs (facultatif, ex. E503 ou M12) :</small></p><input id="mcd" maxlength="20" autocomplete="off" placeholder="Code d’erreur ou de maintenance" style="width:100%;margin-bottom:8px"><p><small>Menus restés ouverts aux joueurs pendant la maintenance (aucun coché = tout verrouillé ; ignoré pour l’erreur réseau) :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible">' + j.maintPresets.map((p) => '<button type="button" class="pill mo' + ((mnf.open || []).includes(p.k) ? ' on' : '') + '" data-mo="' + p.k + '">' + p.label + '</button>').join('') + '</div><p><small>Explication montrée aux joueurs (facultatif, plusieurs choix possibles) :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible">' + j.maintPresets.map((p) => '<button type="button" class="pill mp' + ((j.maintinfo.presets || []).includes(p.k) ? ' on' : '') + '" data-mp="' + p.k + '">' + p.label + '</button>').join('') + '</div><textarea id="mmsg" rows="2" maxlength="300" placeholder="Message du staff (facultatif)" style="margin:8px 0"></textarea><div class="row"><button id="mnt" class="' + (j.maint ? '' : 'g') + '">' + (j.maint ? 'Lever l’écran maintenant' : 'Activer l’écran (tout verrouiller)') + '</button>' + (j.maint ? '<button class="g" id="mnu">Mettre à jour (type, date, messages)</button>' : '') + '</div><div class="err" id="e7"></div></div>' +
     '<form class="box" id="fr" style="display:grid;gap:10px"><h2>Changer le pseudo d\'un joueur</h2><select id="ru" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="rnn" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button><div class="err" id="e6"></div></form>' +
     '<div class="box" id="cpn"><h2>🎴 Panneau Cartes</h2><input id="cq" placeholder="🔎 Nom d\'une carte (objets compris)" style="width:100%;margin-bottom:8px" autocomplete="off"><div id="cres"></div><div id="cinf"></div></div>' +
     '<form class="box" id="fcd" style="display:grid;gap:10px"><h2>🎟️ Codes</h2><p><small>Les joueurs les entrent dans Réglages → Code. Un même code ne s’utilise qu’une fois par joueur.</small></p>'
@@ -2436,12 +2448,14 @@ async function opView(m) {
   ntWire(act); qzWire(act);
   const mpSel = () => [...app.querySelectorAll('.mp.on')].map((b) => b.dataset.mp);
   app.querySelectorAll('.mp').forEach((b) => (b.onclick = () => b.classList.toggle('on')));
+  const moSel = () => [...app.querySelectorAll('.mo.on')].map((b) => b.dataset.mo);
+  app.querySelectorAll('.mo').forEach((b) => (b.onclick = () => b.classList.toggle('on')));
   $('#mmsg').value = mnf.msg || '';
   $('#mun').value = mnf.until ? tsParis(mnf.until) : '';
   $('#mcd').value = mnf.code || '';
   $('#muc').onclick = () => { $('#mun').value = ''; };
   app.querySelectorAll('.mtp').forEach((b) => (b.onclick = () => { app.querySelectorAll('.mtp').forEach((x) => x.classList.toggle('on', x === b)); }));
-  const mArgs = () => ({ presets: mpSel(), msg: $('#mmsg').value, type: (app.querySelector('.mtp.on') || {}).dataset.mtp || 'maint', until: parisTs($('#mun').value), code: $('#mcd').value });
+  const mArgs = () => ({ presets: mpSel(), open: moSel(), msg: $('#mmsg').value, type: (app.querySelector('.mtp.on') || {}).dataset.mtp || 'maint', until: parisTs($('#mun').value), code: $('#mcd').value });
   $('#mnt').onclick = act('e7', () => api('maint', { on: !j.maint, ...mArgs() }), j.maint ? 'Écran levé' : 'Écran activé');
   if ($('#mnu')) $('#mnu').onclick = act('e7', () => api('maint', { on: true, ...mArgs() }), 'Écran mis à jour');
   $('#fr').onsubmit = act('e6', () => api('rename', { pseudo: $('#ru').value, name: $('#rnn').value }), 'Pseudo changé');
@@ -2533,7 +2547,7 @@ async function poll() {
   if (!tok || document.hidden || netOn) return;
   if (isOp && !asP) { if (opOn) opBell().catch(() => {}); return; }
   try {
-    const sig = () => { const m = S.maintinfo || {}; return S.maint ? [m.type, m.until, m.code, m.msg, (m.msgs || []).join('|')].join('~') : ''; };
+    const sig = () => { const m = S.maintinfo || {}; return S.maint ? [m.type, m.until, m.code, m.msg, (m.msgs || []).join('|'), (m.open || []).join(',')].join('~') : ''; };
     const was = sig(), wb = !!S.ban, j = await api('me', {}, { quiet: true }); pollFail = 0; setS(j.state);
     if (was !== sig() || wb !== !!S.ban) { if (j.notifs && j.notifs.length) notify(j.notifs); return playerView(); }
     updHead();
