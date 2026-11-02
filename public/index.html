@@ -101,6 +101,7 @@ main{padding:8px 8px calc(84px + env(safe-area-inset-bottom))}
 .auth{margin:6vh auto}
 }
 @media(max-width:600px){.grid{grid-template-columns:repeat(4,1fr);gap:6px}.card{border-width:2px;border-radius:8px}.card .ct{font-size:11px;padding:4px 2px 0;min-height:2.6em}.card .rn{font-size:9px;padding:0 2px 3px}.card .ac button{font-size:9px;padding:2px;min-height:28px}.card .n{font-size:10px}.tabs button{font-size:11px}}
+.lgb{background:url(/ligues.webp) no-repeat;background-size:500% 400%;display:inline-block;flex:none;vertical-align:middle}.rt tr[data-lr]{cursor:pointer}.rt tr.lgz-up td:first-child{box-shadow:inset 3px 0 var(--r)}.rt tr.lgz-down td:first-child{box-shadow:inset 3px 0 var(--lo)}
 .pills{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:8px;-webkit-overflow-scrolling:touch}.pills::-webkit-scrollbar{display:none}.pill{flex:none;padding:5px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font-size:12px}.pill.on{background:var(--l);border-color:var(--l);color:#000}.rt{width:100%;border-collapse:collapse;font-size:12px}.rt th,.rt td{padding:4px 3px;text-align:center;border-top:1px solid var(--line)}.rt .pn{text-align:left;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rt .me{background:var(--cb);font-weight:700}details.rb{border-color:var(--l)}details.rb>summary{color:var(--l)}
 .lg{width:28px;height:28px;object-fit:contain;border-radius:6px}.tr{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.mt .ac,.mt [data-rb],.mt #dup{display:none!important}.tr .card{width:78px}.tr small{display:block;text-align:center}
 
@@ -480,12 +481,12 @@ function authView(msg) {
 }
 
 // --- Joueur
-// Sachets gratuits : un stock et un compteur par niveau de sachet (S.fp = { niveau: { n, next } })
-const freeN = (L) => { const f = (S.fp || {})[L]; return f ? f.n : L <= 1 ? S.packs : 0; };
-const freeTot = () => Object.values(S.fp || { 1: { n: S.packs } }).reduce((a, f) => a + f.n, 0);
+// Sachets gratuits : un seul stock (10 max) pour tous les niveaux ; un nouveau sachet toutes les 10 à 20 min (S.fp = { 1: { n, next } })
+const freeN = () => S.packs;
+const freeTot = () => S.packs;
 const lvT = (t) => (S.shop && S.shop[t] && S.shop[t].lvl) || (CAT[t] && CAT[t].lv) || 1;
 const packsOf = (t) => (S.bought[t] || 0) + freeN(lvT(t));
-const fpPill = () => '📦 ' + (Object.keys(S.fp || {}).length > 1 ? freeTot() : S.packs + '/10');
+const fpPill = () => '📦 ' + S.packs + '/10';
 function head() {
   return '<div class="bar"><b style="display:flex;align-items:center;gap:6px"><img class="lg" src="/icon-192.png" alt="">' + S.pseudo + pfImg(S.pf) + '</b><span class="row"><span class="pill" id="pc">🪙 ' + S.coins + '</span><span class="pill" id="pp">' + fpPill() + '</span><button class="g" id="bl" aria-label="Notifications">🔔' + (S.inbox.length ? ' ' + S.inbox.length : '') + '</button>' + (isOp ? '<button class="g" id="ob">⚙️ Opérateur</button>' : '') + '<button class="g" id="th" aria-label="Changer de thème">🌓</button></span></div><div class="tabs">' +
     (S.ban ? [['set', 'Réglages']] : [['shop', 'Boutique'], ['col', 'Collection'], ['mk', 'Marché'], ['jeu', 'Jeux'], ['rk', 'Social' + (dmUnread() ? ' 💬' + dmUnread() : '')], ['set', 'Réglages']].filter(([k]) => !S.maint || mOpen().includes(k))).map(([k, l]) => '<button class="' + (tab === k ? '' : 'g') + '" data-t="' + k + '">' + l + '</button>').join('') + '</div>';
@@ -517,7 +518,7 @@ function shopHTML() {
     return '<div class="box' + pkf(sh.lvl) + '"><div class="pk" style="--pc:' + pkc(o) + '">' + o.icon + '</div><h2>Sachet ' + esc(o.name) + (sh.lvl > 1 ? ' <span class="pill">Niveau ' + sh.lvl + '</span>' : '') + (o.until ? ' <span class="pill">⏳ jusqu\'au ' + new Date(o.until).toLocaleDateString('fr-FR') + '</span>' : '') + '</h2><p>5 cartes' + (sh.lvl > 1 ? ' d\'une collection différente à chaque niveau' : '') + '. ' + pr + '</p><div class="row"><button data-b="' + t + '"' + (sh.blocked || sh.nobuy || S.coins < sh.price ? ' disabled' : '') + '>Acheter</button><button class="g" data-o="' + t + '"' + (sh.blocked || packsOf(t) < 1 ? ' disabled' : '') + '>Ouvrir (' + packsOf(t) + ')</button>' + (packsOf(t) >= 2 && !sh.blocked ? '<input type="number" inputmode="numeric" data-nn="' + t + '" min="1" max="' + Math.min(50, packsOf(t)) + '" value="' + Math.min(5, packsOf(t)) + '" style="width:72px" aria-label="Nombre de sachets à ouvrir"><button class="g" data-om="' + t + '">Ouvrir ce nombre</button><button class="g" data-oa="' + t + '">Tout ouvrir (' + Math.min(50, packsOf(t)) + ')</button>' : '') + '</div></div>';
   }).join('');
   const objs = S.objs.length ? '<h2>Objets</h2><div class="grid2">' + S.objs.map((x) => '<div class="box"><b style="color:var(--' + x.r + ')">' + esc(x.name) + '</b> — ' + RN[x.r] + '<p>' + x.price + ' coins' + (x.stock != null ? (x.stock > 0 ? ' · Reste ' + x.stock : ' · Épuisé') : '') + '</p><button data-ob="' + esc('obj:' + x.name) + '"' + (S.coins < x.price || (x.stock != null && x.stock <= 0) ? ' disabled' : '') + '>Acheter</button></div>').join('') + '</div>' : '';
-  const fr = '<div class="box"><p><b>Sachets gratuits</b> : un stock (10 maximum) et un compteur par niveau. Plus le niveau est haut, plus l’attente est longue.</p>' + Object.entries(S.fp || { 1: { n: S.packs } }).map(([L, f]) => '<div class="row" style="justify-content:space-between"><span><span class="pill">Niveau ' + L + '</span> <b>' + f.n + '/10</b></span><span class="sub">1 toutes les ' + Math.round(10 * (1 + 0.5 * (L - 1))) + ' à ' + Math.round(14 * (1 + 0.5 * (L - 1))) + ' min</span><span data-cd="' + L + '"></span></div>').join('') + '</div>';
+  const fr = '<div class="box"><p><b>Sachets gratuits</b> : 10 maximum, un nouveau sachet toutes les 10 à 20 minutes (pour tous les niveaux). Les sachets achetés sont à part.</p><div class="row" style="justify-content:space-between"><span><b>' + S.packs + '/10</b></span><span data-cd="1"></span></div></div>';
   return fr + '<div class="grid2">' + packs + '</div>' + objs;
 }
 function idsOf(t) {
@@ -793,8 +794,42 @@ function jeuHTML() {
     '<div class="box"><b>Gains</b><p>🐍 Snake (cartes ramassées) : gain = mise × (cartes − 5) ÷ 10, maximum ×4. Avec 100 coins : 15 cartes rendent 100, 45 cartes rendent 400. Le serpent change de couleur selon ton gain en direct :</p>' + snLegend() + '<p>🧱 Tetris (lignes) : gain = mise × (lignes − 3) ÷ 6, maximum ×4. Avec 100 coins : 9 lignes rendent 100, 27 lignes rendent 400. 5 cartes ou moins (Snake), 3 lignes ou moins (Tetris) : tu perds ta mise.</p></div>';
 }
 let rkN = 10;
-function rankHTML() {
-  return '<div class="pills">' + [[5, 'Top 5'], [10, 'Top 10'], [0, 'Tout']].map(([n, l]) => '<button class="pill' + (rkN === n ? ' on' : '') + '" data-n="' + n + '">' + l + '</button>').join('') + '</div><div class="box" style="padding:8px"><div id="rl">Chargement…</div></div><small>Classé par renaissances ♻️, puis cartes légendaires (L, chaque exemplaire compte), épiques (E), rares (R), communes (C) ; égalité : coins.</small>';
+// ================= LIGUES =================
+const LGBADGE = (i, w) => '<span class="lgb" role="img" aria-label="' + esc((LG && LG.names[i]) || '') + '" style="width:' + w + 'px;height:' + Math.round(w * 0.867) + 'px;background-position:' + (i % 5) * 25 + '% ' + Math.floor(i / 5) * 33.3333 + '%"></span>';
+let LG = null, lgV = 'l';
+const LGR = [['u', 'Unique', 'var(--u)'], ['s', 'Céleste', 'var(--s)'], ['m', 'Mythique', 'var(--m)'], ['l', 'Légendaire', 'var(--l)'], ['e', 'Épique', 'var(--e)'], ['r', 'Rare', 'var(--r)'], ['c', 'Commune', 'var(--c)']];
+const lgNth = (n) => n + (n === 1 ? 'er' : 'e');
+function rankHTML() { return '<div id="lgbox"><div class="box">Chargement…</div></div>'; }
+function lgInit() { api('lgrank', {}).then((j) => { LG = j.lg; lgDraw(); }).catch((e) => msg(e.message)); }
+function lgLeft(ms) { const m = Math.max(0, Math.floor(ms / 60000)), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60); return d ? d + ' j ' + h + ' h' : h ? h + ' h ' + (m % 60) + ' min' : (m % 60) + ' min'; }
+function lgDetail(x) {
+  const ov = overlay('<div class="box" style="max-width:420px;margin:40px auto;color:var(--txt)"><div class="row" style="gap:14px;flex-wrap:nowrap">' + LGBADGE(x.bi, 84) + '<div><h2 style="margin:0">' + esc(x.n) + '</h2><div class="sub">' + esc(LG.names[x.bi]) + ' · ' + x.cards + ' cartes</div></div></div>'
+    + '<div class="row" style="margin:10px 0;justify-content:space-between"><span>♻️ <b>' + x.ren + '</b></span><span style="color:var(--r)">V <b>' + x.v + '</b></span><span>N <b>' + x.nu + '</b></span><span style="color:var(--lo)">D <b>' + x.d + '</b></span></div>'
+    + '<small>CARTES PAR RARETÉ</small>' + LGR.map(([k, l, c]) => '<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0"><span style="color:' + c + ';font-weight:700">' + l + '</span><b>' + (x.rr[k] || 0) + '</b></div>').join('')
+    + '<button id="lgx" style="width:100%;margin-top:12px">Fermer</button></div>');
+  ov.onclick = (e) => { if (e.target === ov || e.target.id === 'lgx') ov.remove(); };
+}
+function lgDraw() {
+  const el = $('#lgbox'); if (!el || !LG) return;
+  const tabs = '<div class="pills">' + [['l', '🏆 Ma ligue'], ['w', '🌍 Monde']].map(([k, l]) => '<button class="pill' + (lgV === k ? ' on' : '') + '" data-lv="' + k + '">' + l + '</button>').join('') + '</div>';
+  let body;
+  if (lgV === 'l') {
+    body = '<div class="box" style="display:flex;align-items:center;gap:14px">' + LGBADGE(LG.t, 96) + '<div><small>TA LIGUE</small><h2 style="margin:0">' + esc(LG.names[LG.t]) + '</h2><div class="sub">Groupe ' + (LG.g + 1) + ' · ' + LG.size + ' joueurs</div><div style="color:var(--or);font-weight:700" id="lgend"></div><div class="sub">Tes points de saison : <b>' + LG.pts + '</b></div></div></div>'
+      + '<div class="box" style="padding:8px"><table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th>♻️</th><th style="color:var(--r)">V</th><th>N</th><th style="color:var(--lo)">D</th><th style="color:var(--or)">Pts</th><th>🪙</th></tr>'
+      + LG.rows.map((x, i) => '<tr data-lr="' + i + '" class="' + (x.n === S.pseudo ? 'me ' : '') + (x.z ? 'lgz-' + x.z : '') + '"><td>' + (i + 1) + '</td><td class="pn">' + esc(x.n) + pfImg(x.pf) + '</td><td>' + x.ren + '</td><td style="color:var(--r)">' + x.v + '</td><td>' + x.nu + '</td><td style="color:var(--lo)">' + x.d + '</td><td style="color:var(--or);font-weight:700">' + x.pts + '</td><td>' + x.co + '</td></tr>').join('') + '</table></div>'
+      + '<small>🟢 Les 3 premiers montent · 🔴 les 3 derniers descendent, et ceux qui n’ont rien fait de la semaine aussi. Classé par points de saison : renaissance 10 · course gagnée 5 · défi gagné 2 · nul 1. Les points repartent à zéro chaque dimanche à 23 h 59. V, N, D = victoires, nuls, défaites aux défis.</small>';
+  } else {
+    body = '<div class="box" style="padding:8px"><table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th>Cartes</th></tr>'
+      + LG.world.map((x, i) => '<tr data-lr="' + i + '" class="' + (x.n === S.pseudo ? 'me' : '') + '"><td>' + (i + 1) + '</td><td class="pn">' + LGBADGE(x.bi, 30) + ' ' + esc(x.n) + pfImg(x.pf) + '</td><td><b>' + x.cards + '</b></td></tr>').join('') + '</table></div>'
+      + '<small>Classé par nombre de cartes possédées, toutes ligues confondues. Les cartes parties dans les renaissances comptent aussi.</small>';
+  }
+  const place = '<div class="box" style="display:flex;align-items:center;gap:10px;margin-top:8px">' + LGBADGE(LG.t, 34) + '<span style="flex:1">Ta place dans le classement monde</span><b style="font-size:18px">' + (LG.place ? lgNth(LG.place) : '–') + '</b><small>/ ' + LG.total + '</small></div>';
+  el.innerHTML = tabs + body + place;
+  el.querySelectorAll('[data-lv]').forEach((b) => (b.onclick = () => { lgV = b.dataset.lv; lgDraw(); }));
+  el.querySelectorAll('[data-lr]').forEach((r) => (r.onclick = () => lgDetail((lgV === 'l' ? LG.rows : LG.world)[+r.dataset.lr])));
+  clearInterval(window.lgT);
+  const upd = () => { const e = $('#lgend'); if (!e) return clearInterval(window.lgT); e.textContent = 'Fin de saison dans ' + lgLeft(LG.end - Date.now()); };
+  upd(); window.lgT = setInterval(upd, 30000);
 }
 let rkSub = 'r', dmWith = null, dmNew = false, dmTh = [], dmPl = null;
 const dmUnread = () => ((S && S.dms) || []).reduce((a, e) => a + (e.n || 0), 0);
@@ -1056,7 +1091,7 @@ function raceInit() {
 function rkHTML() {
   const un = dmUnread();
   if (S.maint && rkSub === 'c' && !mOpen().includes('jeu')) rkSub = 'r';
-  return '<div class="pills">' + [['r', '🏆 Classement'], ['k', '🏅 Classement défis'], ['c', '🏁 Course'], ['d', '⚔️ Défis'], ['m', '💬 Messages' + (un ? ' (' + un + ')' : '')]].filter(([k]) => !S.maint || k !== 'c' || mOpen().includes('jeu')).map(([k, l]) => '<button class="pill' + (rkSub === k ? ' on' : '') + '" data-rs="' + k + '">' + l + '</button>').join('') + '</div>' + (rkSub === 'm' ? dmHTML() : rkSub === 'd' ? chHTML() : rkSub === 'k' ? chRankHTML() : rkSub === 'c' ? raceHTML() : rankHTML());
+  return '<div class="pills">' + [['r', '🏆 Classement'], ['c', '🏁 Course'], ['d', '⚔️ Défis'], ['m', '💬 Messages' + (un ? ' (' + un + ')' : '')]].filter(([k]) => !S.maint || k !== 'c' || mOpen().includes('jeu')).map(([k, l]) => '<button class="pill' + (rkSub === k ? ' on' : '') + '" data-rs="' + k + '">' + l + '</button>').join('') + '</div>' + (rkSub === 'm' ? dmHTML() : rkSub === 'd' ? chHTML() : rkSub === 'k' ? chRankHTML() : rkSub === 'c' ? raceHTML() : rankHTML());
 }
 function dmHTML() {
   if (dmWith) return '<div class="box"><div class="row" style="margin-bottom:8px"><button class="g" id="dmb">← Retour</button>' + avEl(dmWith) + '<b>' + esc(dmWith) + '</b><button class="g" id="dmsg" style="margin-left:auto">🎁 Abonnement</button><button class="g" id="dmch">⚔️ Défier</button></div><div id="dmt"></div><div class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="dmx" maxlength="500" placeholder="Écrire un message…" style="flex:1;min-width:0"><button id="dms">Envoyer</button></div></div>';
@@ -1280,13 +1315,8 @@ function playerView() {
     app.querySelectorAll('[data-rn]').forEach((b) => (b.onclick = () => { raceN = +b.dataset.rn; RC = null; playerView(); }));
     if (rkSub === 'm') dmInit();
     else if (rkSub === 'd') chInit();
-    else if (rkSub === 'k') chRankInit();
     else if (rkSub === 'c') raceInit();
-    else api('rank', { n: rkN }).then((j) => {
-      const el = $('#rl'); if (!el) return;
-      const col = { l: 'l', e: 'e', r: 'r', c: 'c' };
-      el.innerHTML = j.rank.length ? '<table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th>♻️</th>' + [...'ler'].concat('c').map((k) => '<th style="color:var(--' + k + ')">' + k.toUpperCase() + '</th>').join('') + '<th>🪙</th></tr>' + j.rank.map((x, i) => '<tr' + (x.pseudo === S.pseudo ? ' class="me"' : '') + '><td>' + (i + 1) + '</td><td class="pn">' + esc(x.pseudo) + pfImg(x.pf) + '</td><td>' + x.rb + '</td>' + [...'lerc'].map((k) => '<td style="color:var(--' + k + ')">' + x[k] + '</td>').join('') + '<td>' + x.coins + '</td></tr>').join('') + '</table>' : 'Aucun joueur pour le moment.';
-    }).catch((e) => msg(e.message));
+    else lgInit();
   } else if (tab === 'jeu') {
     wheel($('#rc'), 0, () => {}, true);
     const bt = app.querySelectorAll('[data-rk]');
@@ -1400,6 +1430,13 @@ function playerView() {
 // # `v` doit être unique et change à chaque mise à jour (ex. la date AAAA-MM-JJ, avec -2, -3… s'il y en a plusieurs le même jour).
 // =====================================================================================================================
 const UPDATES = [
+  { v: '2026-11-02', title: 'Ligues et saisons', items: [
+    '🏆 Nouveau : les ligues ! 20 paliers, de Bronze à Maître II, avec des groupes de 18 joueurs. Tout le monde commence en Bronze.',
+    '📅 Une saison dure une semaine (jusqu’à dimanche 23 h 59). Points de saison : renaissance 10, course gagnée 5, défi gagné 2, nul 1. Les 3 premiers montent, les 3 derniers descendent, et ceux qui n’ont rien fait de la semaine descendent aussi.',
+    '🌍 Le classement Monde montre le nombre de cartes de chacun (les cartes parties dans les renaissances comptent), avec le badge de ligue à côté du pseudo. Ta place dans le monde est affichée sous le tableau.',
+    '⚔️ Le classement des défis est maintenant dans le classement de ligue (V, N, D). Touche un joueur pour voir ses cartes par rareté.',
+    '📦 Sachets gratuits : retour à la version d’avant. 10 sachets maximum, un nouveau toutes les 10 à 20 minutes, pour tous les niveaux. Les sachets achetés restent à part.',
+  ] },
   { v: '2026-11-01', title: 'Maintenance et erreur réseau', items: [
     '🔧 Quand le jeu est en maintenance, tu vois maintenant un écran dédié : de petites cartes rebondissent sur un sachet fermé, avec le message du staff, ce qui est prévu et, parfois, l’heure de retour prévue.',
     '🔓 Pendant une maintenance, le staff peut laisser certains menus ouverts (Boutique, Collection, Marché, Jeux, Social, Réglages) : tu les vois alors normalement, les autres restent fermés.',
@@ -2195,6 +2232,13 @@ async function qzRes(id) {
   } catch (er) { box.textContent = er.message; }
 }
 
+function lgOpHTML(users, j) {
+  const lg = j.lg || { id: 1, end: Date.now(), bots: [], names: [] }, opt = lg.names.map((n, i) => '<option value="' + i + '">' + esc(n) + '</option>').join('');
+  return '<div class="box" id="lgop"><h2>🏆 Ligues</h2><p><small>Saison n° ' + lg.id + ' · fin le ' + new Date(lg.end).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) + '. Les places vides des groupes sont remplies automatiquement par des bots (' + (lg.nb || 0) + ' en jeu) : de vrais comptes qui jouent comme des joueurs (achats, défis, courses) sans jamais aller plus vite qu’eux. Ceux que tu crées ici s’ajoutent en plus (dans le premier groupe de leur palier et dans le classement Monde).</small></p>'
+    + '<form id="flp" style="display:grid;gap:8px"><b>Donner ou retirer des points de saison</b><select id="lpu" required><option value="">Choisir un joueur</option>' + users.filter((u) => !u.bot).map((u) => '<option value="' + esc(u.pseudo) + '">' + esc(u.pseudo) + '</option>').join('') + '</select><input id="lpn" type="number" step="1" placeholder="Points (négatif pour retirer)" required><button>Valider</button></form>'
+    + '<form id="flb" style="display:grid;gap:8px;margin-top:14px"><b>Créer un bot</b><input id="lbn" placeholder="Pseudo (3-20, sans accent)" maxlength="20" required><select id="lbt">' + opt + '</select><div class="grid2"><input id="lbr" type="number" min="0" placeholder="Renaissances"><input id="lbc" type="number" min="0" placeholder="Cartes"><input id="lbv" type="number" min="0" placeholder="Victoires"><input id="lbu" type="number" min="0" placeholder="Nuls"><input id="lbd" type="number" min="0" placeholder="Défaites"><input id="lbp" type="number" min="0" placeholder="Points de saison"></div><input id="lbo" type="number" min="0" placeholder="Pièces"><button>Créer le bot</button></form>'
+    + '<div style="margin-top:12px"><b>Bots créés (' + lg.bots.length + ')</b>' + (lg.bots.length ? lg.bots.map((x) => '<div class="row" style="justify-content:space-between"><span>' + esc(x.n) + ' · ' + esc(lg.names[x.t] || '') + ' · ' + x.cards + ' cartes · ' + x.pts + ' pts</span><button class="g" data-lbd="' + x.id + '">Supprimer</button></div>').join('') : '<p><small>Aucun.</small></p>') + '</div><div class="err" id="elg"></div></div>';
+}
 async function opView(m) {
   const j = await api('users'), { users, shop, custom, reports } = j; setCat(j.themes); (j.skinc || []).forEach((d) => (SKC[d.id] = d)); setSkin(j.skin);
   const opts = Object.entries(CAT).map(([t, o]) => '<optgroup label="' + esc(o.name) + '">' + [...RA].flatMap((r) => (o[r] || []).map((n) => '<option value="' + esc(t + ':' + n) + '">' + RN[r] + ' — ' + esc(n) + '</option>')).join('') + '</optgroup>').join('');
@@ -2225,6 +2269,7 @@ async function opView(m) {
     pfbox +
     '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + ' — 🪙 ' + u.coins + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><select id="cac" aria-label="Collection"></select><select id="ca" multiple size="6" aria-label="Cartes"></select><select id="cab" aria-label="Badge"><option value="0">Sans badge</option><option value="1">🥉 Badge Bronze</option><option value="2">🥈 Badge Argent</option><option value="3">🥇 Badge Or</option></select><small id="ch"></small><button>Valider</button><div class="err" id="e"></div></form>' +
     ntOpHTML(users) +
+    lgOpHTML(users, j) +
     qzOpHTML(users) +
     '<div class="box"><h2>🔧 Maintenance / 📡 Erreur réseau</h2><p>' + (j.maint ? 'ACTIVE (' + (mnf.type === 'net' ? 'Erreur réseau' : 'Maintenance') + ') : ' + ((mnf.open || []).length && mnf.type !== 'net' ? 'les joueurs gardent seulement les menus cochés ci-dessous. ' : 'les joueurs ne voient que l’écran d’attente, sans aucun accès au jeu. ') + (mnf.until ? esUntil(mnf.until) + ' : l’écran se lève tout seul à ce moment, ou tu peux le lever à la main.' : 'Sans date de retour : à lever à la main.') + (mnf.type === 'net' ? ' En mode joueur, tu es bloqué toi aussi ; ton espace opérateur reste ouvert.' : ' Toi, tu continues à jouer normalement.') : 'Désactivée.') + '</p><p><small>Type d’écran :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible"><button type="button" class="pill mtp' + (mnf.type === 'net' ? '' : ' on') + '" data-mtp="maint">🔧 Maintenance</button><button type="button" class="pill mtp' + (mnf.type === 'net' ? ' on' : '') + '" data-mtp="net">📡 Erreur réseau</button></div><p><small>Retour prévu, heure de Paris (facultatif) :</small></p><div class="row" style="margin-bottom:8px"><input type="datetime-local" id="mun" aria-label="Date et heure de retour prévu"><button type="button" class="g" id="muc">Effacer la date</button></div><p><small>Code affiché aux joueurs (facultatif, ex. E503 ou M12) :</small></p><input id="mcd" maxlength="20" autocomplete="off" placeholder="Code d’erreur ou de maintenance" style="width:100%;margin-bottom:8px"><p><small>Menus restés ouverts aux joueurs pendant la maintenance (aucun coché = tout verrouillé ; ignoré pour l’erreur réseau) :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible">' + j.maintPresets.map((p) => '<button type="button" class="pill mo' + ((mnf.open || []).includes(p.k) ? ' on' : '') + '" data-mo="' + p.k + '">' + p.label + '</button>').join('') + '</div><p><small>Explication montrée aux joueurs (facultatif, plusieurs choix possibles) :</small></p><div class="pills" style="flex-wrap:wrap;overflow:visible">' + j.maintPresets.map((p) => '<button type="button" class="pill mp' + ((j.maintinfo.presets || []).includes(p.k) ? ' on' : '') + '" data-mp="' + p.k + '">' + p.label + '</button>').join('') + '</div><textarea id="mmsg" rows="2" maxlength="300" placeholder="Message du staff (facultatif)" style="margin:8px 0"></textarea><div class="row"><button id="mnt" class="' + (j.maint ? '' : 'g') + '">' + (j.maint ? 'Lever l’écran maintenant' : 'Activer l’écran (tout verrouiller)') + '</button>' + (j.maint ? '<button class="g" id="mnu">Mettre à jour (type, date, messages)</button>' : '') + '</div><div class="err" id="e7"></div></div>' +
     '<form class="box" id="fr" style="display:grid;gap:10px"><h2>Changer le pseudo d\'un joueur</h2><select id="ru" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + '</option>').join('') + '</select><input id="rnn" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button><div class="err" id="e6"></div></form>' +
@@ -2454,6 +2499,9 @@ async function opView(m) {
   $('#mun').value = mnf.until ? tsParis(mnf.until) : '';
   $('#mcd').value = mnf.code || '';
   $('#muc').onclick = () => { $('#mun').value = ''; };
+  $('#flp').onsubmit = act('elg', () => api('lgpts', { pseudo: $('#lpu').value, n: $('#lpn').value }), 'Points de saison mis à jour');
+  $('#flb').onsubmit = act('elg', () => api('lgbotadd', { n: $('#lbn').value, t: $('#lbt').value, ren: $('#lbr').value, cards: $('#lbc').value, v: $('#lbv').value, nu: $('#lbu').value, d: $('#lbd').value, pts: $('#lbp').value, co: $('#lbo').value }), 'Bot créé');
+  app.querySelectorAll('[data-lbd]').forEach((b) => (b.onclick = act('elg', () => api('lgbotdel', { id: b.dataset.lbd }), 'Bot supprimé')));
   app.querySelectorAll('.mtp').forEach((b) => (b.onclick = () => { app.querySelectorAll('.mtp').forEach((x) => x.classList.toggle('on', x === b)); }));
   const mArgs = () => ({ presets: mpSel(), open: moSel(), msg: $('#mmsg').value, type: (app.querySelector('.mtp.on') || {}).dataset.mtp || 'maint', until: parisTs($('#mun').value), code: $('#mcd').value });
   $('#mnt').onclick = act('e7', () => api('maint', { on: !j.maint, ...mArgs() }), j.maint ? 'Écran levé' : 'Écran activé');
