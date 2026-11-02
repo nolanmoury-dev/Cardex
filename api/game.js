@@ -153,7 +153,7 @@ const MENU_ACTS = {
   col: ['fav', 'sell', 'sellbd', 'list', 'rebirth', 'open'],
   mk: ['buymk', 'unlist', 'list', 'players', 'peek', 'gift', 'tradeoffer', 'tradeaccept', 'tradecounter', 'tradeconfirm', 'tradedecline'],
   jeu: ['bet', 'betend', 'roulette', 'slots', 'flip', 'scratch', 'battle', 'racepack', 'racelb', 'carcolor', 'carskin', 'wheelspin'],
-  rk: ['rank', 'chrank', 'lgrank', 'chlist', 'chnew', 'chacc', 'chdec', 'chcancel', 'dmget', 'dmsend', 'players', 'peek', 'racelb'],
+  rk: ['rank', 'chrank', 'lgrank', 'tnget', 'chlist', 'chnew', 'chacc', 'chdec', 'chcancel', 'dmget', 'dmsend', 'players', 'peek', 'racelb'],
   set: ['settings', 'report', 'delnote', 'vitset'],
 };
 const menuOk = (mt, action) => !!mt && mt.type !== 'net' && (mt.open || []).some((k) => (MENU_ACTS[k] || []).includes(action));
@@ -556,32 +556,61 @@ async function lgView(u, cat) {
   const place = world.findIndex((x) => x.n === u.pseudo) + 1;
   return { vit: (u.vit || []).filter((id) => u.cards && u.cards[id]).slice(0, 3), id: c.id, end: c.end, t: L.t, g: L.g, pts: Math.floor(L.pts), size: LG_SIZE, names: LG_NAMES, rows, world: world.slice(0, 100), place, total: world.length };
 }
-const lgOp = async () => { const c = await lgSync(), names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], mem = list.filter((v) => v && !v.bot).map((v) => ({ n: v.pseudo, t: v.lg ? v.lg.t : 0, g: v.lg && v.lg.sid === c.id ? v.lg.g : -1 })).sort((a, b) => a.n.localeCompare(b.n)); return { id: c.id, end: c.end, bots: (await redis.get('lgob')) || [], names: LG_NAMES, nb: (await redis.smembers('lgbn')).length, mem, tn: await tnSync() }; };
-// ================= TOURNOI INTER-LIGUES =================
-// Créé par l'opérateur : il choisit les joueurs autorisés, la récompense et la mise maximale. Les joueurs s'affrontent en défis (Social → Défis), toutes ligues confondues :
-// victoire 3 pts, nul 1 pt, uniquement pour un défi entre deux participants dont la mise ne dépasse pas la mise maximale. À la fin (date ou clic opérateur), le 1er gagne la récompense.
-const tnRows = (t) => t.pl.map((n) => ({ n, ...(t.pts[n] || { p: 0, w: 0, d: 0, l: 0 }) })).sort((a, b) => b.p - a.p || b.w - a.w || a.n.localeCompare(b.n));
+const lgOp = async () => { const c = await lgSync(), names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], mem = list.filter((v) => v && !v.bot).map((v) => ({ n: v.pseudo, t: v.lg ? v.lg.t : 0, g: v.lg && v.lg.sid === c.id ? v.lg.g : -1 })).sort((a, b) => a.n.localeCompare(b.n)); return { id: c.id, end: c.end, bots: (await redis.get('lgob')) || [], names: LG_NAMES, nb: (await redis.smembers('lgbn')).length, mem, tm: list.filter((v) => v && !banOf(v)).map((v) => ({ n: v.pseudo, b: v.bot || '', t: v.lg ? v.lg.t : 0, r: rbTot(v) })).sort((a, b) => a.n.localeCompare(b.n)), tn: await tnSync() }; };
+// ================= TOURNOI INTER-LIGUES (tableau à élimination directe) =================
+// L'opérateur choisit les joueurs, la récompense et la mise maximale. Le tableau est tiré au sort (les places vides = qualifiés d'office).
+// Un match s'ouvre quand ses deux joueurs sont connus : ils ont 24 h pour le jouer en défi (Social → Défis), mise ≤ mise maximale. Le gagnant passe au tour suivant.
+// Les bots peuvent être ajoutés au tournoi : bot contre bot = résultat immédiat selon leurs niveaux ; bot contre joueur = le joueur peut le défier (s'il accepte), sinon tirage au sort pondéré par son niveau à 24 h.
+// Match nul = on rejoue. Sans match joué au bout de 24 h : tirage au sort. Le vainqueur de la finale gagne la récompense.
+const TN_H = 24 * 36e5, TN_BW = { nul: 0.25, moy: 0.4, mf: 0.55, fort: 0.7 }; // chances de victoire d'un bot contre un joueur, selon son niveau
+const tnPick = (t, a, b) => { const bw = (n) => (t.bots && t.bots[n] ? (TN_BW[t.bots[n]] ?? 0.4) : null), x = bw(a), y = bw(b), pa = x != null && y != null ? x / (x + y) : x != null ? x : y != null ? 1 - y : 0.5; return Math.random() < pa ? a : b; };
+const tnRound = (n) => (n === 1 ? 'Finale' : n === 2 ? 'Demi-finales' : n === 4 ? 'Quarts de finale' : n === 8 ? 'Huitièmes de finale' : n * 2 + 'es de finale');
 const tnRw = (r) => [r.coins ? r.coins + ' 🪙' : '', r.packs ? r.packs + ' sachet' + (r.packs > 1 ? 's' : '') : '', r.card ? 'la carte ' + cn(r.card) : ''].filter(Boolean).join(' + ');
-async function tnEnd(t) {
-  const top = tnRows(t)[0], win = top && top.p > 0 ? top.n : null;
-  t.open = false; t.win = win; t.endedAt = Date.now();
-  for (const n of t.pl) {
-    const v = await redis.get(key(n)); if (!v) continue;
-    if (n === win) { tick(v); const r = t.rw || {}; v.coins += r.coins || 0; v.packs += r.packs || 0; if (r.card) add(v, r.card, 1); note(v, '🏅 Tu gagnes le tournoi « ' + t.name + ' » ! Récompense : ' + tnRw(r)); }
-    else note(v, '🏅 Le tournoi « ' + t.name + ' » est terminé' + (win ? ' : victoire de ' + win + '.' : ' sans vainqueur.'));
-    await redis.set(key(n), v);
+function tnBuild(pl) {
+  const m = 1 << Math.max(0, Math.ceil(Math.log2(pl.length)) - 1), P = shuf([...pl]);
+  const rounds = [Array.from({ length: m }, (_, i) => ({ a: P[i], b: P[m + i] || false, w: null }))];
+  for (let k = m >> 1; k >= 1; k >>= 1) rounds.push(Array.from({ length: k }, () => ({ a: null, b: null, w: null })));
+  return rounds;
+}
+function tnStep(t) { // ouvre les matchs prêts, qualifie les byes, tire au sort les matchs expirés, fait monter les gagnants ; retourne les notifications [pseudo, texte]
+  const now = Date.now(), ev = [], R = t.br; let ch = true;
+  while (ch) {
+    ch = false;
+    R.forEach((rd, r) => rd.forEach((m, i) => {
+      if (m.w == null && m.a) {
+        if (m.b === false) { m.w = m.a; ch = true; }
+        else if (m.b && !m.o) { m.o = now; m.dl = now + TN_H; ch = true; if (t.bots && t.bots[m.a] && t.bots[m.b]) { m.w = tnPick(t, m.a, m.b); m.bot = 1; } else ev.push([m.a, '🏅 « ' + t.name + ' » · ' + tnRound(rd.length) + ' : ' + m.a + ' contre ' + m.b + '. Vous avez 24 h pour jouer ce match (Social → Défis → Tournoi).'], [m.b, '🏅 « ' + t.name + ' » · ' + tnRound(rd.length) + ' : ' + m.b + ' contre ' + m.a + '. Vous avez 24 h pour jouer ce match (Social → Défis → Tournoi).']); }
+        else if (m.b && now >= m.dl) { m.w = tnPick(t, m.a, m.b); m.rnd = 1; ch = true; ev.push([m.a, '⏱️ « ' + t.name + ' » : temps écoulé, tirage au sort : ' + m.w + ' passe.'], [m.b, '⏱️ « ' + t.name + ' » : temps écoulé, tirage au sort : ' + m.w + ' passe.']); }
+      }
+      if (m.w != null && r + 1 < R.length) { const nx = R[r + 1][i >> 1], k = i % 2 ? 'b' : 'a'; if (nx[k] !== m.w) { nx[k] = m.w; ch = true; } }
+    }));
   }
-  await redis.set('tn', t); return t;
+  return ev;
 }
-async function tnSync() { const t = await redis.get('tn'); return t && t.open && Date.now() >= t.end ? tnEnd(t) : t; }
-async function tnScore(A, B, w, sa, sb) {
-  const t = await tnSync(); if (!t || !t.open || !t.pl.includes(A.pseudo) || !t.pl.includes(B.pseudo) || Math.max(sa, sb) > t.max) return;
-  const P = (n) => (t.pts[n] ||= { p: 0, w: 0, d: 0, l: 0 });
-  if (w === 0) { for (const n of [A.pseudo, B.pseudo]) { P(n).p += 1; P(n).d++; } }
-  else { const [W, Lo] = w > 0 ? [A, B] : [B, A]; P(W.pseudo).p += 3; P(W.pseudo).w++; P(Lo.pseudo).l++; }
-  await redis.set('tn', t);
+async function tnTell(ev) { const by = {}; for (const [n, tx] of ev) (by[n] ||= []).push(tx); for (const [n, l] of Object.entries(by)) { const v = await redis.get(key(n)); if (!v || v.bot) continue; for (const tx of l) note(v, tx); await redis.set(key(n), v); } }
+async function tnEnd(t, win) {
+  t.open = false; t.win = win || null; t.endedAt = Date.now(); const ev = [];
+  for (const n of t.br[0].flatMap((m) => [m.a, m.b]).filter(Boolean)) {
+    if (n === win) { const v = await redis.get(key(n)); if (v && v.bot) { /* un bot ne touche pas la récompense */ } else if (v) { tick(v); const r = t.rw || {}; v.coins += r.coins || 0; v.packs += r.packs || 0; if (r.card) add(v, r.card, 1); note(v, '🏆 Tu gagnes le tournoi « ' + t.name + ' » ! Récompense : ' + tnRw(r)); await redis.set(key(n), v); } }
+    else ev.push([n, '🏅 Le tournoi « ' + t.name + ' » est terminé' + (win ? ' : victoire de ' + win + '.' : '.')]);
+  }
+  await redis.set('tn', t); await tnTell(ev); return t;
 }
-async function tnView(u) { const t = await tnSync(); return t ? { id: t.id, name: t.name, max: t.max, end: t.end, open: t.open, win: t.win || null, rwt: tnRw(t.rw || {}), me: t.pl.includes(u.pseudo), rows: tnRows(t) } : null; }
+async function tnCommit(t, ev0 = []) { const ev = ev0.concat(tnStep(t)), fin = t.br[t.br.length - 1][0]; if (fin.w != null && t.open) await tnEnd(t, fin.w); else await redis.set('tn', t); await tnTell(ev); return t; }
+async function tnSync() {
+  const t = await redis.get('tn'); if (!t || !t.open) return t;
+  const probe = JSON.parse(JSON.stringify(t)); if (!tnStep(probe).length && JSON.stringify(probe.br) === JSON.stringify(t.br)) return t;
+  if (!(await redis.set('tn:lock', 1, { nx: true, ex: 5 }))) return t;
+  const cur = await redis.get('tn'); return cur && cur.open ? tnCommit(cur) : cur;
+}
+async function tnScore(A, B, w, sa, sb) { // appelé à la fin de chaque défi
+  const t = await tnSync(); if (!t || !t.open || w === 0 || Math.max(sa, sb) > t.max) return;
+  for (const [r, rd] of t.br.entries()) for (const m of rd) if (m.w == null && m.o && m.b && ((m.a === A.pseudo && m.b === B.pseudo) || (m.a === B.pseudo && m.b === A.pseudo))) {
+    m.w = w > 0 ? A.pseudo : B.pseudo; m.at = Date.now(); const lo = m.w === m.a ? m.b : m.a, last = r === t.br.length - 1;
+    return tnCommit(t, [[m.w, last ? '🏅 Tu gagnes la finale !' : '🏅 « ' + t.name + ' » : victoire contre ' + lo + ', tu passes au tour suivant !'], [lo, '🏅 « ' + t.name + ' » : défaite contre ' + m.w + ', tu es éliminé.']]);
+  }
+}
+async function tnView(u) { const t = await tnSync(); return t ? { name: t.name, max: t.max, open: t.open, win: t.win || null, rwt: tnRw(t.rw || {}), me: t.br[0].some((m) => m.a === u.pseudo || m.b === u.pseudo), bots: Object.keys(t.bots || {}), rounds: t.br.map((rd) => ({ n: tnRound(rd.length), ms: rd.map((m) => ({ a: m.a, b: m.b, w: m.w, dl: m.w == null ? m.dl || 0 : 0, rnd: !!m.rnd, bot: !!m.bot })) })) } : null; }
 async function raceFinish(cur, now) {
   const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], board = raceBoard(list, cur.id);
   const win = board.length && !board[0].bot && board[0].pos > 0 ? board[0] : null;
@@ -1425,9 +1454,8 @@ const handler = async (req, res) => {
         note(t, '🏆 Le staff t’a placé en ' + LG_NAMES[nt] + ' · groupe ' + (ng + 1) + '.');
         await redis.set('lgg', reg); await redis.set(key(t.pseudo), t); return ok({ done: true });
       }
-      if (['tnnew', 'tnplayers', 'tnend', 'tncancel'].includes(b.action)) { // tournoi inter-ligues
-        const t = await tnSync(), names = async () => { const out = []; for (const n of [].concat(b.players || []).map(String)) { const v = await redis.get(key(n)); if (v && !v.bot && !out.includes(v.pseudo)) out.push(v.pseudo); } return out; };
-        const tell = async (arr, text) => { for (const n of arr) { const v = await redis.get(key(n)); if (v) { note(v, text); await redis.set(key(n), v); } } };
+      if (['tnnew', 'tnwin', 'tnend', 'tncancel'].includes(b.action)) { // tournoi inter-ligues
+        const t = await tnSync();
         if (b.action === 'tnnew') {
           if (t && t.open) return fail('Un tournoi est déjà en cours : termine-le ou annule-le d’abord');
           const name = String(b.name || '').trim().slice(0, 40); if (name.length < 2) return fail('Nom du tournoi trop court');
@@ -1435,16 +1463,24 @@ const handler = async (req, res) => {
           if (card && !rarOf(cat, card)) return fail('Carte inconnue');
           if (!rw.coins && !rw.packs && !rw.card) return fail('Ajoute une récompense (coins, sachets ou carte)');
           const max = int(b.max, 1e9); if (!max) return fail('Mise maximale invalide');
-          const pl = await names(); if (pl.length < 2) return fail('Choisis au moins 2 joueurs');
-          const nt = { id: Date.now(), name, rw, max, end: Date.now() + (int(b.days, 60) || 7) * DAY, open: true, pl, pts: Object.fromEntries(pl.map((n) => [n, { p: 0, w: 0, d: 0, l: 0 }])) };
-          await redis.set('tn', nt); await tell(pl, '🏅 Tu es invité au tournoi « ' + name + ' » ! Récompense : ' + tnRw(rw) + ' · mise max ' + max + ' 🪙. Affronte les autres participants en défi (Social → Défis).');
+          const pl = [], bots = {}, nb = int(b.nbots, 64);
+          for (const n of [].concat(b.players || []).map(String)) { const v = await redis.get(key(n)); if (v && !banOf(v) && !pl.includes(v.pseudo)) { pl.push(v.pseudo); if (v.bot) bots[v.pseudo] = v.bot; } }
+          if (pl.length + nb < 2 || pl.length + nb > 64) return fail('Choisis entre 2 et 64 participants (joueurs + bots)');
+          if (nb) { // bots ajoutés au hasard : comptes de bots existants, sinon nouveaux bots
+            const nms = await redis.smembers('users'), lst = nms.length ? await redis.mget(...nms.map(key)) : [], take = shuf(lst.filter((v) => v && v.bot && !banOf(v) && !pl.includes(v.pseudo))).slice(0, nb);
+            const extra = take.length < nb ? await lgNewBots(nb - take.length, new Set(nms.map((x) => x.toLowerCase()))) : [];
+            for (const v of [...take, ...extra]) { pl.push(v.pseudo); bots[v.pseudo] = v.bot; }
+            if (pl.length < 2) return fail('Pas assez de participants');
+          }
+          const nt = { id: Date.now(), name, rw, max, open: true, bots, br: tnBuild(pl) };
+          await tnCommit(nt, pl.map((n) => [n, '🏅 Tu participes au tournoi « ' + name + ' » ! Récompense : ' + tnRw(rw) + ' · mise max ' + max + ' 🪙.']));
         } else if (!t || !t.open) return fail('Aucun tournoi en cours');
-        else if (b.action === 'tnplayers') {
-          const pl = await names(); if (pl.length < 2) return fail('Choisis au moins 2 joueurs');
-          const added = pl.filter((n) => !t.pl.includes(n)); t.pl = pl; for (const n of pl) t.pts[n] ||= { p: 0, w: 0, d: 0, l: 0 };
-          await redis.set('tn', t); await tell(added, '🏅 Tu es invité au tournoi « ' + t.name + ' » ! Récompense : ' + tnRw(t.rw) + ' · mise max ' + t.max + ' 🪙.');
-        } else if (b.action === 'tnend') await tnEnd(t);
-        else { await redis.del('tn'); await tell(t.pl, '🏅 Le tournoi « ' + t.name + ' » a été annulé.'); }
+        else if (b.action === 'tnwin') { // l'opérateur décide un match
+          const m = ((t.br[int(b.r, 10)] || [])[int(b.i, 100)]);
+          if (!m || m.w != null || !m.a || !m.b || ![m.a, m.b].includes(String(b.w))) return fail('Match introuvable ou déjà joué');
+          m.w = String(b.w); m.at = Date.now(); await tnCommit(t, [[m.w, '🏅 « ' + t.name + ' » : le staff te qualifie pour le tour suivant.'], [m.w === m.a ? m.b : m.a, '🏅 « ' + t.name + ' » : tu es éliminé (décision du staff).']]);
+        } else if (b.action === 'tnend') await tnEnd(t, null);
+        else { await redis.del('tn'); await tnTell(t.br[0].flatMap((m) => [m.a, m.b]).filter(Boolean).map((n) => [n, '🏅 Le tournoi « ' + t.name + ' » a été annulé.'])); }
         return ok({ done: true });
       }
       if (b.action === 'lgpts') {
@@ -1478,6 +1514,7 @@ const handler = async (req, res) => {
     tick(u);
     u.seen = Date.now();
     await lgEnsure(u).catch((e) => console.error('lgEnsure', e.message));
+    await tnSync().catch((e) => console.error('tnSync', e.message));
     raceNote(u);
     subCheck(u);
     if (u.ban && u.ban.until != null && u.ban.until <= Date.now()) { delete u.ban; note(u, '✅ Ton bannissement est terminé : bon retour !'); }
@@ -1741,7 +1778,9 @@ const handler = async (req, res) => {
       lgAdd(u, 10);
       extra = r;
     } else if (b.action === 'lgrank') {
-      extra = { lg: await lgView(u, cat), tn: await tnView(u) };
+      extra = { lg: await lgView(u, cat) };
+    } else if (b.action === 'tnget') {
+      extra = { tn: await tnView(u) };
     } else if (b.action === 'rank') {
       const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
       extra = { rank: list.filter(Boolean).map((v) => {
