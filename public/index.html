@@ -311,6 +311,44 @@ details.fvb{border-color:var(--l)}details.fvb>summary{color:var(--l)}
 .qzo{display:block;width:100%;text-align:left;margin:6px 0;background:var(--panel);color:var(--txt);border:1px solid var(--line)}.qzo.on{outline:2px solid var(--l)}.qzst{font-size:32px;line-height:1;background:none!important;border:0!important;padding:2px 4px;cursor:pointer;box-shadow:none}.qzbar{height:8px;background:var(--line);border-radius:4px;overflow:hidden}.qzbar i{display:block;height:100%;background:var(--l)}
 .tb{display:flex;gap:24px;overflow-x:auto;padding:6px 2px 12px}.tcol{display:flex;flex-direction:column;flex:0 0 160px}.tcol h4{margin:0 0 6px;height:22px;text-align:center;font-size:12px;font-weight:500;color:var(--dim)}.tc{flex:1;display:flex;align-items:center;position:relative;min-height:86px}.tm{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:2px 8px}.tm .tp{padding:6px 0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tm .tp+.tp{border-top:1px solid var(--line)}.tm .tp.w{font-weight:700;color:var(--r)}.tm .tp.l{color:var(--dim);text-decoration:line-through}.tm .tp.n{color:var(--dim)}.tm .tp.me b{color:var(--ac2)}.tm small{display:block;text-align:center;padding:2px 0 4px;font-size:11px;color:var(--or)}.tcol:not(:first-child) .tc::before{content:"";position:absolute;left:-12px;top:50%;width:12px;border-top:1px solid var(--line)}.tcol:not(:last-child) .tc::after{content:"";position:absolute;right:-12px;width:12px;height:50%;border:0 solid var(--line)}.tcol:not(:last-child) .tc:nth-child(even)::after{top:50%;border-top-width:1px;border-right-width:1px}.tcol:not(:last-child) .tc:nth-child(odd)::after{top:0;border-bottom-width:1px;border-right-width:1px}
 .tnl{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:8px}.tnl label{display:flex;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line);cursor:pointer}.tnl label:last-child{border-bottom:0}.tnl small{margin-left:auto;color:var(--dim);white-space:nowrap}
+/* ===== promotion / relégation + coupe de tournoi ===== */
+.lv{position:fixed;inset:0;z-index:60;overflow:hidden;color:#EAF0FF;background:radial-gradient(120% 90% at 50% 38%,#16295c 0%,#0E1A38 40%,#060A14 100%);--c:#F5C542;transition:opacity .5s}
+.lv.rel{--c:#FF4D5E}
+.lv>*{position:absolute}
+.lv canvas{inset:0;width:100%;height:100%;pointer-events:none}
+.lv-rays{left:50%;top:38%;width:110vmax;height:110vmax;translate:-50% -50%;opacity:0;border-radius:50%;background:repeating-conic-gradient(from 0deg,var(--c) 0 7deg,transparent 7deg 20deg);-webkit-mask:radial-gradient(circle,#000 0,transparent 62%);mask:radial-gradient(circle,#000 0,transparent 62%)}
+.lv-ring{left:50%;top:38%;width:240px;height:240px;translate:-50% -50%;border-radius:50%;border:4px solid var(--c);opacity:0}
+.lv-bw{left:50%;top:38%;translate:-50% -50%}
+.lv-b{position:relative;opacity:0;line-height:0}
+.lv .lgb{filter:drop-shadow(0 12px 24px #000a)}
+.lv-crack{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.lv-crack path{fill:none;stroke:#fff;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:60;stroke-dashoffset:60;filter:drop-shadow(0 0 3px #FF4D5E)}
+.lv-fl{inset:0;background:#fff;opacity:0}.lv-fl.r{background:#FF4D5E}
+.lv-txt{left:0;right:0;top:calc(38% + 130px);text-align:center;padding:0 16px}
+.lv-ch{height:34px;display:flex;justify-content:center;opacity:0;color:var(--c)}
+.lv-ch svg{width:34px;height:34px;margin:0 -6px;fill:none;stroke:currentColor;stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
+.lv h1{margin:0;font:800 clamp(40px,11vw,84px)/1 system-ui,sans-serif;letter-spacing:.05em;color:var(--c);text-shadow:0 0 28px var(--c);opacity:0}
+.lv-sub{margin:8px 0 0;font:600 20px system-ui,sans-serif;opacity:0}.lv-sub s{text-decoration:none;color:#8C9BC0}.lv-sub span{color:#8C9BC0;font-weight:500;font-size:16px}
+.lv-rew{display:inline-block;margin-top:14px;padding:8px 22px;border-radius:999px;font:800 28px system-ui,sans-serif;color:#2a1a00;background:linear-gradient(#ffe38a,#F5C542);box-shadow:0 10px 30px #f5c54255;opacity:0}
+.lv-ok{position:static!important;margin-top:18px;opacity:0;pointer-events:none;transition:opacity .4s}.lv-ok.on{opacity:1;pointer-events:auto}
+.lv.promo .lv-old .lv-b{animation:lvOP 2s .1s both}.lv.promo .lv-fl{animation:lvFL .9s 2s both}.lv.promo .lv-ring{animation:lvRG 1.1s 2s both}
+.lv.promo .lv-rays{animation:lvRY 1.2s 2.1s both,lvSP 24s linear 2.1s infinite}.lv.promo .lv-new .lv-b{animation:lvNP 1s 2.05s cubic-bezier(.2,1.25,.4,1) both}
+.lv.promo .lv-ch,.lv.promo h1{animation:lvUP .7s 3.1s both}.lv.promo .lv-sub{animation:lvUP .6s 3.5s both}.lv.promo .lv-rew{animation:lvPOP .6s 3.9s cubic-bezier(.2,1.4,.4,1) both}
+.lv.rel .lv-old .lv-b{animation:lvOR 2.9s .1s cubic-bezier(.5,0,.9,.4) both}.lv.rel .lv-crack path{animation:lvCR .5s forwards}
+.lv.rel .lv-crack path:nth-child(1){animation-delay:1.1s}.lv.rel .lv-crack path:nth-child(2){animation-delay:1.35s}.lv.rel .lv-crack path:nth-child(3){animation-delay:1.55s}
+.lv.rel .lv-fl{animation:lvFL .8s 2.05s both}.lv.rel .lv-ring{animation:lvRG 1.1s 2.05s both}.lv.rel .lv-new .lv-b{animation:lvNR 1.4s 2.7s ease-out both}
+.lv.rel .lv-ch,.lv.rel h1{animation:lvUP .7s 3.3s both}.lv.rel .lv-sub{animation:lvUP .6s 3.7s both}
+@keyframes lvOP{0%{opacity:0;transform:scale(.8)}15%{opacity:1;transform:scale(1)}25%{transform:translateX(-4px) rotate(-1.5deg)}33%{transform:translateX(5px) rotate(1.5deg)}41%{transform:translateX(-6px) rotate(-2deg)}49%{transform:translateX(6px) rotate(2deg)}57%{transform:translateX(-7px) rotate(-2deg)}65%{transform:translateX(7px) rotate(2deg);filter:brightness(1.4)}85%{opacity:1;transform:scale(1.14);filter:brightness(2.2)}100%{opacity:0;transform:scale(1.6);filter:brightness(5)}}
+@keyframes lvNP{0%{opacity:0;transform:scale(2.6);filter:blur(14px) brightness(3)}45%{opacity:1;filter:blur(0) brightness(1.6)}100%{opacity:1;transform:scale(1);filter:none}}
+@keyframes lvOR{0%{opacity:0;transform:scale(.8)}12%{opacity:1;transform:scale(1)}22%{transform:translateX(-5px) rotate(-1deg)}30%{transform:translateX(5px) rotate(1deg)}38%{transform:translateX(-6px) rotate(-1.5deg)}46%{transform:translateX(6px) rotate(1.5deg)}56%{opacity:1;transform:translateY(0) rotate(0);filter:grayscale(.3)}100%{opacity:1;transform:translateY(130vh) rotate(24deg);filter:grayscale(1) brightness(.5)}}
+@keyframes lvNR{0%{opacity:0;transform:translateY(-70px) scale(1.15);filter:brightness(.4)}60%{opacity:1;transform:translateY(8px) scale(.98)}100%{opacity:1;transform:none;filter:brightness(.92)}}
+@keyframes lvRY{to{opacity:.38}}@keyframes lvSP{to{rotate:360deg}}@keyframes lvCR{to{stroke-dashoffset:0}}
+@keyframes lvFL{0%{opacity:0}10%{opacity:.95}100%{opacity:0}}@keyframes lvRG{0%{opacity:.9;transform:scale(.3)}100%{opacity:0;transform:scale(3.4)}}
+@keyframes lvUP{0%{opacity:0;transform:translateY(26px)}100%{opacity:1;transform:none}}@keyframes lvPOP{0%{opacity:0;transform:scale(.4)}100%{opacity:1;transform:none}}
+.lv.cup .lv-rays{animation:lvRY 1s .6s both,lvSP 24s linear .6s infinite}
+.lv-cup{left:50%;top:38%;translate:-50% -50%;font-size:min(46vw,190px);line-height:1;animation:lvCupIn 1s cubic-bezier(.2,1.3,.4,1) both,lvGlow 1.4s ease-in-out 1s infinite alternate}
+.lv.cup h1{animation:lvUP .7s 1s both}.lv.cup .lv-sub{animation:lvUP .6s 1.4s both}
+@keyframes lvCupIn{0%{opacity:0;transform:scale(0) rotate(-25deg)}100%{opacity:1;transform:none}}@keyframes lvGlow{to{filter:drop-shadow(0 0 28px #F5C542)}}
 </style>
 </head>
 <body><main id="app"></main>
@@ -376,7 +414,83 @@ async function flip() {
   if (!isOp) try { await api('settings', { theme: t }); } catch {}
 }
 function setCat(c) { CAT = c; RAR = {}; for (const [t, o] of Object.entries(CAT)) [...RA].forEach((r) => (o[r] || []).forEach((n) => (RAR[t + ':' + n] = r))); }
-function setS(s) { S = s; setSub(s.sub); setCat(s.themes); if (s.theme && s.theme !== localStorage.th) setTheme(s.theme); if (s.skin !== undefined && !SKPV) { if (s.skind) SKC[s.skind.id] = s.skind; if ((s.skin || '') !== SKK || (s.skind && localStorage.skd !== JSON.stringify(s.skind))) setSkin(s.skin); } }
+// ===== animations : promotion / relégation de ligue et coupe de tournoi =====
+var LGEV = 0;
+const LGN = ['Bronze', 'Bronze II', 'Bronze III', 'Argent', 'Argent II', 'Argent III', 'Or', 'Or II', 'Or III', 'Platine', 'Platine II', 'Platine III', 'Diamant', 'Diamant II', 'Diamant III', 'Émeraude', 'Émeraude II', 'Émeraude III', 'Maître', 'Maître II'];
+function fxMake(host, cv) {
+  const cx = cv.getContext('2d'), COL = ['#F5C542', '#FFE38A', '#2F6BFF', '#8fb2ff', '#ffffff', '#3DDC84']; let P = [], raf = 0, on = true;
+  const fit = () => { const d = devicePixelRatio || 1; cv.width = host.clientWidth * d; cv.height = host.clientHeight * d; cx.setTransform(d, 0, 0, d, 0, 0); };
+  fit();
+  const loop = () => {
+    if (!on) return; const w = host.clientWidth, h = host.clientHeight; cx.clearRect(0, 0, w, h); P = P.filter((p) => p.life > 0 && p.y < h + 40);
+    for (const p of P) {
+      p.life--; p.x += p.vx; p.y += p.vy;
+      if (p.k === 'c') { p.r += p.vr; p.vx += Math.sin(p.y / 30) * 0.04; cx.save(); cx.translate(p.x, p.y); cx.rotate(p.r); cx.fillStyle = p.col; cx.globalAlpha = Math.min(1, p.life / 40); cx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); cx.restore(); }
+      else if (p.k === 's') { p.vx *= 0.93; p.vy = p.vy * 0.93 + 0.2; cx.globalAlpha = p.life / 55; cx.fillStyle = p.col; cx.beginPath(); cx.arc(p.x, p.y, 2.4, 0, 6.28); cx.fill(); }
+      else { p.ph += 0.12; cx.save(); cx.translate(p.x, p.y); cx.scale(Math.max(0.15, Math.abs(Math.cos(p.ph))), 1); cx.globalAlpha = Math.min(1, p.life / 30); cx.fillStyle = '#F5C542'; cx.strokeStyle = '#b8860b'; cx.lineWidth = 2; cx.beginPath(); cx.arc(0, 0, 11, 0, 6.28); cx.fill(); cx.stroke(); cx.fillStyle = '#b8860b'; cx.fillRect(-1.5, -5, 3, 10); cx.restore(); }
+    }
+    cx.globalAlpha = 1; raf = P.length ? requestAnimationFrame(loop) : 0; if (!raf) cx.clearRect(0, 0, w, h);
+  };
+  return {
+    burst(kind, n, red) {
+      const w = host.clientWidth, h = host.clientHeight;
+      for (let i = 0; i < n; i++) {
+        if (kind === 'conf') P.push({ k: 'c', x: Math.random() * w, y: -20 - Math.random() * h * 0.5, vx: (Math.random() - 0.5) * 1.6, vy: 2 + Math.random() * 3, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3, w: 6 + Math.random() * 6, h: 9 + Math.random() * 8, col: COL[i % COL.length], life: 320 });
+        else if (kind === 'spark') { const a = Math.random() * 6.28, s = 4 + Math.random() * 9; P.push({ k: 's', x: w / 2, y: h * 0.38, vx: Math.cos(a) * s, vy: Math.sin(a) * s, col: red ? '#FF4D5E' : '#FFE38A', life: 55 }); }
+        else P.push({ k: 'o', x: w / 2 + (Math.random() - 0.5) * w * 0.7, y: -20 - Math.random() * 200, vx: (Math.random() - 0.5) * 1.2, vy: 3 + Math.random() * 3, life: 260, ph: Math.random() * 6 });
+      }
+      if (!raf) loop();
+    },
+    stop() { on = false; cancelAnimationFrame(raf); },
+  };
+}
+function lgEvent(ev) { // montée / descente de division : animation aux couleurs du jeu, avec les écussons des ligues
+  const promo = ev.d > 0, w = Math.round(Math.min(230, innerWidth * 0.52)), o = document.createElement('div');
+  const chev = promo ? '<svg viewBox="0 0 40 40"><path d="M8 30 L20 16 L32 30"/></svg><svg viewBox="0 0 40 40"><path d="M8 30 L20 16 L32 30"/></svg>' : '<svg viewBox="0 0 40 40"><path d="M8 12 L20 26 L32 12"/></svg><svg viewBox="0 0 40 40"><path d="M8 12 L20 26 L32 12"/></svg>';
+  o.className = 'lv ' + (promo ? 'promo' : 'rel');
+  o.innerHTML = '<div class="lv-rays"></div><div class="lv-ring"></div>'
+    + '<div class="lv-bw lv-old"><div class="lv-b">' + LGBADGE(ev.from, w) + '<svg class="lv-crack" viewBox="0 0 100 110" aria-hidden="true"><path d="M52 6 L46 24 L58 36 L44 52 L56 68 L47 86"/><path d="M58 36 L76 44 L84 62"/><path d="M44 52 L26 58 L18 76"/></svg></div></div>'
+    + '<div class="lv-bw lv-new"><div class="lv-b">' + LGBADGE(ev.to, w) + '</div></div><div class="lv-fl' + (promo ? '' : ' r') + '"></div><canvas></canvas>'
+    + '<div class="lv-txt"><div class="lv-ch">' + chev + '</div><h1>' + (promo ? 'PROMOTION' : 'RELÉGATION') + '</h1><p class="lv-sub"><s>' + esc(LGN[ev.from] || '') + '</s> &nbsp;→&nbsp; <b>' + esc(LGN[ev.to] || '') + '</b>' + (promo ? '' : '<br><span>Gagne tes prochains défis pour remonter</span>') + '</p>' + (promo && ev.coins ? '<div class="lv-rew"></div>' : '') + '<div><button class="lv-ok" type="button">Continuer</button></div></div>';
+  document.body.appendChild(o);
+  const fx = fxMake(o, o.querySelector('canvas')), T = [], at = (ms, f) => T.push(setTimeout(f, ms)), btn = o.querySelector('.lv-ok'), rw = o.querySelector('.lv-rew');
+  if (promo) {
+    at(2050, () => fx.burst('spark', 90)); at(2150, () => fx.burst('conf', 130)); at(3000, () => fx.burst('conf', 80));
+    at(3900, () => { fx.burst('coin', 45); const t0 = performance.now(); (function n(t) { const v = Math.min(ev.coins, Math.round(((t - t0) / 900) * ev.coins)); if (rw) rw.textContent = '+' + v + ' 🪙'; if (v < ev.coins) requestAnimationFrame(n); })(t0); });
+    at(4900, () => btn.classList.add('on'));
+  } else { at(2050, () => fx.burst('spark', 70, 1)); at(4300, () => btn.classList.add('on')); }
+  btn.onclick = () => { T.forEach(clearTimeout); fx.stop(); o.remove(); api('lgack', {}).then((j) => { if (j && j.state) setS(j.state); }).catch(() => {}).then(() => { LGEV = 0; }); };
+}
+function showCup(w, cb) { // le gagnant du tournoi a récupéré sa récompense : coupe et confettis pendant 5 s
+  w = w || {}; const o = document.createElement('div'); o.className = 'lv cup';
+  o.innerHTML = '<div class="lv-rays"></div><div class="lv-cup">🏆</div><canvas></canvas><div class="lv-txt"><h1>VICTOIRE !</h1><p class="lv-sub"><b>' + esc(w.name || '') + '</b><br>' + esc(w.rw || '') + (w.pot ? ' + cagnotte ' + w.pot + ' 🪙' : '') + '</p></div>';
+  document.body.appendChild(o); const fx = fxMake(o, o.querySelector('canvas')), T = [];
+  for (let i = 0; i < 9; i++) T.push(setTimeout(() => fx.burst('conf', 40), i * 550));
+  T.push(setTimeout(() => { o.style.opacity = 0; }, 5000));
+  T.push(setTimeout(() => { T.forEach(clearTimeout); fx.stop(); o.remove(); if (cb) cb(); }, 5500));
+}
+function tnRegHTML() { // tournoi en cours d'inscription : le joueur s'inscrit ou se désinscrit tant que le staff n'a pas lancé le tournoi
+  const fee = TN.fee ? 'Inscription : <b>' + TN.fee + ' 🪙</b> ' + (TN.pm === 'pot' ? '(versée dans une cagnotte : <b>' + TN.pot + ' 🪙</b> pour le vainqueur, en plus de la récompense)' : '(perdue une fois le tournoi lancé ; remboursée si tu te désinscris avant)') : 'Inscription <b>gratuite</b>';
+  const lock = !S.ch || !S.ch.ok;
+  return '<div class="box"><small>INSCRIPTIONS OUVERTES</small><h2 style="margin:0">🏅 ' + esc(TN.name) + '</h2><div class="sub">🎁 Récompense : <b>' + esc(TN.rwt) + '</b></div>'
+    + '<div class="sub">Format : <b>' + TN.fmt + ' contre ' + TN.fmt + '</b> · ' + (TN.mode === 'fun' ? '<b>🤝 Amical</b> : rien en jeu' : '<b>⚔️ Guerre</b> · mise max <b>' + TN.max + ' 🪙</b> par défi') + '</div>'
+    + '<div class="sub">' + fee + '</div><div class="sub">👥 <b>' + TN.n + '</b> inscrit' + (TN.n > 1 ? 's' : '') + ' · le staff lance le tournoi quand il le décide</div>'
+    + (lock ? '<small>🔒 Les défis se débloquent à ta première renaissance : tu ne peux pas encore t’inscrire.</small>' : '<div class="row" style="margin-top:10px">' + (TN.me ? '<b>✅ Tu es inscrit</b><button class="g" id="tnlv">Se désinscrire' + (TN.fee ? ' (remboursé)' : '') + '</button>' : '<button id="tnjn">S’inscrire' + (TN.fee ? ' (' + TN.fee + ' 🪙)' : '') + '</button>') + '</div>') + '</div>';
+}
+function tnRegBind() {
+  const go = (a) => run(async () => { const j = await api(a, {}); if (j.state) setS(j.state); TN = j.tn || TN; tnDraw(); });
+  const a = $('#tnjn'), b = $('#tnlv'); if (a) a.onclick = () => go('tnjoin'); if (b) b.onclick = () => go('tnleave');
+}
+function tnRegOp(tn, lg) { // vue opérateur d'un tournoi en cours d'inscription
+  const rw = tn.rw || {}, rwt = [rw.coins ? rw.coins + ' 🪙' : '', rw.packs ? rw.packs + ' sachet(s)' : '', rw.card ? 'carte ' + rw.card.slice(rw.card.indexOf(':') + 1) : ''].filter(Boolean).join(' + ');
+  const inn = new Set(tn.pl || []), cand = (lg.tm || []).filter((x) => !inn.has(x.n));
+  return '<p><b>' + esc(tn.name) + '</b> · inscriptions ouvertes · 🎁 ' + esc(rwt) + ' · ' + (tn.mode === 'fun' ? 'Amical' : 'Guerre · mise max ' + tn.max + ' 🪙') + ' · format ' + (tn.fmt || 3) + ' · inscription ' + (tn.fee ? tn.fee + ' 🪙 (' + (tn.pm === 'pot' ? 'cagnotte : ' + (tn.pot || 0) + ' 🪙' : 'perdue') + ')' : 'gratuite') + '</p>'
+    + '<b>' + (tn.pl || []).length + ' inscrit(s)</b><div class="tnl">' + ((tn.pl || []).map((n) => '<label>' + (tn.bots && tn.bots[n] ? '🤖 ' : '') + esc(n) + '</label>').join('') || '<p style="padding:8px"><small>Personne pour le moment.</small></p>') + '</div>'
+    + '<div style="display:grid;gap:8px;margin-top:10px"><b>Inscrire d’autres participants</b><small>Seuls les joueurs et bots qui peuvent jouer des défis sont proposés (renaissance faite, connectés depuis moins de 48 h). Les joueurs inscrits par le staff paient aussi l’inscription ; les bots non.</small>'
+    + '<select id="tnap" multiple size="6">' + cand.map((x) => '<option value="' + esc(x.n) + '">' + (x.b ? '🤖 ' : '') + esc(x.n) + ' — ' + esc((lg.names || [])[x.t] || '') + '</option>').join('') + '</select><input id="tnanb" type="number" min="0" max="64" placeholder="➕ Ajouter N bots au hasard"><button type="button" id="tnad">Ajouter</button></div>'
+    + '<div class="row" style="margin-top:10px"><button id="tnst" type="button">🚀 Lancer le tournoi</button><button class="g" id="tnx" type="button">Annuler (rembourse)</button></div>';
+}
+function setS(s) { S = s; if (s.lgev && !LGEV) { LGEV = 1; setTimeout(() => lgEvent(s.lgev), 600); } setSub(s.sub); setCat(s.themes); if (s.theme && s.theme !== localStorage.th) setTheme(s.theme); if (s.skin !== undefined && !SKPV) { if (s.skind) SKC[s.skind.id] = s.skind; if ((s.skin || '') !== SKK || (s.skind && localStorage.skd !== JSON.stringify(s.skind))) setSkin(s.skin); } }
 
 // Erreur réseau automatique : serveur injoignable, plus de connexion, base saturée (limite Upstash), page d’erreur, code 5xx ou 429.
 // Le texte technique n’est jamais montré : un écran « Erreur réseau » avec « Réessayer » le remplace (o.quiet = sans écran, utilisé par le suivi automatique).
@@ -885,7 +999,8 @@ function tnDraw() {
   const el = $('#tnb'); if (!el) return;
   if (chForm && chForm.tn) return chFormDraw(el);
   if (!TN) { el.innerHTML = '<div class="box">Aucun tournoi pour le moment.</div>'; return; }
-  const me = S.pseudo, mine = [].concat(...TN.rounds.map((r) => r.ms)).find((m) => m.w == null && m.dl && (m.a === me || m.b === me));
+  if (TN.reg) { el.innerHTML = tnRegHTML(); tnRegBind(); return; }
+  const mx = TN.mode === 'fun' ? 1e9 : TN.max, me = S.pseudo, mine = [].concat(...TN.rounds.map((r) => r.ms)).find((m) => m.w == null && m.dl && (m.a === me || m.b === me));
   const opp = mine ? (mine.a === me ? mine.b : mine.a) : null, d = CHD || { inc: [], open: [], sent: [], res: [] };
   const inc = opp && d.inc.concat(d.open).find((x) => x.from === opp), sent = opp && d.sent.find((x) => x.to === opp);
   const last = opp && d.res.find((h) => (h.a === me && h.b === opp) || (h.a === opp && h.b === me));
@@ -894,24 +1009,25 @@ function tnDraw() {
   if (mine) {
     act = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)"><div>⚔️ Ton match : <b>' + esc(opp) + '</b> · ⏳ ' + lgLeft(mine.dl - Date.now()) + '</div>';
     if (!S.ch || !S.ch.ok) act += '<small>🔒 Les défis se débloquent à ta première renaissance : ton match sera tiré au sort à la fin du délai.</small>';
-    else if (inc) act += '<div class="row" style="margin-top:6px;justify-content:space-between"><span>📥 ' + esc(opp) + ' t’a défié · ' + fmtL(inc) + ' · mise ' + inc.s + ' 🪙' + (inc.fmt !== TN.fmt ? '<br><small style="color:var(--lo)">⚠️ Mauvais format : ce tournoi se joue en ' + TN.fmt + ' contre ' + TN.fmt + '. Refuse-le et demande un défi dans le bon format.</small>' : inc.s > TN.max ? '<br><small style="color:var(--lo)">⚠️ Mise trop haute pour le tournoi (max ' + TN.max + ' 🪙) : ce combat ne compterait pas. Refuse-le et demande un défi plus bas.</small>' : '') + '</span><span>' + (inc.s > TN.max || inc.fmt !== TN.fmt ? '' : '<button data-ta="' + inc.id + '">⚔️ Accepter et combattre</button> ') + '<button class="g" data-td="' + inc.id + '">Refuser</button></span></div>';
+    else if (inc) act += '<div class="row" style="margin-top:6px;justify-content:space-between"><span>📥 ' + esc(opp) + ' t’a défié · ' + fmtL(inc) + ' · mise ' + inc.s + ' 🪙' + ((inc.fmt !== TN.fmt || inc.mode !== (TN.mode || 'war')) ? '<br><small style="color:var(--lo)">⚠️ Mauvais format ou mode : ce tournoi se joue en ' + TN.fmt + ' contre ' + TN.fmt + '. Refuse-le et demande un défi dans le bon format.</small>' : inc.s > mx ? '<br><small style="color:var(--lo)">⚠️ Mise trop haute pour le tournoi (max ' + TN.max + ' 🪙) : ce combat ne compterait pas. Refuse-le et demande un défi plus bas.</small>' : '') + '</span><span>' + (inc.s > mx || (inc.fmt !== TN.fmt || inc.mode !== (TN.mode || 'war')) ? '' : '<button data-ta="' + inc.id + '">⚔️ Accepter et combattre</button> ') + '<button class="g" data-td="' + inc.id + '">Refuser</button></span></div>';
     else if (sent) act += '<div class="row" style="margin-top:6px;justify-content:space-between"><span>📤 Défi envoyé à ' + esc(opp) + ' · en attente de sa réponse (expire dans ' + chLeft(sent.exp) + ')</span><button class="g" data-tc="' + sent.id + '">Annuler</button></div>';
-    else act += '<div class="row" style="margin-top:6px"><button id="tnp">⚔️ Défier ' + esc(opp) + '</button><small>Mise de ' + TN.max + ' 🪙 maximum pour que le match compte.</small></div>';
+    else act += '<div class="row" style="margin-top:6px"><button id="tnp">⚔️ Défier ' + esc(opp) + '</button><small>' + (TN.mode === 'fun' ? 'Mode Amical : aucune mise.' : 'Mise de ' + TN.max + ' 🪙 maximum pour que le match compte.') + '</small></div>';
     if (last) act += '<div class="row" style="margin-top:6px"><button class="g" id="tnr">▶ Revoir le dernier combat contre ' + esc(opp) + '</button></div>';
     act += '</div>';
   }
-  el.innerHTML = '<div class="box"><small>' + (TN.open ? 'TOURNOI INTER-LIGUES' : 'TOURNOI TERMINÉ') + '</small><h2 style="margin:0">🏅 ' + esc(TN.name) + '</h2><div class="sub">🎁 Récompense : <b>' + esc(TN.rwt) + '</b></div><div class="sub">Format : <b>' + TN.fmt + ' contre ' + TN.fmt + '</b> · Mise maximale : <b>' + TN.max + ' 🪙</b> par défi</div>'
-    + (TN.win ? '<div style="color:var(--or);font-weight:700">🏆 Vainqueur : ' + esc(TN.win) + '</div>' : '')
+  el.innerHTML = '<div class="box"><small>' + (TN.open ? 'TOURNOI INTER-LIGUES' : 'TOURNOI TERMINÉ') + '</small><h2 style="margin:0">🏅 ' + esc(TN.name) + '</h2><div class="sub">🎁 Récompense : <b>' + esc(TN.rwt) + '</b></div><div class="sub">Format : <b>' + TN.fmt + ' contre ' + TN.fmt + '</b> · ' + (TN.mode === 'fun' ? '<b>🤝 Amical</b> : rien en jeu' : '<b>⚔️ Guerre</b> · mise maximale <b>' + TN.max + ' 🪙</b> par défi') + (TN.fee ? ' · inscription ' + TN.fee + ' 🪙' + (TN.pm === 'pot' ? ' (cagnotte ' + TN.pot + ' 🪙 pour le vainqueur)' : '') : '') + '</div>'
+    + (TN.win ? '<div style="color:var(--or);font-weight:700">🏆 Vainqueur : ' + esc(TN.win) + '</div>' : '') + (TN.claim ? '<div class="row" style="margin-top:8px"><button id="tncl">🏆 Récupérer ma récompense' + (TN.pot ? ' + cagnotte ' + TN.pot + ' 🪙' : '') + '</button></div>' : '')
     + '<div class="sub">' + (TN.me ? '✅ Tu participes' : '🔒 Tu ne participes pas (le staff choisit les joueurs)') + '</div>' + act + '</div>'
     + '<div class="box"><div class="tb">' + TN.rounds.map((rd) => '<div class="tcol"><h4>' + esc(rd.n) + '</h4>' + rd.ms.map((m) => '<div class="tc"><div class="tm">' + cell(m.a, m) + cell(m.b, m) + (m.w == null && m.dl ? '<small>⏳ ' + lgLeft(m.dl - Date.now()) + '</small>' : m.bot ? '<small>🤖 joué par les bots</small>' : m.rnd ? '<small>🎲 tirage au sort</small>' : '') + '</div></div>').join('') + '</div>').join('') + '</div></div>'
-    + '<small>Chaque match s’ouvre quand ses deux joueurs sont connus : vous avez 24 h pour le jouer ici même (un joueur défie, l’autre accepte), avec une mise de ' + TN.max + ' 🪙 maximum. Le gagnant passe au tour suivant ; en cas d’égalité, rejouez ; sans match joué au bout de 24 h, le gagnant est tiré au sort. Les bots (🤖) peuvent refuser un défi : leur match est alors tiré au sort selon leur niveau.</small>';
+    + '<small>Chaque match s’ouvre quand ses deux joueurs sont connus : vous avez 24 h pour le jouer ici même (un joueur défie, l’autre accepte), ' + (TN.mode === 'fun' ? 'en mode Amical (sans mise)' : 'avec une mise de ' + TN.max + ' 🪙 maximum') + '. Le gagnant passe au tour suivant ; en cas d’égalité, rejouez ; sans match joué au bout de 24 h, le gagnant est tiré au sort. Les bots (🤖) peuvent refuser un défi : leur match est alors tiré au sort selon leur niveau.</small>';
   const go = (fn) => run(async () => { await fn(); });
-  const pb = $('#tnp'); if (pb) pb.onclick = () => { chForm = { mode: 'war', fmt: TN.fmt || 3, to: opp, stake: Math.max(10, Math.min(100, TN.max)), sel: [], q: '', tn: 1 }; tnDraw(); };
+  const pb = $('#tnp'); if (pb) pb.onclick = () => { chForm = { mode: TN.mode || 'war', fmt: TN.fmt || 3, to: opp, stake: Math.max(10, Math.min(100, TN.max || 100)), sel: [], q: '', tn: 1 }; tnDraw(); };
   el.querySelectorAll('[data-tp]').forEach((b) => (b.onclick = () => tnPlayer(b.dataset.tp)));
-  el.querySelectorAll('[data-ta]').forEach((b) => (b.onclick = () => { const x = inc; chForm = { acc: x, mode: x.mode, fmt: x.fmt, to: x.from, stake: Math.max(10, Math.min(TN.max, x.s)), sel: [], q: '', tn: 1 }; tnDraw(); }));
+  el.querySelectorAll('[data-ta]').forEach((b) => (b.onclick = () => { const x = inc; chForm = { acc: x, mode: x.mode, fmt: x.fmt, to: x.from, stake: Math.max(10, Math.min(mx, x.s)), sel: [], q: '', tn: 1 }; tnDraw(); }));
   el.querySelectorAll('[data-td]').forEach((b) => (b.onclick = () => go(async () => { setS((await api('chdec', { id: b.dataset.td })).state); tnInit(); })));
   el.querySelectorAll('[data-tc]').forEach((b) => (b.onclick = () => go(async () => { setS((await api('chcancel', { id: b.dataset.tc })).state); tnInit(); msg('Défi annulé : mise et cartes rendues', true); })));
   const rb = $('#tnr'); if (rb) rb.onclick = () => replay(last);
+  const cl = $('#tncl'); if (cl) cl.onclick = () => go(async () => { const j = await api('tnclaim', {}); if (j.state) setS(j.state); TN = null; showCup(j.tnwon, () => tnInit()); });
 }
 function chHTML() {
   if (chSub === 't') return chPills() + '<div id="tnb">Chargement…</div>';
@@ -947,16 +1063,16 @@ function chDraw() {
   el.querySelectorAll('[data-cv]').forEach((b) => (b.onclick = () => { const h = d.res[+b.dataset.cv]; chForm = { mode: h.mode, fmt: h.fmt, to: h.a === me ? h.b : h.a, stake: h.a === me ? h.sa : h.sb, sel: [], q: '' }; chDraw(); }));
 }
 function chFormDraw(el) {
-  const f = chForm, acc = f.acc, war = () => f.mode === 'war', cap = f.tn && TN ? TN.max : 5000;
+  const f = chForm, acc = f.acc, war = () => f.mode === 'war', cap = f.tn && TN && TN.mode !== 'fun' ? TN.max : 5000;
   const pts = () => f.sel.reduce((a, s) => a + COSTC[RAR[pk(s)[0]]], 0), allow = () => Math.floor((+f.stake || 0) / 10);
   const pl = [...new Set([f.to].concat((CHD && CHD.players) || []).filter(Boolean))];
   el.innerHTML = '<div class="box"><div class="row"><button class="g" id="cfb">← Retour</button><b>' + (acc ? 'Relever le défi de ' + esc(acc.from) : 'Lancer un défi') + '</b></div>'
-    + '<div class="row" style="margin:10px 0"><label>Mode <select id="cfm"' + (acc ? ' disabled' : '') + '><option value="war">⚔️ Guerre (mise + 1 carte)</option><option value="fun">🤝 Amical (rien en jeu)</option></select></label>'
+    + '<div class="row" style="margin:10px 0"><label>Mode <select id="cfm"' + (acc || f.tn ? ' disabled' : '') + '><option value="war">⚔️ Guerre (mise + 1 carte)</option><option value="fun">🤝 Amical (rien en jeu)</option></select></label>'
     + '<label>Format <select id="cff"' + (acc || f.tn ? ' disabled' : '') + '><option value="3">3 contre 3</option><option value="2">2 contre 2</option><option value="1">1 contre 1</option></select></label>'
     + (acc ? '' : '<label>Adversaire <select id="cft"' + (f.tn ? ' disabled' : '') + '><option value="">🌍 Défi ouvert (n\'importe qui)</option>' + pl.map((n) => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('') + '</select></label>')
     + '<label>' + (war() ? 'Mise (coins, 10 à ' + cap + ')' : 'Mise virtuelle (fixe la force)') + ' <input id="cfs" type="number" min="10" max="' + cap + '" value="' + f.stake + '" style="width:120px"></label></div>'
     + (acc ? '<p><small>Mise de ' + esc(acc.from) + ' : ' + acc.s + ' 🪙. Tu choisis ta propre mise.</small></p>' : '')
-    + (f.tn ? '<p><small>🏅 Défi de tournoi : format ' + f.fmt + ' contre ' + f.fmt + ' · mise de ' + cap + ' 🪙 maximum pour que le match compte.</small></p>' : '')
+    + (f.tn ? '<p><small>🏅 Défi de tournoi : format ' + f.fmt + ' contre ' + f.fmt + ' · ' + (TN && TN.mode === 'fun' ? 'mode Amical, sans mise.' : 'mise de ' + cap + ' 🪙 maximum pour que le match compte.') + '</small></p>' : '')
     + '<p id="cfp"></p><div id="cfsel" class="row" style="margin-bottom:8px"></div>'
     + '<input id="cfq" placeholder="🔎 Chercher : nom, ou un nombre (vie, guerre ou batterie)" style="width:100%;margin-bottom:8px" value="' + esc(f.q || '') + '"><div class="row" style="margin-bottom:8px;gap:8px"><label>❤️ Vie <input id="cfh" type="number" min="0" style="width:80px" value="' + esc(f.qh || '') + '"></label><label>⚔️ Guerre <input id="cfa" type="number" min="0" style="width:80px" value="' + esc(f.qa || '') + '"></label><label>🔋 Batterie <input id="cfbt" type="number" min="0" style="width:80px" value="' + esc(f.qb || '') + '"></label></div><div class="grid" id="cfg"></div>'
     + '<div class="row" style="margin-top:12px"><button id="cfok">' + (acc ? '⚔️ Accepter et combattre' : '🚀 Envoyer le défi') + '</button></div><div class="err" id="cfe"></div></div>';
@@ -1506,6 +1622,12 @@ function playerView() {
 // # `v` doit être unique et change à chaque mise à jour (ex. la date AAAA-MM-JJ, avec -2, -3… s'il y en a plusieurs le même jour).
 // =====================================================================================================================
 const UPDATES = [
+  { v: '2026-11-02-4', title: 'Tournois, ligues et promotions', items: [
+    '🏅 Tournois : le staff ouvre les inscriptions, tu peux t’inscrire (ou te désinscrire, remboursé) tant que le tournoi n’a pas commencé. Certains tournois ont un prix d’inscription, perdu ou versé dans une cagnotte pour le vainqueur.',
+    '🤝 Deux modes de tournoi : Amical (rien en jeu) ou Guerre (mise maximale). Le gagnant récupère sa récompense lui-même, avec une animation de coupe 🏆.',
+    '🏆 Points de ligue : défi normal 3 / 1 / 0, match de tournoi 4 / 2 / 1, titre de tournoi +15 (finaliste +6).',
+    '⬆️ Promotion en division supérieure : +500 🪙 et une animation aux couleurs des ligues (relégation aussi). Les joueurs absents depuis 48 h ne peuvent plus entrer dans un tournoi.',
+  ] },
   { v: '2026-11-02-3', title: 'Tournoi : format et mise max', items: [
     '📍 Depuis le tournoi, tu restes dans l’onglet Tournoi : touche ton adversaire de match pour le défier, sans passer par Défis.',
     '🎚️ Le staff choisit le format du tournoi : 1 contre 1, 2 contre 2 ou 3 contre 3. Seuls les combats de ce format comptent pour le match.',
@@ -2321,17 +2443,17 @@ async function qzRes(id) {
 function lgOpHTML(users, j) {
   const bt = (n) => (tn && tn.bots && tn.bots[n] ? '🤖 ' : ''), rdn = (n) => (n === 1 ? 'Finale' : n === 2 ? 'Demi-finales' : n === 4 ? 'Quarts de finale' : n === 8 ? 'Huitièmes de finale' : n * 2 + 'es de finale'), mem = (j.lg && j.lg.mem) || [], tn = j.lg && j.lg.tn, rwTxt = (r) => [r.coins ? r.coins + ' 🪙' : '', r.packs ? r.packs + ' sachet(s)' : '', r.card ? 'carte ' + r.card.slice(r.card.indexOf(':') + 1) : ''].filter(Boolean).join(' + '), pls = (sel) => mem.map((m) => '<option value="' + esc(m.n) + '"' + (sel.includes(m.n) ? ' selected' : '') + '>' + esc(m.n) + '</option>').join('');
   const lg = j.lg || { id: 1, end: Date.now(), bots: [], names: [] }, opt = lg.names.map((n, i) => '<option value="' + i + '">' + esc(n) + '</option>').join('');
-  return '<div class="box" id="lgop"><h2>🏆 Ligues</h2><p><small>Saison n° ' + lg.id + ' · fin le ' + new Date(lg.end).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) + '. Les places vides des groupes sont remplies automatiquement par des bots (' + (lg.nb || 0) + ' en jeu) : de vrais comptes qui jouent comme des joueurs (achats, défis, courses) sans jamais aller plus vite qu’eux. Ceux que tu crées ici s’ajoutent en plus (dans le premier groupe de leur palier et dans le classement Monde).</small></p>'
+  return '<div class="box" id="lgop"><h2>🏆 Ligues</h2><p><small>Saison n° ' + lg.id + ' · fin le ' + new Date(lg.end).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) + '. Les places vides des groupes sont remplies automatiquement par des bots (' + (lg.nb || 0) + ' en jeu) : de vrais comptes qui jouent comme des joueurs (achats, défis, courses) sans jamais aller plus vite qu’eux. Ceux que tu crées ici s’ajoutent en plus (dans le premier groupe de leur palier et dans le classement Monde).</small></p><div class="row"><button class="g" id="lgend" type="button">⏭️ Terminer la saison maintenant</button></div><small>La saison suivante démarre aussitôt et dure jusqu’au dimanche 23 h 59.</small>'
     + '<form id="flp" style="display:grid;gap:8px"><b>Donner ou retirer des points de saison</b><select id="lpu" required><option value="">Choisir un joueur</option>' + users.filter((u) => !u.bot).map((u) => '<option value="' + esc(u.pseudo) + '">' + esc(u.pseudo) + '</option>').join('') + '</select><input id="lpn" type="number" step="1" placeholder="Points (négatif pour retirer)" required><button>Valider</button></form>'
     + '<form id="flb" style="display:grid;gap:8px;margin-top:14px"><b>Créer un bot</b><input id="lbn" placeholder="Pseudo (3-20, sans accent)" maxlength="20" required><select id="lbt">' + opt + '</select><div class="grid2"><input id="lbr" type="number" min="0" placeholder="Renaissances"><input id="lbc" type="number" min="0" placeholder="Cartes"><input id="lbv" type="number" min="0" placeholder="Victoires"><input id="lbu" type="number" min="0" placeholder="Nuls"><input id="lbd" type="number" min="0" placeholder="Défaites"><input id="lbp" type="number" min="0" placeholder="Points de saison"></div><input id="lbo" type="number" min="0" placeholder="Pièces"><button>Créer le bot</button></form>'
     + '<div style="margin-top:12px"><b>Bots créés (' + lg.bots.length + ')</b>' + (lg.bots.length ? lg.bots.map((x) => '<div class="row" style="justify-content:space-between"><span>' + esc(x.n) + ' · ' + esc(lg.names[x.t] || '') + ' · ' + x.cards + ' cartes · ' + x.pts + ' pts</span><button class="g" data-lbd="' + x.id + '">Supprimer</button></div>').join('') : '<p><small>Aucun.</small></p>') + '</div>'
     + '<form id="flm" style="display:grid;gap:8px;margin-top:14px"><b>Placer un joueur dans une ligue et un groupe</b><select id="lmu" required><option value="">Choisir un joueur</option>' + mem.map((m) => '<option value="' + esc(m.n) + '">' + esc(m.n) + ' — ' + esc(lg.names[m.t] || '') + (m.g >= 0 ? ' · groupe ' + (m.g + 1) : '') + '</option>').join('') + '</select><div class="grid2"><select id="lmt">' + opt + '</select><input id="lmg" type="number" min="1" max="50" value="1" placeholder="Groupe n°" required></div><small>Un groupe contient 18 joueurs (les places vides sont remplies par des bots). Les points de saison du joueur sont conservés.</small><button>Placer</button></form>'
-    + '<div style="margin-top:18px"><h2>🏅 Tournoi inter-ligues</h2>' + (tn && tn.open
-      ? '<p><b>' + esc(tn.name) + '</b> · 🎁 ' + esc(rwTxt(tn.rw)) + ' · mise max ' + tn.max + ' 🪙 · format ' + (tn.fmt || 3) + ' contre ' + (tn.fmt || 3) + '</p>'
+    + '<div style="margin-top:18px"><h2>🏅 Tournoi inter-ligues</h2>' + (tn && tn.reg ? tnRegOp(tn, lg) : tn && tn.open
+      ? '<p><b>' + esc(tn.name) + '</b> · 🎁 ' + esc(rwTxt(tn.rw)) + ' · ' + (tn.mode === 'fun' ? 'Amical' : 'Guerre · mise max ' + tn.max + ' 🪙') + ' · format ' + (tn.fmt || 3) + ' contre ' + (tn.fmt || 3) + '</p>'
         + tn.br.map((rd, r) => '<b>' + rdn(rd.length) + '</b>' + rd.map((m, i) => '<div class="row" style="justify-content:space-between"><span>' + bt(m.a) + esc(m.a || '—') + ' vs ' + bt(m.b) + esc(m.b === false ? '(qualifié d’office)' : m.b || '—') + (m.w ? ' → <b>' + esc(m.w) + '</b>' : '') + '</span>' + (!m.w && m.a && m.b ? '<span><button type="button" class="g" data-tw="' + r + '|' + i + '|' + esc(m.a) + '">' + esc(m.a) + ' gagne</button> <button type="button" class="g" data-tw="' + r + '|' + i + '|' + esc(m.b) + '">' + esc(m.b) + ' gagne</button></span>' : '') + '</div>').join('')).join('')
         + '<div class="row" style="margin-top:8px"><button class="g" id="tne" type="button">🏁 Terminer sans vainqueur</button><button class="g" id="tnx" type="button">Annuler et effacer</button></div>'
-      : (tn ? '<p><small>Dernier tournoi : « ' + esc(tn.name) + ' » terminé · ' + (tn.win ? 'vainqueur : ' + esc(tn.win) : 'aucun vainqueur') + '.</small></p>' : '')
-        + '<form id="ftn" style="display:grid;gap:8px"><b>Créer un tournoi</b><input id="tnn" placeholder="Nom du tournoi" maxlength="40" required><div class="grid2"><input id="tnco" type="number" min="0" placeholder="Récompense : coins"><input id="tnpk" type="number" min="0" placeholder="Récompense : sachets"></div><select id="tnc"></select><select id="tnk"></select><input id="tnm" type="number" min="1" placeholder="Mise maximale par défi" required><select id="tnfmt" aria-label="Format des matchs"><option value="1">Format : 1 contre 1</option><option value="2">Format : 2 contre 2</option><option value="3" selected>Format : 3 contre 3</option></select><b>Participants</b><input id="tnq" placeholder="🔎 Rechercher un joueur ou un bot"><div class="grid2"><select id="tnf"><option value="all">Tous</option><option value="p">Joueurs</option><option value="b">Bots 🤖</option><option value="s">Sélectionnés</option></select><select id="tnl"><option value="">Toutes les ligues</option>' + opt + '</select></div><div class="row"><button type="button" class="g" id="tna">Cocher la liste affichée</button><button type="button" class="g" id="tnr">Cocher ceux qui ont fait une renaissance</button><button type="button" class="g" id="tnz">Tout décocher</button></div><div class="tnl" id="tnlist"></div><b id="tnsum"></b><input id="tnnb" type="number" min="0" max="64" placeholder="➕ Ajouter N bots au hasard (en plus des cochés)"><small>Les bots ne touchent pas la récompense. Bot contre bot : résultat immédiat selon leurs niveaux. Bot contre joueur : le joueur peut le défier, sinon tirage au sort pondéré par le niveau du bot au bout de 24 h. Le tableau est tiré au sort (2 à 64 participants ; qualifiés d’office si ce n’est pas une puissance de 2). Chaque match : 24 h, mise ≤ mise maximale. Pour défier, un joueur doit avoir fait une première renaissance (⚠️ = pas encore).</small><button>Lancer le tournoi</button></form>')
+      : (tn ? '<p><small>Dernier tournoi : « ' + esc(tn.name) + ' » terminé · ' + (tn.win ? 'vainqueur : ' + esc(tn.win) : 'aucun vainqueur') + '.' + (tn.win && !tn.claimed ? ' ⏳ Le gagnant n’a pas encore récupéré sa récompense : attends avant d’en créer un nouveau.' : '') + '</small></p>' + (tn.win && !tn.claimed ? '<div class="row"><button class="g" id="tnx" type="button">Annuler et effacer</button></div>' : '') : '')
+        + '<form id="ftn" style="display:grid;gap:8px"><b>Créer un tournoi</b><input id="tnn" placeholder="Nom du tournoi" maxlength="40" required><div class="grid2"><input id="tnco" type="number" min="0" placeholder="Récompense : coins"><input id="tnpk" type="number" min="0" placeholder="Récompense : sachets"></div><select id="tnc"></select><select id="tnk"></select><select id="tnmode" aria-label="Mode du tournoi"><option value="war">⚔️ Mode Guerre (mise et cartes en jeu)</option><option value="fun">🤝 Mode Amical (rien en jeu, pas de mise max)</option></select><input id="tnm" type="number" min="1" placeholder="Mise maximale par défi" required><input id="tnfee" type="number" min="0" placeholder="Prix d’inscription en coins (0 = gratuit)"><select id="tnpm" aria-label="Destination des inscriptions"><option value="lost">Coins d’inscription perdus</option><option value="pot">Coins d’inscription en cagnotte (pour le vainqueur)</option></select><select id="tnfmt" aria-label="Format des matchs"><option value="1">Format : 1 contre 1</option><option value="2">Format : 2 contre 2</option><option value="3" selected>Format : 3 contre 3</option></select><b>Participants</b><input id="tnq" placeholder="🔎 Rechercher un joueur ou un bot"><div class="grid2"><select id="tnf"><option value="all">Tous</option><option value="p">Joueurs</option><option value="b">Bots 🤖</option><option value="s">Sélectionnés</option></select><select id="tnl"><option value="">Toutes les ligues</option>' + opt + '</select></div><div class="row"><button type="button" class="g" id="tna">Cocher la liste affichée</button><button type="button" class="g" id="tnr">Cocher ceux qui ont fait une renaissance</button><button type="button" class="g" id="tnz">Tout décocher</button></div><div class="tnl" id="tnlist"></div><b id="tnsum"></b><input id="tnnb" type="number" min="0" max="64" placeholder="➕ Ajouter N bots au hasard (en plus des cochés)"><small>Les bots ne touchent pas la récompense. Bot contre bot : résultat immédiat selon leurs niveaux. Bot contre joueur : le joueur peut le défier, sinon tirage au sort pondéré par le niveau du bot au bout de 24 h. Le tableau est tiré au sort (2 à 64 participants ; qualifiés d’office si ce n’est pas une puissance de 2). Chaque match : 24 h, mise ≤ mise maximale. Seuls les joueurs et bots qui peuvent jouer des défis sont proposés (renaissance faite, connectés depuis moins de 48 h). Les joueurs cochés paient l’inscription, les bots non. Les joueurs peuvent aussi s’inscrire eux-mêmes ; le tournoi démarre quand tu cliques sur « Lancer le tournoi ».</small><button>Ouvrir les inscriptions</button></form>')
     + '</div><div class="err" id="elg"></div></div>';
 }
 async function opView(m) {
@@ -2615,11 +2737,15 @@ async function opView(m) {
   if ($('#ftn')) {
     const fillK = () => { const t = $('#tnc').value; $('#tnk').innerHTML = '<option value="">Aucune carte</option>' + (t ? [...RA].flatMap((r) => (CAT[t][r] || []).map((n) => '<option value="' + esc(t + ':' + n) + '">' + RN[r] + ' — ' + esc(n) + '</option>')).join('') : ''); };
     $('#tnc').innerHTML = '<option value="">Carte en récompense (facultatif) : collection…</option>' + Object.entries(CAT).map(([t, o]) => '<option value="' + esc(t) + '">' + esc(o.icon + ' ' + o.name) + '</option>').join(''); $('#tnc').onchange = fillK; fillK();
-    $('#ftn').onsubmit = act('elg', () => api('tnnew', { name: $('#tnn').value, coins: $('#tnco').value, packs: $('#tnpk').value, card: $('#tnk').value, max: $('#tnm').value, fmt: $('#tnfmt').value, players: selP(), nbots: $('#tnnb').value }), 'Tournoi lancé');
+    $('#ftn').onsubmit = act('elg', () => api('tnnew', { name: $('#tnn').value, coins: $('#tnco').value, packs: $('#tnpk').value, card: $('#tnk').value, max: $('#tnm').value, mode: $('#tnmode').value, fee: $('#tnfee').value, pm: $('#tnpm').value, fmt: $('#tnfmt').value, players: selP(), nbots: $('#tnnb').value }), 'Inscriptions ouvertes');
+    $('#tnmode').onchange = () => { const f = $('#tnmode').value === 'fun'; $('#tnm').style.display = f ? 'none' : ''; $('#tnm').required = !f; };
   }
   app.querySelectorAll('[data-tw]').forEach((b) => (b.onclick = act('elg', () => { const [r, i, ...w] = b.dataset.tw.split('|'); return api('tnwin', { r, i, w: w.join('|') }); }, 'Match validé')));
+  if ($('#lgend')) $('#lgend').onclick = () => { if (confirm('Terminer la saison maintenant ?\n\nLe classement est traité comme à une fin normale (récompenses, montées et descentes, points remis à zéro) et la nouvelle saison démarre aussitôt, jusqu’au dimanche 23 h 59.\nImpossible de revenir en arrière.')) act('elg', () => api('lgendnow', {}), 'Saison terminée')(); };
+  if ($('#tnad')) $('#tnad').onclick = act('elg', () => api('tnadd', { players: [...$('#tnap').selectedOptions].map((o) => o.value), nbots: $('#tnanb').value }), 'Participants ajoutés');
+  if ($('#tnst')) $('#tnst').onclick = () => { if (confirm('Lancer le tournoi ? Les inscriptions seront fermées et le tableau tiré au sort.')) act('elg', () => api('tnstart', {}), 'Tournoi lancé')(); };
   if ($('#tne')) $('#tne').onclick = act('elg', () => api('tnend', {}), 'Tournoi terminé');
-  if ($('#tnx')) $('#tnx').onclick = () => { if (confirm('Annuler ce tournoi sans récompense ?')) act('elg', () => api('tncancel', {}), 'Tournoi annulé')(); };
+  if ($('#tnx')) $('#tnx').onclick = () => { if (confirm('Annuler ce tournoi sans récompense ? Les inscriptions payées seront remboursées.')) act('elg', () => api('tncancel', {}), 'Tournoi annulé')(); };
   $('#flp').onsubmit = act('elg', () => api('lgpts', { pseudo: $('#lpu').value, n: $('#lpn').value }), 'Points de saison mis à jour');
   $('#flb').onsubmit = act('elg', () => api('lgbotadd', { n: $('#lbn').value, t: $('#lbt').value, ren: $('#lbr').value, cards: $('#lbc').value, v: $('#lbv').value, nu: $('#lbu').value, d: $('#lbd').value, pts: $('#lbp').value, co: $('#lbo').value }), 'Bot créé');
   app.querySelectorAll('[data-lbd]').forEach((b) => (b.onclick = act('elg', () => api('lgbotdel', { id: b.dataset.lbd }), 'Bot supprimé')));
