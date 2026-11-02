@@ -455,10 +455,12 @@ const hf = (...a) => h32(...a) / 4294967296;
 const lgCap = (t) => 50 + 10 * t; // points d'un bot qui finit la semaine en tête de son palier
 const parisOff = (ts) => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Paris', hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }).formatToParts(new Date(ts)).map((x) => [x.type, +x.value])); return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(ts / 1000) * 1000; };
 const lgEnd = (now) => { const L = new Date(now + parisOff(now)), days = (7 - L.getUTCDay()) % 7, endL = Date.UTC(L.getUTCFullYear(), L.getUTCMonth(), L.getUTCDate() + days, 23, 59, 59, 999); return endL - parisOff(endL - parisOff(now)); };
+// # MODE JOUEUR DE L'OPÉRATEUR : quand Noln_mry joue en « mode joueur », c'est un compte de joueur NORMAL pour les ligues et le classement Monde
+// (groupe, points de saison, montées/descentes, place dans le monde). Il n'est donc exclu d'AUCUN calcul de ligue.
 const lgOf = (u) => (u.lg ||= { t: 0, g: -1, sid: 0, pts: 0, act: 0 });
 let LGC = null, lgChk = 0;
 function lgSyncUser(u, c) { const L = lgOf(u); if (L.sid !== c.id) { L.pts = 0; L.act = 0; L.g = -1; L.sid = c.id; } return L; }
-const lgAdd = (u, n, act = true) => { if (!u || u.pseudo === OP_NAME) return; const L = LGC ? lgSyncUser(u, LGC) : lgOf(u); L.pts = Math.max(0, L.pts + n); if (act) L.act++; };
+const lgAdd = (u, n, act = true) => { if (!u) return; const L = LGC ? lgSyncUser(u, LGC) : lgOf(u); L.pts = Math.max(0, L.pts + n); if (act) L.act++; };
 async function lgSync() {
   const now = Date.now();
   if (LGC && now < LGC.end && now - lgChk < 30000) return LGC;
@@ -487,7 +489,7 @@ async function lgFill(t, g, reg, c) {
   for (const u of got) { u.lg = { t, g, sid: c.id, pts: 0, act: 0 }; G.b.push(u.pseudo); await redis.set(key(u.pseudo), u); }
 }
 async function lgEnsure(u) {
-  const c = await lgSync(); if (u.bot || u.pseudo === OP_NAME) return c;
+  const c = await lgSync(); if (u.bot) return c;
   const L = lgSyncUser(u, c);
   if (L.g < 0) {
     const reg = (await redis.get('lgg')) || { groups: {}, pool: [] }; let g = 0;
@@ -502,7 +504,7 @@ async function lgEnsure(u) {
 }
 async function lgRoll(c) {
   const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
-  const all = list.filter((v) => v && v.pseudo !== OP_NAME), users = all.filter((v) => !v.bot), bots = all.filter((v) => v.bot && v.lgb);
+  const all = list.filter((v) => v), users = all.filter((v) => !v.bot), bots = all.filter((v) => v.bot && v.lgb);
   const nid = c.id + 1, groups = new Map(), res = new Map();
   for (const u of [...users, ...bots.filter((b) => b.lg && b.lg.g >= 0)]) { const L = lgOf(u); if (L.sid !== c.id) { L.pts = 0; L.act = 0; L.g = -1; } const k = L.t + ':' + L.g; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(u); }
   for (const [k, R] of groups) {
@@ -542,16 +544,16 @@ const rarSplit = (n) => { const P = [['u', 0.002], ['s', 0.01], ['m', 0.03], ['l
 async function lgView(u, cat) {
   const c = await lgEnsure(u), L = lgOf(u);
   const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], H = (await redis.get('chh')) || [], ob = (await redis.get('lgob')) || [];
-  const acc = list.filter((v) => v && v.pseudo !== OP_NAME && !banOf(v) && v.pseudo !== u.pseudo); if (!banOf(u) && u.pseudo !== OP_NAME) acc.push(u);
-  const rowOf = (v) => { const cs = v.cs || csFrom(H, v.pseudo), rr = rarCount(v, cat), vl = v.lg && v.lg.sid === c.id ? v.lg : null; return { n: v.pseudo, pf: v.pf || null, bi: v.lg ? v.lg.t : 0, ren: rbTot(v), v: cs.w, nu: cs.d, d: cs.l, pts: vl ? Math.floor(vl.pts) : 0, co: v.coins, cards: cardsTot(v, cat, rr), rr }; };
-  const obRow = (x) => ({ n: x.n, pf: null, bi: x.t, ren: x.ren, v: x.v, nu: x.nu, d: x.d, pts: x.pts, co: x.co, cards: x.cards, rr: rarSplit(x.cards), op: 1 });
+  const acc = list.filter((v) => v && !banOf(v) && v.pseudo !== u.pseudo); if (!banOf(u)) acc.push(u);
+  const rowOf = (v) => { const cs = v.cs || csFrom(H, v.pseudo), rr = rarCount(v, cat), vl = v.lg && v.lg.sid === c.id ? v.lg : null; return { n: v.pseudo, pf: v.pf || null, bi: v.lg ? v.lg.t : 0, ren: rbTot(v), v: cs.w, nu: cs.d, d: cs.l, pts: vl ? Math.floor(vl.pts) : 0, co: v.coins, cards: cardsTot(v, cat, rr), rr, vit: (v.vit || []).filter((id) => v.cards && v.cards[id] && rarOf(cat, id)).slice(0, 3) }; };
+  const obRow = (x) => ({ n: x.n, pf: null, bi: x.t, ren: x.ren, v: x.v, nu: x.nu, d: x.d, pts: x.pts, co: x.co, cards: x.cards, rr: rarSplit(x.cards), vit: [], op: 1 });
   const rows = acc.filter((v) => v.lg && v.lg.sid === c.id && v.lg.t === L.t && v.lg.g === L.g).map(rowOf);
   if (L.g === 0) for (const x of ob) if (x.t === L.t) rows.push(obRow(x));
   rows.sort((a, b) => b.pts - a.pts || b.ren - a.ren || b.co - a.co || a.n.localeCompare(b.n));
   const nn = rows.filter((r) => !r.op).length; let z = 0; for (const r of rows) { if (r.op) { r.z = ''; continue; } r.z = z < LG_UP ? 'up' : z >= Math.max(LG_UP, nn - LG_UP) ? 'down' : ''; z++; }
   const world = [...acc.map(rowOf), ...ob.map(obRow)].sort((a, b) => b.cards - a.cards || b.ren - a.ren || a.n.localeCompare(b.n));
   const place = world.findIndex((x) => x.n === u.pseudo) + 1;
-  return { id: c.id, end: c.end, t: L.t, g: L.g, pts: Math.floor(L.pts), size: LG_SIZE, names: LG_NAMES, rows, world: world.slice(0, 100), place, total: world.length };
+  return { vit: (u.vit || []).filter((id) => u.cards && u.cards[id]).slice(0, 3), id: c.id, end: c.end, t: L.t, g: L.g, pts: Math.floor(L.pts), size: LG_SIZE, names: LG_NAMES, rows, world: world.slice(0, 100), place, total: world.length };
 }
 const lgOp = async () => { const c = await lgSync(); return { id: c.id, end: c.end, bots: (await redis.get('lgob')) || [], names: LG_NAMES, nb: (await redis.smembers('lgbn')).length }; };
 async function raceFinish(cur, now) {
@@ -951,8 +953,9 @@ const handler = async (req, res) => {
         }
         for (const id of ids) {
           if (sg > 0) { if (bt) addB(u, id, bt); else add(u, id, 1); } else rmT(u, id, bt);
-          parts.push((bt ? BADGES[bt - 1].ico + ' ' : '') + 'la carte ' + id.slice(id.indexOf(':') + 1) + (bt ? ' (badge ' + BADGES[bt - 1].name + ')' : ''));
+          if (!b.full) parts.push((bt ? BADGES[bt - 1].ico + ' ' : '') + 'la carte ' + id.slice(id.indexOf(':') + 1) + (bt ? ' (badge ' + BADGES[bt - 1].name + ')' : ''));
         }
+        if (b.full && ids.length) parts.push('toutes les cartes de la collection ' + ids[0].slice(0, ids[0].indexOf(':')) + (sg > 0 ? ' : à toi de faire la renaissance ♻️' : ''));
         if (parts.length) note(u, (sg > 0 ? "🎁 L'opérateur t'a donné : " : "⚠️ L'opérateur t'a retiré : ") + parts.join(', '));
         await redis.set(key(u.pseudo), u);
         return ok({ done: true });
@@ -1512,6 +1515,10 @@ const handler = async (req, res) => {
     } else if (b.action === 'fav') {
       if (!u.cards[b.card]) return fail('Carte non possédée');
       u.fav = u.fav.includes(b.card) ? u.fav.filter((x) => x !== b.card) : [...u.fav, b.card];
+    } else if (b.action === 'vitset') { // vitrine : jusqu'à 3 cartes possédées, montrées aux autres joueurs au clic dans les classements
+      const ids = [...new Set([].concat(b.cards || []).map(String))].slice(0, 3);
+      for (const id of ids) if (!u.cards[id] || !rarOf(cat, id)) return fail('Tu ne possèdes pas cette carte');
+      u.vit = ids;
     } else if (b.action === 'report') {
       const text = String(b.text || '').trim().slice(0, 500);
       if (text.length < 5) return fail('Décris le problème (5 caractères minimum)');
