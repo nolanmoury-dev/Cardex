@@ -547,8 +547,8 @@ async function lgView(u, cat) {
   const c = await lgEnsure(u), L = lgOf(u);
   const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], H = (await redis.get('chh')) || [], ob = (await redis.get('lgob')) || [];
   const acc = list.filter((v) => v && !banOf(v) && v.pseudo !== u.pseudo); if (!banOf(u)) acc.push(u);
-  const rowOf = (v) => { const cs = v.cs || csFrom(H, v.pseudo), rr = rarCount(v, cat), vl = v.lg && v.lg.sid === c.id ? v.lg : null; return { n: v.pseudo, pf: v.pf || null, bi: v.lg ? v.lg.t : 0, ren: rbTot(v), v: cs.w, nu: cs.d, d: cs.l, pts: vl ? Math.floor(vl.pts) : 0, co: v.coins, cards: cardsTot(v, cat, rr), rr, vit: (v.vit || []).filter((id) => v.cards && v.cards[id] && rarOf(cat, id)).slice(0, 3) }; };
-  const obRow = (x) => ({ n: x.n, pf: null, bi: x.t, ren: x.ren, v: x.v, nu: x.nu, d: x.d, pts: x.pts, co: x.co, cards: x.cards, rr: rarSplit(x.cards), vit: [], op: 1 });
+  const rowOf = (v) => { const cs = v.cs || csFrom(H, v.pseudo), rr = rarCount(v, cat), vl = v.lg && v.lg.sid === c.id ? v.lg : null; const l5 = H.filter((h) => h.a === v.pseudo || h.b === v.pseudo).slice(0, 5).map((h) => h.w * (h.a === v.pseudo ? 1 : -1)); return { l5, n: v.pseudo, pf: v.pf || null, bi: v.lg ? v.lg.t : 0, ren: rbTot(v), v: cs.w, nu: cs.d, d: cs.l, pts: vl ? Math.floor(vl.pts) : 0, co: v.coins, cards: cardsTot(v, cat, rr), rr, vit: (v.vit || []).filter((id) => v.cards && v.cards[id] && rarOf(cat, id)).slice(0, 3) }; };
+  const obRow = (x) => ({ l5: [], n: x.n, pf: null, bi: x.t, ren: x.ren, v: x.v, nu: x.nu, d: x.d, pts: x.pts, co: x.co, cards: x.cards, rr: rarSplit(x.cards), vit: [], op: 1 });
   const rows = acc.filter((v) => v.lg && v.lg.sid === c.id && v.lg.t === L.t && v.lg.g === L.g).map(rowOf);
   if (L.g === 0) for (const x of ob) if (x.t === L.t) rows.push(obRow(x));
   rows.sort((a, b) => b.pts - a.pts || b.ren - a.ren || b.co - a.co || a.n.localeCompare(b.n));
