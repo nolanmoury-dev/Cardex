@@ -312,7 +312,7 @@ async function settle(A, B, x, sb, cb, cat, cu) {
     cl.forEach((c, i) => { if (i === k) { if (c.tr) addB(W, c.id, c.tr); else add(W, c.id, 1); } else unlock(Lo, [c]); });
   }
   { const H0 = (await redis.get('chh')) || []; for (const [P, m] of [[A, w], [B, -w]]) { const c = P.cs || (P.cs = csFrom(H0, P.pseudo)); if (m > 0) c.w++; else if (m < 0) c.l++; else c.d++; lgAdd(P, m > 0 ? 2 : m === 0 ? 1 : 0); } }
-  await tnScore(A, B, w, sa, sb).catch((e) => console.error('tnScore', e.message));
+  await tnScore(A, B, w, sa, sb, x.fmt).catch((e) => console.error('tnScore', e.message));
   dlUse(A, B.pseudo); dlUse(B, A.pseudo);
   const say = (P, O) => {
     const m = (P === A ? 1 : -1) * w, ms = P === A ? sa : sb;
@@ -603,14 +603,14 @@ async function tnSync() {
   if (!(await redis.set('tn:lock', 1, { nx: true, ex: 5 }))) return t;
   const cur = await redis.get('tn'); return cur && cur.open ? tnCommit(cur) : cur;
 }
-async function tnScore(A, B, w, sa, sb) { // appelé à la fin de chaque défi
-  const t = await tnSync(); if (!t || !t.open || w === 0 || Math.max(sa, sb) > t.max) return;
+async function tnScore(A, B, w, sa, sb, fmt) { // appelé à la fin de chaque défi
+  const t = await tnSync(); if (!t || !t.open || w === 0 || Math.max(sa, sb) > t.max || (fmt && fmt !== (t.fmt || 3))) return;
   for (const [r, rd] of t.br.entries()) for (const m of rd) if (m.w == null && m.o && m.b && ((m.a === A.pseudo && m.b === B.pseudo) || (m.a === B.pseudo && m.b === A.pseudo))) {
     m.w = w > 0 ? A.pseudo : B.pseudo; m.at = Date.now(); const lo = m.w === m.a ? m.b : m.a, last = r === t.br.length - 1;
     return tnCommit(t, [[m.w, last ? '🏅 Tu gagnes la finale !' : '🏅 « ' + t.name + ' » : victoire contre ' + lo + ', tu passes au tour suivant !'], [lo, '🏅 « ' + t.name + ' » : défaite contre ' + m.w + ', tu es éliminé.']]);
   }
 }
-async function tnView(u) { const t = await tnSync(); return t ? { name: t.name, max: t.max, open: t.open, win: t.win || null, rwt: tnRw(t.rw || {}), me: t.br[0].some((m) => m.a === u.pseudo || m.b === u.pseudo), bots: Object.keys(t.bots || {}), rounds: t.br.map((rd) => ({ n: tnRound(rd.length), ms: rd.map((m) => ({ a: m.a, b: m.b, w: m.w, dl: m.w == null ? m.dl || 0 : 0, rnd: !!m.rnd, bot: !!m.bot })) })) } : null; }
+async function tnView(u) { const t = await tnSync(); return t ? { name: t.name, max: t.max, fmt: t.fmt || 3, open: t.open, win: t.win || null, rwt: tnRw(t.rw || {}), me: t.br[0].some((m) => m.a === u.pseudo || m.b === u.pseudo), bots: Object.keys(t.bots || {}), rounds: t.br.map((rd) => ({ n: tnRound(rd.length), ms: rd.map((m) => ({ a: m.a, b: m.b, w: m.w, dl: m.w == null ? m.dl || 0 : 0, rnd: !!m.rnd, bot: !!m.bot })) })) } : null; }
 async function raceFinish(cur, now) {
   const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], board = raceBoard(list, cur.id);
   const win = board.length && !board[0].bot && board[0].pos > 0 ? board[0] : null;
@@ -1472,7 +1472,7 @@ const handler = async (req, res) => {
             for (const v of [...take, ...extra]) { pl.push(v.pseudo); bots[v.pseudo] = v.bot; }
             if (pl.length < 2) return fail('Pas assez de participants');
           }
-          const nt = { id: Date.now(), name, rw, max, open: true, bots, br: tnBuild(pl) };
+          const nt = { id: Date.now(), name, rw, max, fmt: [1, 2, 3].includes(+b.fmt) ? +b.fmt : 3, open: true, bots, br: tnBuild(pl) };
           await tnCommit(nt, pl.map((n) => [n, '🏅 Tu participes au tournoi « ' + name + ' » ! Récompense : ' + tnRw(rw) + ' · mise max ' + max + ' 🪙.']));
         } else if (!t || !t.open) return fail('Aucun tournoi en cours');
         else if (b.action === 'tnwin') { // l'opérateur décide un match
