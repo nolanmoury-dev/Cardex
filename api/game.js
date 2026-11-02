@@ -154,7 +154,7 @@ const MENU_ACTS = {
   mk: ['buymk', 'unlist', 'list', 'players', 'peek', 'gift', 'tradeoffer', 'tradeaccept', 'tradecounter', 'tradeconfirm', 'tradedecline'],
   jeu: ['bet', 'betend', 'roulette', 'slots', 'flip', 'scratch', 'battle', 'racepack', 'racelb', 'carcolor', 'carskin', 'wheelspin'],
   rk: ['rank', 'chrank', 'lgrank', 'chlist', 'chnew', 'chacc', 'chdec', 'chcancel', 'dmget', 'dmsend', 'players', 'peek', 'racelb'],
-  set: ['settings', 'report', 'delnote'],
+  set: ['settings', 'report', 'delnote', 'vitset'],
 };
 const menuOk = (mt, action) => !!mt && mt.type !== 'net' && (mt.open || []).some((k) => (MENU_ACTS[k] || []).includes(action));
 const maintInfo = async () => { const i = (await redis.get('maintinfo')) || {}; return { msgs: (i.presets || []).filter((k) => MAINT_PRESETS[k]).map((k) => MAINT_PRESETS[k][1]), msg: i.msg || '' }; };
@@ -312,6 +312,7 @@ async function settle(A, B, x, sb, cb, cat, cu) {
     cl.forEach((c, i) => { if (i === k) { if (c.tr) addB(W, c.id, c.tr); else add(W, c.id, 1); } else unlock(Lo, [c]); });
   }
   { const H0 = (await redis.get('chh')) || []; for (const [P, m] of [[A, w], [B, -w]]) { const c = P.cs || (P.cs = csFrom(H0, P.pseudo)); if (m > 0) c.w++; else if (m < 0) c.l++; else c.d++; lgAdd(P, m > 0 ? 2 : m === 0 ? 1 : 0); } }
+  await tnScore(A, B, w, sa, sb).catch((e) => console.error('tnScore', e.message));
   dlUse(A, B.pseudo); dlUse(B, A.pseudo);
   const say = (P, O) => {
     const m = (P === A ? 1 : -1) * w, ms = P === A ? sa : sb;
@@ -390,7 +391,7 @@ const price = (sh, t, cat) => Math.round((PRICE * 2 ** (lvOf(cat, t) - 1) * (100
 const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t), ob = cat[t]; if (ob && ob.until != null && !ob.base && ((u.rb || {})[t] || 0) >= 1) return false; return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
 const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => x.seller === u.pseudo || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))), inbox: u.inbox || [],
-  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, pf: u.pf || null, sub: subOf(u) ? { t: u.sub.t, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial, subs: SUBS, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
+  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, vit: (u.vit || []).filter((id) => u.cards[id]).slice(0, 3), pf: u.pf || null, sub: subOf(u) ? { t: u.sub.t, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial, subs: SUBS, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
   rw: (u.rw || []).map((x) => ({ rank: x.rank, name: x.name })), rws: (u.rw || [])[0] ? wSegs(u.rw[0].rank, u.rw[0].mult).map(wLabel) : null,
   next: u.packs >= MAXP ? null : u.last + stepOf(u.last), fp: { 1: { n: u.packs, next: u.packs >= MAXP ? null : u.last + stepOf(u.last) } }, cards: u.cards, bd: u.bd || {}, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
@@ -555,7 +556,32 @@ async function lgView(u, cat) {
   const place = world.findIndex((x) => x.n === u.pseudo) + 1;
   return { vit: (u.vit || []).filter((id) => u.cards && u.cards[id]).slice(0, 3), id: c.id, end: c.end, t: L.t, g: L.g, pts: Math.floor(L.pts), size: LG_SIZE, names: LG_NAMES, rows, world: world.slice(0, 100), place, total: world.length };
 }
-const lgOp = async () => { const c = await lgSync(); return { id: c.id, end: c.end, bots: (await redis.get('lgob')) || [], names: LG_NAMES, nb: (await redis.smembers('lgbn')).length }; };
+const lgOp = async () => { const c = await lgSync(), names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], mem = list.filter((v) => v && !v.bot).map((v) => ({ n: v.pseudo, t: v.lg ? v.lg.t : 0, g: v.lg && v.lg.sid === c.id ? v.lg.g : -1 })).sort((a, b) => a.n.localeCompare(b.n)); return { id: c.id, end: c.end, bots: (await redis.get('lgob')) || [], names: LG_NAMES, nb: (await redis.smembers('lgbn')).length, mem, tn: await tnSync() }; };
+// ================= TOURNOI INTER-LIGUES =================
+// Créé par l'opérateur : il choisit les joueurs autorisés, la récompense et la mise maximale. Les joueurs s'affrontent en défis (Social → Défis), toutes ligues confondues :
+// victoire 3 pts, nul 1 pt, uniquement pour un défi entre deux participants dont la mise ne dépasse pas la mise maximale. À la fin (date ou clic opérateur), le 1er gagne la récompense.
+const tnRows = (t) => t.pl.map((n) => ({ n, ...(t.pts[n] || { p: 0, w: 0, d: 0, l: 0 }) })).sort((a, b) => b.p - a.p || b.w - a.w || a.n.localeCompare(b.n));
+const tnRw = (r) => [r.coins ? r.coins + ' 🪙' : '', r.packs ? r.packs + ' sachet' + (r.packs > 1 ? 's' : '') : '', r.card ? 'la carte ' + cn(r.card) : ''].filter(Boolean).join(' + ');
+async function tnEnd(t) {
+  const top = tnRows(t)[0], win = top && top.p > 0 ? top.n : null;
+  t.open = false; t.win = win; t.endedAt = Date.now();
+  for (const n of t.pl) {
+    const v = await redis.get(key(n)); if (!v) continue;
+    if (n === win) { tick(v); const r = t.rw || {}; v.coins += r.coins || 0; v.packs += r.packs || 0; if (r.card) add(v, r.card, 1); note(v, '🏅 Tu gagnes le tournoi « ' + t.name + ' » ! Récompense : ' + tnRw(r)); }
+    else note(v, '🏅 Le tournoi « ' + t.name + ' » est terminé' + (win ? ' : victoire de ' + win + '.' : ' sans vainqueur.'));
+    await redis.set(key(n), v);
+  }
+  await redis.set('tn', t); return t;
+}
+async function tnSync() { const t = await redis.get('tn'); return t && t.open && Date.now() >= t.end ? tnEnd(t) : t; }
+async function tnScore(A, B, w, sa, sb) {
+  const t = await tnSync(); if (!t || !t.open || !t.pl.includes(A.pseudo) || !t.pl.includes(B.pseudo) || Math.max(sa, sb) > t.max) return;
+  const P = (n) => (t.pts[n] ||= { p: 0, w: 0, d: 0, l: 0 });
+  if (w === 0) { for (const n of [A.pseudo, B.pseudo]) { P(n).p += 1; P(n).d++; } }
+  else { const [W, Lo] = w > 0 ? [A, B] : [B, A]; P(W.pseudo).p += 3; P(W.pseudo).w++; P(Lo.pseudo).l++; }
+  await redis.set('tn', t);
+}
+async function tnView(u) { const t = await tnSync(); return t ? { id: t.id, name: t.name, max: t.max, end: t.end, open: t.open, win: t.win || null, rwt: tnRw(t.rw || {}), me: t.pl.includes(u.pseudo), rows: tnRows(t) } : null; }
 async function raceFinish(cur, now) {
   const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], board = raceBoard(list, cur.id);
   const win = board.length && !board[0].bot && board[0].pos > 0 ? board[0] : null;
@@ -1385,6 +1411,42 @@ const handler = async (req, res) => {
         await redis.set(key(u.pseudo), u);
         return ok({ done: true });
       }
+      if (b.action === 'lgmove') { // l'opérateur place un joueur dans la ligue (palier) et le groupe de son choix
+        const t = await redis.get(key(String(b.pseudo || '')));
+        if (!t || t.bot) return fail('Joueur introuvable');
+        const nt = int(b.t, 19), ng = Math.max(1, int(b.g, 50)) - 1, c = await lgSync(), L = lgSyncUser(t, c), reg = (await redis.get('lgg')) || { groups: {}, pool: [] }, K = (a, g2) => a + ':' + g2;
+        if (L.g === ng && L.t === nt) return ok({ done: true });
+        const G0 = reg.groups[K(nt, ng)]; if (G0 && G0.r >= LG_SIZE) return fail('Ce groupe a déjà ' + LG_SIZE + ' joueurs');
+        const oldT = L.t, oldG = L.g, O = oldG >= 0 ? reg.groups[K(oldT, oldG)] : null; if (O) O.r = Math.max(0, O.r - 1);
+        const G = (reg.groups[K(nt, ng)] ||= { r: 0, b: [] });
+        if (G.b.length && G.r + G.b.length >= LG_SIZE) { const nm = G.b.pop(), bb = await redis.get(key(nm)); if (bb) { bb.lg = null; await redis.set(key(nm), bb); reg.pool.push(nm); } }
+        G.r++; L.t = nt; L.g = ng;
+        await lgFill(nt, ng, reg, c); if (O && O.r > 0) await lgFill(oldT, oldG, reg, c);
+        note(t, '🏆 Le staff t’a placé en ' + LG_NAMES[nt] + ' · groupe ' + (ng + 1) + '.');
+        await redis.set('lgg', reg); await redis.set(key(t.pseudo), t); return ok({ done: true });
+      }
+      if (['tnnew', 'tnplayers', 'tnend', 'tncancel'].includes(b.action)) { // tournoi inter-ligues
+        const t = await tnSync(), names = async () => { const out = []; for (const n of [].concat(b.players || []).map(String)) { const v = await redis.get(key(n)); if (v && !v.bot && !out.includes(v.pseudo)) out.push(v.pseudo); } return out; };
+        const tell = async (arr, text) => { for (const n of arr) { const v = await redis.get(key(n)); if (v) { note(v, text); await redis.set(key(n), v); } } };
+        if (b.action === 'tnnew') {
+          if (t && t.open) return fail('Un tournoi est déjà en cours : termine-le ou annule-le d’abord');
+          const name = String(b.name || '').trim().slice(0, 40); if (name.length < 2) return fail('Nom du tournoi trop court');
+          const card = String(b.card || '').trim(), rw = { coins: int(b.coins, 1e9), packs: int(b.packs, 1000), card: card || null };
+          if (card && !rarOf(cat, card)) return fail('Carte inconnue');
+          if (!rw.coins && !rw.packs && !rw.card) return fail('Ajoute une récompense (coins, sachets ou carte)');
+          const max = int(b.max, 1e9); if (!max) return fail('Mise maximale invalide');
+          const pl = await names(); if (pl.length < 2) return fail('Choisis au moins 2 joueurs');
+          const nt = { id: Date.now(), name, rw, max, end: Date.now() + (int(b.days, 60) || 7) * DAY, open: true, pl, pts: Object.fromEntries(pl.map((n) => [n, { p: 0, w: 0, d: 0, l: 0 }])) };
+          await redis.set('tn', nt); await tell(pl, '🏅 Tu es invité au tournoi « ' + name + ' » ! Récompense : ' + tnRw(rw) + ' · mise max ' + max + ' 🪙. Affronte les autres participants en défi (Social → Défis).');
+        } else if (!t || !t.open) return fail('Aucun tournoi en cours');
+        else if (b.action === 'tnplayers') {
+          const pl = await names(); if (pl.length < 2) return fail('Choisis au moins 2 joueurs');
+          const added = pl.filter((n) => !t.pl.includes(n)); t.pl = pl; for (const n of pl) t.pts[n] ||= { p: 0, w: 0, d: 0, l: 0 };
+          await redis.set('tn', t); await tell(added, '🏅 Tu es invité au tournoi « ' + t.name + ' » ! Récompense : ' + tnRw(t.rw) + ' · mise max ' + t.max + ' 🪙.');
+        } else if (b.action === 'tnend') await tnEnd(t);
+        else { await redis.del('tn'); await tell(t.pl, '🏅 Le tournoi « ' + t.name + ' » a été annulé.'); }
+        return ok({ done: true });
+      }
       if (b.action === 'lgpts') {
         const t = await redis.get(key(String(b.pseudo || '')));
         if (!t || t.bot) return fail('Joueur introuvable');
@@ -1679,7 +1741,7 @@ const handler = async (req, res) => {
       lgAdd(u, 10);
       extra = r;
     } else if (b.action === 'lgrank') {
-      extra = { lg: await lgView(u, cat) };
+      extra = { lg: await lgView(u, cat), tn: await tnView(u) };
     } else if (b.action === 'rank') {
       const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
       extra = { rank: list.filter(Boolean).map((v) => {
