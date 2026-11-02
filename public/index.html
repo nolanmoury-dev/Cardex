@@ -804,14 +804,32 @@ const lgNth = (n) => n + (n === 1 ? 'er' : 'e');
 function rankHTML() { return '<div id="lgbox"><div class="box">Chargement…</div></div>'; }
 function lgInit() { api('lgrank', {}).then((j) => { LG = j.lg; lgDraw(); }).catch((e) => msg(e.message)); }
 function lgLeft(ms) { const m = Math.max(0, Math.floor(ms / 60000)), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60); return d ? d + ' j ' + h + ' h' : h ? h + ' h ' + (m % 60) + ' min' : (m % 60) + ' min'; }
-function lgDetail(x) {
-  const ov = overlay('<div class="box" style="max-width:420px;margin:40px auto;color:var(--txt)"><div class="row" style="gap:14px;flex-wrap:nowrap">' + LGBADGE(x.bi, 84) + '<div><h2 style="margin:0">' + esc(x.n) + '</h2><div class="sub">' + esc(LG.names[x.bi]) + ' · ' + x.cards + ' cartes</div></div></div>'
-    + '<div class="row" style="margin:10px 0;justify-content:space-between"><span>♻️ <b>' + x.ren + '</b></span><span style="color:var(--r)">V <b>' + x.v + '</b></span><span>N <b>' + x.nu + '</b></span><span style="color:var(--lo)">D <b>' + x.d + '</b></span></div>'
+const tnOpp = () => { if (!TN) return null; const me = S.pseudo, m = [].concat(...TN.rounds.map((r) => r.ms)).find((y) => y.w == null && y.dl && (y.a === me || y.b === me)); return m ? (m.a === me ? m.b : m.a) : null; };
+function lgDetail(x, fromTn) {
+  const opp = fromTn ? tnOpp() : null, isOpp = !!opp && opp === x.n;
+  let why = ''; if (!S.ch || !S.ch.ok) why = 'Les défis se débloquent à ta première renaissance (♻️)'; else if (!x.unk && x.ren === 0) why = x.n + ' n’a pas encore fait de renaissance : il ne peut pas être défié';
+  const bt = x.n !== S.pseudo && !x.op ? '<button id="lgd" style="width:100%;margin-top:12px"' + (why ? ' disabled' : '') + '>⚔️ ' + (isOpp ? 'Défier ' + esc(x.n) + ' (match du tournoi)' : 'Défier ' + esc(x.n)) + '</button>' + (why ? '<small style="display:block;text-align:center;margin-top:4px;color:var(--dim)">' + esc(why) + '</small>' : '') + (fromTn && !isOpp && !why ? '<small style="display:block;text-align:center;margin-top:4px;color:var(--dim)">Défi normal : il ne compte pas pour le tournoi.</small>' : '') : '';
+  const ov = overlay('<div class="box" style="max-width:420px;margin:40px auto;color:var(--txt)"><div class="row" style="gap:14px;flex-wrap:nowrap">' + (x.unk ? '' : LGBADGE(x.bi, 84)) + '<div><h2 style="margin:0">' + esc(x.n) + '</h2>' + (x.unk ? '' : '<div class="sub">' + esc(LG.names[x.bi]) + ' · ' + x.cards + ' cartes</div>') + '</div></div>'
+    + (x.unk ? '' : '<div class="row" style="margin:10px 0;justify-content:space-between"><span>♻️ <b>' + x.ren + '</b></span><span style="color:var(--r)">V <b>' + x.v + '</b></span><span>N <b>' + x.nu + '</b></span><span style="color:var(--lo)">D <b>' + x.d + '</b></span></div>'
     + '<small>CARTES PAR RARETÉ</small>' + LGR.map(([k, l, c]) => '<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0"><span style="color:' + c + ';font-weight:700">' + l + '</span><b>' + (x.rr[k] || 0) + '</b></div>').join('')
-    + '<small style="display:block;margin-top:10px">VITRINE</small><div class="tr" id="lgv" style="min-height:30px"></div>'
-    + '<button id="lgx" style="width:100%;margin-top:12px">Fermer</button></div>');
-  const vb = ov.querySelector('#lgv'); if (!(x.vit || []).length) vb.innerHTML = '<small>Aucune carte choisie.</small>'; else x.vit.forEach((id) => vb.append(cardEl(id, 1)));
+    + '<small style="display:block;margin-top:10px">VITRINE</small><div class="tr" id="lgv" style="min-height:30px"></div>')
+    + bt
+    + '<button id="lgx" class="g" style="width:100%;margin-top:8px">Fermer</button></div>');
+  const vb = ov.querySelector('#lgv'); if (vb) { if (!(x.vit || []).length) vb.innerHTML = '<small>Aucune carte choisie.</small>'; else x.vit.forEach((id) => vb.append(cardEl(id, 1))); }
   ov.onclick = (e) => { if (e.target === ov || e.target.id === 'lgx') ov.remove(); };
+  const db = ov.querySelector('#lgd'); if (db && !why) db.onclick = () => {
+    ov.remove();
+    if (isOpp) { chForm = { mode: 'war', fmt: 3, to: x.n, stake: Math.max(10, Math.min(100, TN.max)), sel: [], q: '', tn: 1 }; chSub = 't'; }
+    else { chForm = { mode: 'war', fmt: 3, to: x.n, stake: 100, sel: [], q: '' }; chSub = 'c'; }
+    CHD = CHD || { players: [x.n], inc: [], open: [], sent: [], res: [] }; tab = 'rk'; rkSub = 'd'; dmWith = null; playerView();
+  };
+}
+async function tnPlayer(name) { // fiche d'un joueur depuis le tableau du tournoi
+  try {
+    if (!LG) LG = (await api('lgrank', {})).lg;
+    const x = (LG.rows || []).concat(LG.world || []).find((r) => r.n === name) || { n: name, unk: 1 };
+    lgDetail(x, true);
+  } catch (e) { msg(e.message); }
 }
 function lgVit() {
   const sel = new Set((S.vit || []).slice(0, 3)), ids = Object.keys(S.cards || {}).filter((id) => RAR[id]);
@@ -857,20 +875,42 @@ const chLeft = (t) => { const h = Math.max(0, Math.round((t - Date.now()) / 36e5
 const resOf = (h, me) => h.w * (me === h.a ? 1 : -1);
 const resTxt = (h, me) => { const m = resOf(h, me), war = h.mode === 'war', ms = me === h.a ? h.sa : h.sb; return m === 0 ? 'égalité' : m > 0 ? 'victoire' + (war ? ' +' + h.pot + ' 🪙' + (h.got ? ' + ' + cname(h.got) : '') : '') : 'défaite' + (war ? ' −' + ms + ' 🪙' + (h.got ? ' − ' + cname(h.got) : '') : ''); };
 function chPills() { return '<div class="pills" style="margin-bottom:8px">' + [['c', '⚔️ Mes défis'], ['t', '🏅 Tournoi']].map(([k, l]) => '<button class="pill' + (chSub === k ? ' on' : '') + '" data-cs="' + k + '">' + l + '</button>').join('') + '</div>'; }
-function tnInit() { clearInterval(chTk); const load = async () => { try { const j = await api('tnget', {}); TN = j.tn || null; tnDraw(); } catch (e) { msg(e.message); } }; load(); chTk = setInterval(() => { if (!$('#tnb')) return clearInterval(chTk); load(); }, 30000); }
+function tnInit() {
+  clearInterval(chTk);
+  const load = async () => { try { const j = await api('tnget', {}); TN = j.tn || null; if (S.ch && S.ch.ok) { const c = await api('chlist', { pl: 1 }); setS(c.state); CHD = c; } tnDraw(); } catch (e) { msg(e.message); } };
+  load(); chTk = setInterval(() => { if (!$('#tnb')) return clearInterval(chTk); if (!chForm && !document.querySelector('.ov')) load(); }, 20000);
+}
 function tnDraw() {
   const el = $('#tnb'); if (!el) return;
+  if (chForm && chForm.tn) return chFormDraw(el);
   if (!TN) { el.innerHTML = '<div class="box">Aucun tournoi pour le moment.</div>'; return; }
   const me = S.pseudo, mine = [].concat(...TN.rounds.map((r) => r.ms)).find((m) => m.w == null && m.dl && (m.a === me || m.b === me));
-  const opp = mine ? (mine.a === me ? mine.b : mine.a) : null;
-  const cell = (p, m) => { const cls = p === false || p == null ? 'n' : m.w == null ? '' : m.w === p ? 'w' : 'l'; return '<div class="tp ' + cls + (p === me ? ' me' : '') + '">' + (p === false ? 'Qualifié d’office' : p == null ? '—' : (TN.bots || []).includes(p) ? '🤖 ' + esc(p) : p === me ? '<b>' + esc(p) + '</b>' : esc(p)) + '</div>'; };
+  const opp = mine ? (mine.a === me ? mine.b : mine.a) : null, d = CHD || { inc: [], open: [], sent: [], res: [] };
+  const inc = opp && d.inc.concat(d.open).find((x) => x.from === opp), sent = opp && d.sent.find((x) => x.to === opp);
+  const last = opp && d.res.find((h) => (h.a === me && h.b === opp) || (h.a === opp && h.b === me));
+  const cell = (p, m) => { const cls = p === false || p == null ? 'n' : m.w == null ? '' : m.w === p ? 'w' : 'l'; return '<div class="tp ' + cls + (p === me ? ' me' : '') + '">' + (p === false ? 'Qualifié d’office' : p == null ? '—' : '<span data-tp="' + esc(p) + '" style="cursor:pointer;text-decoration:underline dotted">' + ((TN.bots || []).includes(p) ? '🤖 ' + esc(p) : p === me ? '<b>' + esc(p) + '</b>' : esc(p)) + '</span>') + '</div>'; };
+  let act = '';
+  if (mine) {
+    act = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)"><div>⚔️ Ton match : <b>' + esc(opp) + '</b> · ⏳ ' + lgLeft(mine.dl - Date.now()) + '</div>';
+    if (!S.ch || !S.ch.ok) act += '<small>🔒 Les défis se débloquent à ta première renaissance : ton match sera tiré au sort à la fin du délai.</small>';
+    else if (inc) act += '<div class="row" style="margin-top:6px;justify-content:space-between"><span>📥 ' + esc(opp) + ' t’a défié · ' + fmtL(inc) + ' · mise ' + inc.s + ' 🪙' + (inc.s > TN.max ? '<br><small style="color:var(--lo)">⚠️ Mise trop haute pour le tournoi (max ' + TN.max + ' 🪙) : ce combat ne compterait pas. Refuse-le et demande un défi plus bas.</small>' : '') + '</span><span>' + (inc.s > TN.max ? '' : '<button data-ta="' + inc.id + '">⚔️ Accepter et combattre</button> ') + '<button class="g" data-td="' + inc.id + '">Refuser</button></span></div>';
+    else if (sent) act += '<div class="row" style="margin-top:6px;justify-content:space-between"><span>📤 Défi envoyé à ' + esc(opp) + ' · en attente de sa réponse (expire dans ' + chLeft(sent.exp) + ')</span><button class="g" data-tc="' + sent.id + '">Annuler</button></div>';
+    else act += '<div class="row" style="margin-top:6px"><button id="tnp">⚔️ Défier ' + esc(opp) + '</button><small>Mise de ' + TN.max + ' 🪙 maximum pour que le match compte.</small></div>';
+    if (last) act += '<div class="row" style="margin-top:6px"><button class="g" id="tnr">▶ Revoir le dernier combat contre ' + esc(opp) + '</button></div>';
+    act += '</div>';
+  }
   el.innerHTML = '<div class="box"><small>' + (TN.open ? 'TOURNOI INTER-LIGUES' : 'TOURNOI TERMINÉ') + '</small><h2 style="margin:0">🏅 ' + esc(TN.name) + '</h2><div class="sub">🎁 Récompense : <b>' + esc(TN.rwt) + '</b></div><div class="sub">Mise maximale : <b>' + TN.max + ' 🪙</b> par défi</div>'
     + (TN.win ? '<div style="color:var(--or);font-weight:700">🏆 Vainqueur : ' + esc(TN.win) + '</div>' : '')
-    + '<div class="sub">' + (TN.me ? '✅ Tu participes' : '🔒 Tu ne participes pas (le staff choisit les joueurs)') + '</div>'
-    + (mine ? '<div class="row" style="margin-top:8px;justify-content:space-between"><span>⚔️ Ton match : <b>' + esc(opp) + '</b> · ⏳ ' + lgLeft(mine.dl - Date.now()) + '</span><button id="tnp">Jouer ce match</button></div>' : '') + '</div>'
+    + '<div class="sub">' + (TN.me ? '✅ Tu participes' : '🔒 Tu ne participes pas (le staff choisit les joueurs)') + '</div>' + act + '</div>'
     + '<div class="box"><div class="tb">' + TN.rounds.map((rd) => '<div class="tcol"><h4>' + esc(rd.n) + '</h4>' + rd.ms.map((m) => '<div class="tc"><div class="tm">' + cell(m.a, m) + cell(m.b, m) + (m.w == null && m.dl ? '<small>⏳ ' + lgLeft(m.dl - Date.now()) + '</small>' : m.bot ? '<small>🤖 joué par les bots</small>' : m.rnd ? '<small>🎲 tirage au sort</small>' : '') + '</div></div>').join('') + '</div>').join('') + '</div></div>'
-    + '<small>Chaque match s’ouvre quand ses deux joueurs sont connus : vous avez 24 h pour le jouer en défi (Social → Défis), avec une mise de ' + TN.max + ' 🪙 maximum. Le gagnant passe au tour suivant ; en cas d’égalité, rejouez ; sans match joué au bout de 24 h, le gagnant est tiré au sort. Les bots (🤖) peuvent refuser un défi : leur match est alors tiré au sort selon leur niveau.</small>';
-  const pb = $('#tnp'); if (pb) pb.onclick = () => { if (!S.ch || !S.ch.ok) return msg('Les défis se débloquent à ta première renaissance (♻️)'); chForm = { mode: 'war', fmt: 3, to: opp, stake: Math.max(10, Math.min(100, TN.max)), sel: [], q: '' }; CHD = CHD || { players: [opp], inc: [], open: [], sent: [], res: [] }; chSub = 'c'; playerView(); };
+    + '<small>Chaque match s’ouvre quand ses deux joueurs sont connus : vous avez 24 h pour le jouer ici même (un joueur défie, l’autre accepte), avec une mise de ' + TN.max + ' 🪙 maximum. Le gagnant passe au tour suivant ; en cas d’égalité, rejouez ; sans match joué au bout de 24 h, le gagnant est tiré au sort. Les bots (🤖) peuvent refuser un défi : leur match est alors tiré au sort selon leur niveau.</small>';
+  const go = (fn) => run(async () => { await fn(); });
+  const pb = $('#tnp'); if (pb) pb.onclick = () => { chForm = { mode: 'war', fmt: 3, to: opp, stake: Math.max(10, Math.min(100, TN.max)), sel: [], q: '', tn: 1 }; tnDraw(); };
+  el.querySelectorAll('[data-tp]').forEach((b) => (b.onclick = () => tnPlayer(b.dataset.tp)));
+  el.querySelectorAll('[data-ta]').forEach((b) => (b.onclick = () => { const x = inc; chForm = { acc: x, mode: x.mode, fmt: x.fmt, to: x.from, stake: Math.max(10, Math.min(TN.max, x.s)), sel: [], q: '', tn: 1 }; tnDraw(); }));
+  el.querySelectorAll('[data-td]').forEach((b) => (b.onclick = () => go(async () => { setS((await api('chdec', { id: b.dataset.td })).state); tnInit(); })));
+  el.querySelectorAll('[data-tc]').forEach((b) => (b.onclick = () => go(async () => { setS((await api('chcancel', { id: b.dataset.tc })).state); tnInit(); msg('Défi annulé : mise et cartes rendues', true); })));
+  const rb = $('#tnr'); if (rb) rb.onclick = () => replay(last);
 }
 function chHTML() {
   if (chSub === 't') return chPills() + '<div id="tnb">Chargement…</div>';
@@ -906,15 +946,16 @@ function chDraw() {
   el.querySelectorAll('[data-cv]').forEach((b) => (b.onclick = () => { const h = d.res[+b.dataset.cv]; chForm = { mode: h.mode, fmt: h.fmt, to: h.a === me ? h.b : h.a, stake: h.a === me ? h.sa : h.sb, sel: [], q: '' }; chDraw(); }));
 }
 function chFormDraw(el) {
-  const f = chForm, acc = f.acc, war = () => f.mode === 'war';
+  const f = chForm, acc = f.acc, war = () => f.mode === 'war', cap = f.tn && TN ? TN.max : 5000;
   const pts = () => f.sel.reduce((a, s) => a + COSTC[RAR[pk(s)[0]]], 0), allow = () => Math.floor((+f.stake || 0) / 10);
   const pl = [...new Set([f.to].concat((CHD && CHD.players) || []).filter(Boolean))];
   el.innerHTML = '<div class="box"><div class="row"><button class="g" id="cfb">← Retour</button><b>' + (acc ? 'Relever le défi de ' + esc(acc.from) : 'Lancer un défi') + '</b></div>'
     + '<div class="row" style="margin:10px 0"><label>Mode <select id="cfm"' + (acc ? ' disabled' : '') + '><option value="war">⚔️ Guerre (mise + 1 carte)</option><option value="fun">🤝 Amical (rien en jeu)</option></select></label>'
     + '<label>Format <select id="cff"' + (acc ? ' disabled' : '') + '><option value="3">3 contre 3</option><option value="2">2 contre 2</option><option value="1">1 contre 1</option></select></label>'
-    + (acc ? '' : '<label>Adversaire <select id="cft"><option value="">🌍 Défi ouvert (n\'importe qui)</option>' + pl.map((n) => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('') + '</select></label>')
-    + '<label>' + (war() ? 'Mise (coins, 10 à 5000)' : 'Mise virtuelle (fixe la force)') + ' <input id="cfs" type="number" min="10" max="5000" value="' + f.stake + '" style="width:120px"></label></div>'
+    + (acc ? '' : '<label>Adversaire <select id="cft"' + (f.tn ? ' disabled' : '') + '><option value="">🌍 Défi ouvert (n\'importe qui)</option>' + pl.map((n) => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('') + '</select></label>')
+    + '<label>' + (war() ? 'Mise (coins, 10 à ' + cap + ')' : 'Mise virtuelle (fixe la force)') + ' <input id="cfs" type="number" min="10" max="' + cap + '" value="' + f.stake + '" style="width:120px"></label></div>'
     + (acc ? '<p><small>Mise de ' + esc(acc.from) + ' : ' + acc.s + ' 🪙. Tu choisis ta propre mise.</small></p>' : '')
+    + (f.tn ? '<p><small>🏅 Défi de tournoi : mise de ' + cap + ' 🪙 maximum pour que le match compte.</small></p>' : '')
     + '<p id="cfp"></p><div id="cfsel" class="row" style="margin-bottom:8px"></div>'
     + '<input id="cfq" placeholder="🔎 Chercher : nom, ou un nombre (vie, guerre ou batterie)" style="width:100%;margin-bottom:8px" value="' + esc(f.q || '') + '"><div class="row" style="margin-bottom:8px;gap:8px"><label>❤️ Vie <input id="cfh" type="number" min="0" style="width:80px" value="' + esc(f.qh || '') + '"></label><label>⚔️ Guerre <input id="cfa" type="number" min="0" style="width:80px" value="' + esc(f.qa || '') + '"></label><label>🔋 Batterie <input id="cfbt" type="number" min="0" style="width:80px" value="' + esc(f.qb || '') + '"></label></div><div class="grid" id="cfg"></div>'
     + '<div class="row" style="margin-top:12px"><button id="cfok">' + (acc ? '⚔️ Accepter et combattre' : '🚀 Envoyer le défi') + '</button></div><div class="err" id="cfe"></div></div>';
@@ -950,7 +991,7 @@ function chFormDraw(el) {
     if (ids.length > 60) g.insertAdjacentHTML('beforeend', '<small>' + (ids.length - 60) + ' autres : affine la recherche.</small>');
   };
   info(); grid();
-  $('#cfb').onclick = () => { chForm = null; chDraw(); };
+  $('#cfb').onclick = () => { chForm = null; if (chSub === 't') tnDraw(); else chDraw(); };
   $('#cfm').onchange = (e) => { f.mode = e.target.value; if (f.mode === 'war') f.sel = f.sel.filter((s) => !S.fav.includes(pk(s)[0])); chFormDraw(el); };
   $('#cff').onchange = (e) => { f.fmt = +e.target.value; f.sel = f.sel.slice(0, f.fmt); chFormDraw(el); };
   if ($('#cft')) $('#cft').onchange = (e) => (f.to = e.target.value);
@@ -963,6 +1004,7 @@ function chFormDraw(el) {
     const er = $('#cfe'); er.textContent = '';
     try {
       if (f.sel.length !== f.fmt) throw new Error('Choisis ' + f.fmt + ' carte' + (f.fmt > 1 ? 's' : ''));
+      if (f.tn && +f.stake > cap) throw new Error('Mise trop haute pour le tournoi : ' + cap + ' 🪙 maximum');
       if (acc) { const j = await api('chacc', { id: acc.id, stake: f.stake, cards: f.sel }); setS(j.state); chForm = null; playerView(); replay(j.res); }
       else { const j = await api('chnew', { mode: f.mode, fmt: f.fmt, to: f.to, stake: f.stake, cards: f.sel }); setS(j.state); chForm = null; playerView(); if (j.res) replay(j.res); else if (j.refused) msg(j.refused + ' a refusé ton défi : tes coins et tes cartes te sont rendus.'); else msg('Défi envoyé ! Tes coins et tes cartes sont bloqués jusqu\'au résultat.', true); }
     } catch (e) { er.textContent = e.message; }
@@ -1463,6 +1505,11 @@ function playerView() {
 // # `v` doit être unique et change à chaque mise à jour (ex. la date AAAA-MM-JJ, avec -2, -3… s'il y en a plusieurs le même jour).
 // =====================================================================================================================
 const UPDATES = [
+  { v: '2026-11-02-2', title: 'Tournoi : fiches et défis', items: [
+    '👆 Dans le tableau du tournoi, touche un pseudo pour voir sa fiche : cartes par rareté, vitrine, victoires.',
+    '⚔️ Le bouton « Défier » est aussi dans cette fiche. Sur ton adversaire de match, le défi compte pour le tournoi (mise plafonnée) ; sur un autre joueur, c’est un défi normal.',
+    '🔒 Si un défi est impossible (pas encore de renaissance, par exemple), le bouton est grisé et la raison est écrite dessous.',
+  ] },
   { v: '2026-11-02', title: 'Ligues et saisons', items: [
     '🏆 Nouveau : les ligues ! 20 paliers, de Bronze à Maître II, avec des groupes de 18 joueurs. Tout le monde commence en Bronze.',
     '📅 Une saison dure une semaine (jusqu’à dimanche 23 h 59). Points de saison : renaissance 10, course gagnée 5, défi gagné 2, nul 1. Les 3 premiers montent, les 3 derniers descendent, et ceux qui n’ont rien fait de la semaine descendent aussi.',
