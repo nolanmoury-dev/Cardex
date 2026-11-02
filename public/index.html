@@ -796,11 +796,11 @@ function jeuHTML() {
 let rkN = 10;
 // ================= LIGUES =================
 const LGBADGE = (i, w) => '<span class="lgb" role="img" aria-label="' + esc((LG && LG.names[i]) || '') + '" style="width:' + w + 'px;height:' + Math.round(w * 0.867) + 'px;background-position:' + (i % 5) * 25 + '% ' + Math.floor(i / 5) * 33.3333 + '%"></span>';
-let LG = null, lgV = 'l';
+let LG = null, TN = null, lgV = 'l';
 const LGR = [['u', 'Unique', 'var(--u)'], ['s', 'Céleste', 'var(--s)'], ['m', 'Mythique', 'var(--m)'], ['l', 'Légendaire', 'var(--l)'], ['e', 'Épique', 'var(--e)'], ['r', 'Rare', 'var(--r)'], ['c', 'Commune', 'var(--c)']];
 const lgNth = (n) => n + (n === 1 ? 'er' : 'e');
 function rankHTML() { return '<div id="lgbox"><div class="box">Chargement…</div></div>'; }
-function lgInit() { api('lgrank', {}).then((j) => { LG = j.lg; lgDraw(); }).catch((e) => msg(e.message)); }
+function lgInit() { api('lgrank', {}).then((j) => { LG = j.lg; TN = j.tn || null; if (!TN && lgV === 't') lgV = 'l'; lgDraw(); }).catch((e) => msg(e.message)); }
 function lgLeft(ms) { const m = Math.max(0, Math.floor(ms / 60000)), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60); return d ? d + ' j ' + h + ' h' : h ? h + ' h ' + (m % 60) + ' min' : (m % 60) + ' min'; }
 function lgDetail(x) {
   const ov = overlay('<div class="box" style="max-width:420px;margin:40px auto;color:var(--txt)"><div class="row" style="gap:14px;flex-wrap:nowrap">' + LGBADGE(x.bi, 84) + '<div><h2 style="margin:0">' + esc(x.n) + '</h2><div class="sub">' + esc(LG.names[x.bi]) + ' · ' + x.cards + ' cartes</div></div></div>'
@@ -812,34 +812,40 @@ function lgDetail(x) {
   ov.onclick = (e) => { if (e.target === ov || e.target.id === 'lgx') ov.remove(); };
 }
 function lgVit() {
-  const sel = new Set((LG.vit || []).slice(0, 3)), ids = Object.keys(S.cards || {}).filter((id) => RAR[id]);
+  const sel = new Set((S.vit || []).slice(0, 3)), ids = Object.keys(S.cards || {}).filter((id) => RAR[id]);
   const ov = overlay('<div class="box" style="max-width:520px;margin:30px auto;color:var(--txt)"><h2>⭐ Ma vitrine</h2><small>Choisis jusqu’à 3 cartes : les autres joueurs les voient quand ils touchent ton nom dans le classement.</small><div class="tr" id="lgp" style="margin:10px 0;max-height:55vh;overflow:auto"></div><button id="lgs" style="width:100%">Enregistrer</button> <button id="lgc" class="g" style="width:100%;margin-top:6px">Annuler</button><div class="err" id="lge"></div></div>');
   const g = ov.querySelector('#lgp'), mark = () => g.querySelectorAll('.card').forEach((c) => { c.style.outline = sel.has(c.dataset.id) ? '3px solid var(--or)' : ''; });
   ids.forEach((id) => { const c = cardEl(id, 1); c.dataset.id = id; c.style.cursor = 'pointer'; c.onclick = () => { if (sel.has(id)) sel.delete(id); else if (sel.size < 3) sel.add(id); mark(); }; g.append(c); }); mark();
   ov.querySelector('#lgc').onclick = () => ov.remove();
-  ov.querySelector('#lgs').onclick = async () => { try { await api('vitset', { cards: [...sel] }); ov.remove(); lgInit(); msg('Vitrine enregistrée'); } catch (e) { ov.querySelector('#lge').textContent = e.message; } };
+  ov.querySelector('#lgs').onclick = async () => { try { setS((await api('vitset', { cards: [...sel] })).state); ov.remove(); playerView(); msg('Vitrine enregistrée'); } catch (e) { ov.querySelector('#lge').textContent = e.message; } };
 }
 function lgDraw() {
   const el = $('#lgbox'); if (!el || !LG) return;
-  const tabs = '<div class="pills">' + [['l', '🏆 Ma ligue'], ['w', '🌍 Monde']].map(([k, l]) => '<button class="pill' + (lgV === k ? ' on' : '') + '" data-lv="' + k + '">' + l + '</button>').join('') + '</div>';
+  const tabs = '<div class="pills">' + [['l', '🏆 Ma ligue'], ['w', '🌍 Monde'], ...(TN ? [['t', '🏅 Tournoi']] : [])].map(([k, l]) => '<button class="pill' + (lgV === k ? ' on' : '') + '" data-lv="' + k + '">' + l + '</button>').join('') + '</div>';
   let body;
   if (lgV === 'l') {
     body = '<div class="box" style="display:flex;align-items:center;gap:14px">' + LGBADGE(LG.t, 96) + '<div><small>TA LIGUE</small><h2 style="margin:0">' + esc(LG.names[LG.t]) + '</h2><div class="sub">Groupe ' + (LG.g + 1) + ' · ' + LG.size + ' joueurs</div><div style="color:var(--or);font-weight:700" id="lgend"></div><div class="sub">Tes points de saison : <b>' + LG.pts + '</b></div></div></div>'
       + '<div class="box" style="padding:8px"><table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th>♻️</th><th style="color:var(--r)">V</th><th>N</th><th style="color:var(--lo)">D</th><th style="color:var(--or)">Pts</th><th>🪙</th></tr>'
       + LG.rows.map((x, i) => '<tr data-lr="' + i + '" class="' + (x.n === S.pseudo ? 'me ' : '') + (x.z ? 'lgz-' + x.z : '') + '"><td>' + (i + 1) + '</td><td class="pn">' + esc(x.n) + pfImg(x.pf) + '</td><td>' + x.ren + '</td><td style="color:var(--r)">' + x.v + '</td><td>' + x.nu + '</td><td style="color:var(--lo)">' + x.d + '</td><td style="color:var(--or);font-weight:700">' + x.pts + '</td><td>' + x.co + '</td></tr>').join('') + '</table></div>'
       + '<small>🟢 Les 3 premiers montent · 🔴 les 3 derniers descendent, et ceux qui n’ont rien fait de la semaine aussi. Classé par points de saison : renaissance 10 · course gagnée 5 · défi gagné 2 · nul 1. Les points repartent à zéro chaque dimanche à 23 h 59. V, N, D = victoires, nuls, défaites aux défis.</small>';
+  } else if (lgV === 't' && TN) {
+    body = '<div class="box"><small>' + (TN.open ? 'TOURNOI INTER-LIGUES' : 'TOURNOI TERMINÉ') + '</small><h2 style="margin:0">🏅 ' + esc(TN.name) + '</h2><div class="sub">🎁 Récompense : <b>' + esc(TN.rwt) + '</b></div><div class="sub">Mise maximale : <b>' + TN.max + ' 🪙</b> par défi</div>'
+      + (TN.open ? '<div style="color:var(--or);font-weight:700" id="lgend"></div>' : TN.win ? '<div style="color:var(--or);font-weight:700">🏆 Vainqueur : ' + esc(TN.win) + '</div>' : '<div class="sub">Aucun vainqueur</div>')
+      + '<div class="sub">' + (TN.me ? '✅ Tu participes' : '🔒 Tu ne participes pas (le staff choisit les joueurs)') + '</div></div>'
+      + '<div class="box" style="padding:8px"><table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th style="color:var(--r)">V</th><th>N</th><th style="color:var(--lo)">D</th><th style="color:var(--or)">Pts</th></tr>'
+      + TN.rows.map((x, i) => '<tr class="' + (x.n === S.pseudo ? 'me' : '') + '"><td>' + (i + 1) + '</td><td class="pn">' + esc(x.n) + '</td><td style="color:var(--r)">' + x.w + '</td><td>' + x.d + '</td><td style="color:var(--lo)">' + x.l + '</td><td style="color:var(--or);font-weight:700">' + x.p + '</td></tr>').join('') + '</table></div>'
+      + '<small>Joue des défis (Social → Défis) contre les autres participants, toutes ligues confondues : victoire 3 pts, nul 1 pt. Seuls comptent les défis dont la mise ne dépasse pas ' + TN.max + ' 🪙. Le meilleur à la fin gagne la récompense.</small>';
   } else {
     body = '<div class="box" style="padding:8px"><table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th>Cartes</th></tr>'
       + LG.world.map((x, i) => '<tr data-lr="' + i + '" class="' + (x.n === S.pseudo ? 'me' : '') + '"><td>' + (i + 1) + '</td><td class="pn">' + LGBADGE(x.bi, 30) + ' ' + esc(x.n) + pfImg(x.pf) + '</td><td><b>' + x.cards + '</b></td></tr>').join('') + '</table></div>'
       + '<small>Classé par nombre de cartes possédées, toutes ligues confondues. Les cartes parties dans les renaissances comptent aussi.</small>';
   }
   const place = '<div class="box" style="display:flex;align-items:center;gap:10px;margin-top:8px">' + LGBADGE(LG.t, 34) + '<span style="flex:1">Ta place dans le classement monde</span><b style="font-size:18px">' + (LG.place ? lgNth(LG.place) : '–') + '</b><small>/ ' + LG.total + '</small></div>';
-  el.innerHTML = tabs + body + place;
-  const vtb = document.createElement('button'); vtb.textContent = '⭐ Choisir mes 3 cartes de vitrine'; vtb.style.marginTop = '8px'; vtb.onclick = lgVit; el.append(vtb);
+  el.innerHTML = tabs + body + (lgV === 't' ? '' : place);
   el.querySelectorAll('[data-lv]').forEach((b) => (b.onclick = () => { lgV = b.dataset.lv; lgDraw(); }));
   el.querySelectorAll('[data-lr]').forEach((r) => (r.onclick = () => lgDetail((lgV === 'l' ? LG.rows : LG.world)[+r.dataset.lr])));
   clearInterval(window.lgT);
-  const upd = () => { const e = $('#lgend'); if (!e) return clearInterval(window.lgT); e.textContent = 'Fin de saison dans ' + lgLeft(LG.end - Date.now()); };
+  const upd = () => { const e = $('#lgend'); if (!e) return clearInterval(window.lgT); e.textContent = (lgV === 't' && TN ? 'Fin du tournoi dans ' + lgLeft(TN.end - Date.now()) : 'Fin de saison dans ' + lgLeft(LG.end - Date.now())); };
   upd(); window.lgT = setInterval(upd, 30000);
 }
 let rkSub = 'r', dmWith = null, dmNew = false, dmTh = [], dmPl = null;
@@ -1180,6 +1186,7 @@ function pfpBox() {
 function setHTML() {
   const th = document.documentElement.dataset.th;
   return (pushOn || S.maint || S.ban ? '' : '<div class="box"><h2>🔔 Notifications</h2><p>Messages du staff, nouveaux objets et nouvelles cartes au Marché, même app fermée. <b>Sur iPhone</b> : ajoute d\'abord le site à l\'écran d\'accueil (Partager → « Sur l\'écran d\'accueil »), ouvre-le depuis l\'icône, puis appuie ici.</p><button id="pn2">Activer</button></div>') +
+    (S.maint || S.ban ? '' : '<div class="box"><h2>⭐ Ma vitrine</h2><p><small>Choisis jusqu’à 3 cartes : les autres joueurs les voient quand ils touchent ton nom dans le classement.</small></p><div class="tr" id="vtp" style="min-height:30px">' + ((S.vit || []).length ? '' : '<small>Aucune carte choisie.</small>') + '</div><button type="button" id="vtb" style="margin-top:8px">Choisir mes 3 cartes</button></div>') +
     '<div class="box"><h2>Apparence</h2><select id="tsel"><option value="dark"' + (th === 'dark' ? ' selected' : '') + '>Sombre</option><option value="light"' + (th === 'light' ? ' selected' : '') + '>Clair</option></select></div>' +
     '<div class="box"><h2>🔊 Son des notifications</h2><label class="row" style="gap:8px"><input type="checkbox" id="sndt"' + (sndOn() ? ' checked' : '') + '> Jouer un son à chaque notification</label><p><small>Le son joue quand l’app est ouverte. App fermée, ton téléphone utilise son propre son.</small></p></div>' +
     (S.maint || S.ban ? '' : subHTML()) +
@@ -1426,6 +1433,7 @@ function playerView() {
     if ($('#subcs')) $('#subcs').onclick = () => subCol($('#subcol').value);
     if ($('#subcr')) $('#subcr').onclick = () => subCol('');
     if ($('#fcode')) $('#fcode').onsubmit = (e) => { e.preventDefault(); run(async () => { const j = await api('redeem', { code: $('#cdi').value }); setS(j.state); playerView(); msg('🎟️ Code validé : tu as reçu ' + j.redeemed, true); }); };
+    if ($('#vtp')) { (S.vit || []).forEach((id) => $('#vtp').append(cardEl(id, 1))); $('#vtb').onclick = lgVit; }
     $('#sndt').onchange = (e) => { localStorage.nsnd = e.target.checked ? '1' : '0'; if (e.target.checked) playSnd('account'); };
     $('#tsel').onchange = (e) => run(async () => { setTheme(e.target.value); await api('settings', { theme: e.target.value }); });
     if ($('#frn')) $('#frn').onsubmit = (e) => { e.preventDefault(); if (!$('#rn2') || !confirm('Un seul changement gratuit. Continuer ?')) return; run(async () => { setS((await api('rename', { name: $('#rn2').value })).state); playerView(); msg('Pseudo changé', true); }); };
@@ -2244,11 +2252,21 @@ async function qzRes(id) {
 }
 
 function lgOpHTML(users, j) {
+  const mem = (j.lg && j.lg.mem) || [], tn = j.lg && j.lg.tn, rwTxt = (r) => [r.coins ? r.coins + ' 🪙' : '', r.packs ? r.packs + ' sachet(s)' : '', r.card ? 'carte ' + r.card.slice(r.card.indexOf(':') + 1) : ''].filter(Boolean).join(' + '), pls = (sel) => mem.map((m) => '<option value="' + esc(m.n) + '"' + (sel.includes(m.n) ? ' selected' : '') + '>' + esc(m.n) + '</option>').join('');
   const lg = j.lg || { id: 1, end: Date.now(), bots: [], names: [] }, opt = lg.names.map((n, i) => '<option value="' + i + '">' + esc(n) + '</option>').join('');
   return '<div class="box" id="lgop"><h2>🏆 Ligues</h2><p><small>Saison n° ' + lg.id + ' · fin le ' + new Date(lg.end).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) + '. Les places vides des groupes sont remplies automatiquement par des bots (' + (lg.nb || 0) + ' en jeu) : de vrais comptes qui jouent comme des joueurs (achats, défis, courses) sans jamais aller plus vite qu’eux. Ceux que tu crées ici s’ajoutent en plus (dans le premier groupe de leur palier et dans le classement Monde).</small></p>'
     + '<form id="flp" style="display:grid;gap:8px"><b>Donner ou retirer des points de saison</b><select id="lpu" required><option value="">Choisir un joueur</option>' + users.filter((u) => !u.bot).map((u) => '<option value="' + esc(u.pseudo) + '">' + esc(u.pseudo) + '</option>').join('') + '</select><input id="lpn" type="number" step="1" placeholder="Points (négatif pour retirer)" required><button>Valider</button></form>'
     + '<form id="flb" style="display:grid;gap:8px;margin-top:14px"><b>Créer un bot</b><input id="lbn" placeholder="Pseudo (3-20, sans accent)" maxlength="20" required><select id="lbt">' + opt + '</select><div class="grid2"><input id="lbr" type="number" min="0" placeholder="Renaissances"><input id="lbc" type="number" min="0" placeholder="Cartes"><input id="lbv" type="number" min="0" placeholder="Victoires"><input id="lbu" type="number" min="0" placeholder="Nuls"><input id="lbd" type="number" min="0" placeholder="Défaites"><input id="lbp" type="number" min="0" placeholder="Points de saison"></div><input id="lbo" type="number" min="0" placeholder="Pièces"><button>Créer le bot</button></form>'
-    + '<div style="margin-top:12px"><b>Bots créés (' + lg.bots.length + ')</b>' + (lg.bots.length ? lg.bots.map((x) => '<div class="row" style="justify-content:space-between"><span>' + esc(x.n) + ' · ' + esc(lg.names[x.t] || '') + ' · ' + x.cards + ' cartes · ' + x.pts + ' pts</span><button class="g" data-lbd="' + x.id + '">Supprimer</button></div>').join('') : '<p><small>Aucun.</small></p>') + '</div><div class="err" id="elg"></div></div>';
+    + '<div style="margin-top:12px"><b>Bots créés (' + lg.bots.length + ')</b>' + (lg.bots.length ? lg.bots.map((x) => '<div class="row" style="justify-content:space-between"><span>' + esc(x.n) + ' · ' + esc(lg.names[x.t] || '') + ' · ' + x.cards + ' cartes · ' + x.pts + ' pts</span><button class="g" data-lbd="' + x.id + '">Supprimer</button></div>').join('') : '<p><small>Aucun.</small></p>') + '</div>'
+    + '<form id="flm" style="display:grid;gap:8px;margin-top:14px"><b>Placer un joueur dans une ligue et un groupe</b><select id="lmu" required><option value="">Choisir un joueur</option>' + mem.map((m) => '<option value="' + esc(m.n) + '">' + esc(m.n) + ' — ' + esc(lg.names[m.t] || '') + (m.g >= 0 ? ' · groupe ' + (m.g + 1) : '') + '</option>').join('') + '</select><div class="grid2"><select id="lmt">' + opt + '</select><input id="lmg" type="number" min="1" max="50" value="1" placeholder="Groupe n°" required></div><small>Un groupe contient 18 joueurs (les places vides sont remplies par des bots). Les points de saison du joueur sont conservés.</small><button>Placer</button></form>'
+    + '<div style="margin-top:18px"><h2>🏅 Tournoi inter-ligues</h2>' + (tn && tn.open
+      ? '<p><b>' + esc(tn.name) + '</b> · 🎁 ' + esc(rwTxt(tn.rw)) + ' · mise max ' + tn.max + ' 🪙 · fin le ' + new Date(tn.end).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) + '</p>'
+        + tn.pl.map((n) => { const x = tn.pts[n] || { p: 0, w: 0, d: 0, l: 0 }; return '<div class="row" style="justify-content:space-between"><span>' + esc(n) + '</span><small>' + x.p + ' pts · ' + x.w + 'V ' + x.d + 'N ' + x.l + 'D</small></div>'; }).join('')
+        + '<form id="ftp" style="display:grid;gap:8px;margin-top:10px"><b>Joueurs autorisés</b><select id="tnp" multiple size="8">' + pls(tn.pl) + '</select><small>Ctrl ou Cmd pour en choisir plusieurs.</small><button>Mettre à jour les joueurs</button></form>'
+        + '<div class="row" style="margin-top:8px"><button class="g" id="tne" type="button">🏁 Terminer maintenant (le 1er gagne)</button><button class="g" id="tnx" type="button">Annuler sans récompense</button></div>'
+      : (tn ? '<p><small>Dernier tournoi : « ' + esc(tn.name) + ' » terminé · ' + (tn.win ? 'vainqueur : ' + esc(tn.win) : 'aucun vainqueur') + '.</small></p>' : '')
+        + '<form id="ftn" style="display:grid;gap:8px"><b>Créer un tournoi</b><input id="tnn" placeholder="Nom du tournoi" maxlength="40" required><div class="grid2"><input id="tnco" type="number" min="0" placeholder="Récompense : coins"><input id="tnpk" type="number" min="0" placeholder="Récompense : sachets"></div><select id="tnc"></select><select id="tnk"></select><div class="grid2"><input id="tnm" type="number" min="1" placeholder="Mise maximale par défi" required><input id="tnd" type="number" min="1" max="60" value="7" placeholder="Durée (jours)"></div><b>Joueurs autorisés</b><select id="tnp" multiple size="8">' + pls([]) + '</select><small>Ctrl ou Cmd pour en choisir plusieurs. Victoire en défi 3 pts, nul 1 pt (défis entre participants, mise ≤ mise maximale). Le 1er gagne la récompense.</small><button>Lancer le tournoi</button></form>')
+    + '</div><div class="err" id="elg"></div></div>';
 }
 async function opView(m) {
   const j = await api('users'), { users, shop, custom, reports } = j; setCat(j.themes); (j.skinc || []).forEach((d) => (SKC[d.id] = d)); setSkin(j.skin);
@@ -2510,6 +2528,16 @@ async function opView(m) {
   $('#mun').value = mnf.until ? tsParis(mnf.until) : '';
   $('#mcd').value = mnf.code || '';
   $('#muc').onclick = () => { $('#mun').value = ''; };
+  $('#flm').onsubmit = act('elg', () => api('lgmove', { pseudo: $('#lmu').value, t: $('#lmt').value, g: $('#lmg').value }), 'Joueur placé');
+  const selP = () => [...$('#tnp').selectedOptions].map((o) => o.value);
+  if ($('#ftn')) {
+    const fillK = () => { const t = $('#tnc').value; $('#tnk').innerHTML = '<option value="">Aucune carte</option>' + (t ? [...RA].flatMap((r) => (CAT[t][r] || []).map((n) => '<option value="' + esc(t + ':' + n) + '">' + RN[r] + ' — ' + esc(n) + '</option>')).join('') : ''); };
+    $('#tnc').innerHTML = '<option value="">Carte en récompense (facultatif) : collection…</option>' + Object.entries(CAT).map(([t, o]) => '<option value="' + esc(t) + '">' + esc(o.icon + ' ' + o.name) + '</option>').join(''); $('#tnc').onchange = fillK; fillK();
+    $('#ftn').onsubmit = act('elg', () => api('tnnew', { name: $('#tnn').value, coins: $('#tnco').value, packs: $('#tnpk').value, card: $('#tnk').value, max: $('#tnm').value, days: $('#tnd').value, players: selP() }), 'Tournoi lancé');
+  }
+  if ($('#ftp')) $('#ftp').onsubmit = act('elg', () => api('tnplayers', { players: selP() }), 'Joueurs mis à jour');
+  if ($('#tne')) $('#tne').onclick = act('elg', () => api('tnend', {}), 'Tournoi terminé : récompense versée');
+  if ($('#tnx')) $('#tnx').onclick = () => { if (confirm('Annuler ce tournoi sans récompense ?')) act('elg', () => api('tncancel', {}), 'Tournoi annulé')(); };
   $('#flp').onsubmit = act('elg', () => api('lgpts', { pseudo: $('#lpu').value, n: $('#lpn').value }), 'Points de saison mis à jour');
   $('#flb').onsubmit = act('elg', () => api('lgbotadd', { n: $('#lbn').value, t: $('#lbt').value, ren: $('#lbr').value, cards: $('#lbc').value, v: $('#lbv').value, nu: $('#lbu').value, d: $('#lbd').value, pts: $('#lbp').value, co: $('#lbo').value }), 'Bot créé');
   app.querySelectorAll('[data-lbd]').forEach((b) => (b.onclick = act('elg', () => api('lgbotdel', { id: b.dataset.lbd }), 'Bot supprimé')));
