@@ -966,12 +966,12 @@ function lgDraw() {
       + LG.rows.map((x, i) => '<tr data-lr="' + i + '" class="' + (x.n === S.pseudo ? 'me ' : '') + (x.z ? 'lgz-' + x.z : '') + '"><td>' + (i + 1) + '</td><td class="pn">' + esc(x.n) + pfImg(x.pf) + '</td><td>' + x.ren + '</td><td style="color:var(--r)">' + x.v + '</td><td>' + x.nu + '</td><td style="color:var(--lo)">' + x.d + '</td><td style="color:var(--or);font-weight:700">' + x.pts + '</td><td>' + x.co + '</td></tr>').join('') + '</table></div>'
       + '<small>🟢 Les 3 premiers montent · 🔴 les 3 derniers descendent, et ceux qui n’ont rien fait de la semaine aussi. Classé par points de saison : renaissance 10 · course gagnée 5 · défi gagné 2 · nul 1. Les points repartent à zéro chaque dimanche à 23 h 59. V, N, D = victoires, nuls, défaites aux défis.</small>';
   } else {
-    body = '<div class="box" style="padding:8px"><table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th>5 derniers</th><th>Cartes</th><th>Rareté</th></tr>'
-      + LG.world.map((x, i) => '<tr data-lr="' + i + '" class="' + (x.n === S.pseudo ? 'me' : '') + '"><td>' + (i + 1) + '</td><td class="pn">' + LGBADGE(x.bi, 30) + ' ' + esc(x.n) + pfImg(x.pf) + '</td><td>' + lgDots(x.l5) + '</td><td><b>' + x.cards + '</b></td><td style="white-space:nowrap">' + lgRar(x.rr) + '</td></tr>').join('') + '</table></div>'
+    body = '<div class="box" style="padding:8px"><table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th>5 derniers</th><th>♻️</th><th>Cartes</th><th>Rareté</th></tr>'
+      + LG.world.map((x, i) => '<tr data-lr="' + i + '" class="' + (x.n === S.pseudo ? 'me' : '') + '"><td>' + (i + 1) + '</td><td class="pn">' + LGBADGE(x.bi, 30) + ' ' + esc(x.n) + pfImg(x.pf) + '</td><td>' + lgDots(x.l5) + '</td><td>' + x.ren + '</td><td><b>' + x.cards + '</b></td><td style="white-space:nowrap">' + lgRar(x.rr) + '</td></tr>').join('') + '</table></div>'
       + '<small>Rond vert = victoire, gris = nul, rouge = défaite (5 derniers défis, le plus récent à droite). Rareté : mythiques, célestes, légendaires, épiques possédées. Classé par nombre de cartes possédées, toutes ligues confondues. Les cartes parties dans les renaissances comptent aussi.</small>';
   }
-  const place = '<div class="box" style="display:flex;align-items:center;gap:10px;margin-top:8px">' + LGBADGE(LG.t, 34) + '<span style="flex:1">Ta place dans le classement monde</span><b style="font-size:18px">' + (LG.place ? lgNth(LG.place) : '–') + '</b><small>/ ' + LG.total + '</small></div>';
-  el.innerHTML = tabs + body + place;
+  const place = '<div class="box" style="display:flex;align-items:center;gap:10px;margin:8px 0">' + LGBADGE(LG.t, 34) + '<span style="flex:1">Ta place dans le classement monde</span><b style="font-size:18px">' + (LG.place ? lgNth(LG.place) : '–') + '</b><small>/ ' + LG.total + '</small></div>';
+  el.innerHTML = tabs + place + body;
   el.querySelectorAll('[data-lv]').forEach((b) => (b.onclick = () => { lgV = b.dataset.lv; lgDraw(); }));
   el.querySelectorAll('[data-lr]').forEach((r) => (r.onclick = () => lgDetail((lgV === 'l' ? LG.rows : LG.world)[+r.dataset.lr])));
   clearInterval(window.lgT);
