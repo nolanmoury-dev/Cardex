@@ -311,8 +311,9 @@ async function settle(A, B, x, sb, cb, cat, cu) {
     const k = crypto.randomInt(cl.length); h.got = cl[k].id;
     cl.forEach((c, i) => { if (i === k) { if (c.tr) addB(W, c.id, c.tr); else add(W, c.id, 1); } else unlock(Lo, [c]); });
   }
-  { const H0 = (await redis.get('chh')) || []; for (const [P, m] of [[A, w], [B, -w]]) { const c = P.cs || (P.cs = csFrom(H0, P.pseudo)); if (m > 0) c.w++; else if (m < 0) c.l++; else c.d++; lgAdd(P, m > 0 ? 2 : m === 0 ? 1 : 0); } }
-  await tnScore(A, B, w, sa, sb, x.fmt).catch((e) => console.error('tnScore', e.message));
+  const tnm = await tnIs(A, B, sa, sb, x.fmt, x.mode).catch(() => false);
+  { const H0 = (await redis.get('chh')) || []; for (const [P, m] of [[A, w], [B, -w]]) { const c = P.cs || (P.cs = csFrom(H0, P.pseudo)); if (m > 0) c.w++; else if (m < 0) c.l++; else c.d++; if (!(tnm && P.bot)) lgAdd(P, tnm ? (m > 0 ? 4 : m === 0 ? 2 : 1) : (m > 0 ? 3 : m === 0 ? 1 : 0)); } }
+  await tnScore(A, B, w, sa, sb, x.fmt, x.mode).catch((e) => console.error('tnScore', e.message));
   dlUse(A, B.pseudo); dlUse(B, A.pseudo);
   const say = (P, O) => {
     const m = (P === A ? 1 : -1) * w, ms = P === A ? sa : sb;
@@ -391,7 +392,7 @@ const price = (sh, t, cat) => Math.round((PRICE * 2 ** (lvOf(cat, t) - 1) * (100
 const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t), ob = cat[t]; if (ob && ob.until != null && !ob.base && ((u.rb || {})[t] || 0) >= 1) return false; return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
 const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => x.seller === u.pseudo || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))), inbox: u.inbox || [],
-  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, vit: (u.vit || []).filter((id) => u.cards[id]).slice(0, 3), pf: u.pf || null, sub: subOf(u) ? { t: u.sub.t, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial, subs: SUBS, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
+  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, lgev: u.lg && u.lg.prev && u.lg.prev.d && !u.lg.prev.ack ? { from: u.lg.prev.t, to: u.lg.t, d: u.lg.prev.d, coins: u.lg.prev.d > 0 ? LG_PROMO : 0 } : null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, vit: (u.vit || []).filter((id) => u.cards[id]).slice(0, 3), pf: u.pf || null, sub: subOf(u) ? { t: u.sub.t, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial, subs: SUBS, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
   rw: (u.rw || []).map((x) => ({ rank: x.rank, name: x.name })), rws: (u.rw || [])[0] ? wSegs(u.rw[0].rank, u.rw[0].mult).map(wLabel) : null,
   next: u.packs >= MAXP ? null : u.last + stepOf(u.last), fp: { 1: { n: u.packs, next: u.packs >= MAXP ? null : u.last + stepOf(u.last) } }, cards: u.cards, bd: u.bd || {}, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
@@ -447,9 +448,9 @@ function raceBoard(list, id) {
 }
 // ================= LIGUES (saisons d'une semaine) =================
 // 20 paliers (Bronze → Maître II), groupes de 18 : les places vides sont remplies par des bots automatiques = de vrais comptes (bot: niveau, lgb: 1) créés à partir de LGB, qui jouent comme des joueurs (achats, défis, courses) mais jamais plus vite qu'eux ; les bots de l'opérateur (redis 'lgob') s'ajoutent EN PLUS.
-// Points de saison : renaissance 10, victoire à la course 5, victoire en défi 2, nul 1. Fin de saison : dimanche 23 h 59 (Paris) → les 3 premiers montent, les 3 derniers et les inactifs descendent.
+// Points de saison : renaissance 10, victoire à la course 5, défi normal 3 / 1 / 0, match de tournoi 4 / 2 / 1, titre de tournoi 15 (finaliste 6). Fin de saison : dimanche 23 h 59 (Paris) → les 3 premiers montent, les 3 derniers et les inactifs descendent.
 const LG_NAMES = ['Bronze', 'Bronze II', 'Bronze III', 'Argent', 'Argent II', 'Argent III', 'Or', 'Or II', 'Or III', 'Platine', 'Platine II', 'Platine III', 'Diamant', 'Diamant II', 'Diamant III', 'Émeraude', 'Émeraude II', 'Émeraude III', 'Maître', 'Maître II'];
-const LG_SIZE = 18, LG_UP = 3;
+const LG_SIZE = 18, LG_UP = 3, LG_PROMO = 500; // LG_PROMO : coins offerts à chaque montée de division
 const LGB = 'Zekro Maxou42 Lunyx ShadowX Kiro Vortex Noxium Zayko NeoFlash Xyron Tazik Wolfy Kenzor Blazik Moonix RaptorX Elyon Zorak Nexium Skyrox Drakos Mavix Tynox Kyzen Frosty Velkan Axion Zunex Klyro RavenX Oziris Nivox Zentro Ryzen Darkino Flamy Xelion Vayko Noxer Skyzen Trixo Zylor Kairox Nexor Voltik PixelFox Lazer42 Gatyx Stormix Zyphor Kivano Orvex Drax Mylow Zekai Lunaris Xandor Krytox Vexio Naru Torky Blunex Azuro Klyx Zorion Nexy Valtor Ryuko Dravix Xylo FrostX Kenzai Moxer Zynko Elvyn Noctis Vayron Tazou Kyrox Lumix Xevan Zorix DarkWolf Nelyx Vortex42 KylianX Aztek Ryvox Solary Nexyra Zayrox KiroX Mavro Xentis Loxer AlphaFox BlueStorm NightCrow RedPixel TurboMax Ghosty IceNova FireZ BlackMoon SilverFox LuckyZen UltraNox MiniVex KingRyu NovaX DarkAce FastKiro Zenox SkyHunter PixelKing Vynox Zekson Kylor Mirox Axeron Zynar Velox Drayko Kenzix Noxar Xyven Tylor Zorven Klyven Rykan Vexar Nivor Zayven Xalor Kavor Elyxor Mavon Zykar Tervox Kylar Vynar Zexor Naxio Lyran Orkan Zoltar Nymox Kavix Xorion Vezak Loxyn Daryx Kynox Zuvio Tervan Axory Nyrak Zekor Vylix Kryven Xavor Melyx Torvix Zynox KavorX Skywalker42 TheGamer NoSkill ProNairo UltraGamer MisterFox CrazyMax SuperKiro GhostPlayer DarkLegend Vexium Noryx Xykar Zolix Kymor DravenX Tynar Velion Zaymor Kexio Naxor Xylox Ryvex Mylix ZorvenX Kynar Vaxor ElyonX Tazix Norix Blazzer IceDragon ThunderX FireStorm DarkShadow NightFox BlueNinja RedDragon ToxicBoy CrazyWolf MoonLight StarPlayer CyberMax NeonGhost FlashKing ThunderBoy AstroFox MegaNox LuckyPlayer GoldenBoy Zynel Kylax Voryn Xevor Nylor Dazik Zekyn Kavori Rynox Tylix Moxyn Xalix Vezor Naxen Zyran Kyven Lurix Orvyn Tazmor XyvenX LoupBlanc PetitNox MaxGaming LucasFR GatiX Emiliano Gloubi CraftyFox NairoFR FrenchFox Azeryx VynoxX Zarkon Klyzor Nexaro Xynero Draxor Zyntek Kenzaro Vexon RyzenX Noxify Torken MavixX Xandrix Zaykor Kryzon Velkar Norvex AxeronX ShadowNinja PixelStorm NeonTiger IcePhoenix FireKnight DarkRaven BlueFalcon SilverWolf CyberTiger NightHunter Zoriel Kylven Xyronix Vaxen NoryxX Tervik Zynor KlyvenX Mavory Daxor Xelkor Vynex Raxio Nylix KenzorX Zorax Tynex Voryx AxionX Loryn MrNobody JustPlayer UnknownX RandomFox Nobody42 PlayerOne PlayerTwo MisterX Anonymous NotFound Zeky Noxou Kiro42 Maxito Tazou42 Luny Vexy ZouzouX Kenz RoroX Xavox Naxou Mylou Zayou Kylou Vavix Tixou Loxou Nynox Zikro HyperMax MegaFox SuperNox UltraVex TurboFox HyperKiro MegaStorm ProHunter XtremeBoy InfinityX Vexaris Zynaris Kyloris Noxaris Xavoris Draxium Velaris Kenzium Ryvoria Zorvian FrostNova SolarX LunarWolf CosmicFox AstroNox GalaxyKing StarNinja SpaceVex MeteorX CometBoy Naxium Zexium Kylion Tazion Xylar Rykar Zovix Moryx Kaxor GreenWolf MagicMax FastNox DarkRyu VenomX Ghost42 KillerFox StormBoy IceKing FireFox NightZero BlackTiger BlueShadow RedStorm WhiteWolf SilverMoon GoldenFox ToxicX RapidMax NitroBoy Speedy42 FlashNox Zayden Kayro Xavien Nelyo Tylann MaelX Enzo42 Mathix Yanox LennyX Noam42 Soren Kaelis ElioX NolanX Tiago42 AxelPro Evanox LiamX Malo42 RayanX TheoStorm LucasMax TomyX Jules42 HugoNox LeoVex NathanX EnzoPro ZekorX Vynor Xymax KylosX Drayx Mavox NexorX Tazrox Klymax VexonX Noxen Xyvenor Zayrix Kenzox Rynex Valtix Orvax Tynor Zekyx Raven42 FoxyMax WolfX TigerBoy PandaX Lynx42 EaglePro FalconX CobraZ PantherX DragonMax Phoenix42 Sharky BearX HawkEye JaguarX Viper42 ScorpionX LynxPro WolfKing ZynoxFR Kairo42 NoxiumX Velox42 AxionFR DrakosX Skyrox42 XelionFR ZorionX Mavix42 Trixor Klyven42 NairoX ZekroFR VortexFR MaxouX Lunyx42 CraftyMax GatiGaming JujuX LucasPro EmilianoX Dana42 GloubiX Raptor42 StormNox DarkKiro FrostVex NeonRyu ShadowMax NinjaFox GhostNox FirePixel IceStorm ThunderFox DarkPixel NeonWolf AstroKing CyberNox LuckyFox'.split(' ');
 const h32 = (...a) => { let h = 2166136261; for (const ch of a.join('|')) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
 const hf = (...a) => h32(...a) / 4294967296;
@@ -518,7 +519,7 @@ async function lgRoll(c) {
     });
   }
   const byT = new Map(), reg = { groups: {}, pool: [] };
-  for (const u of users) { const L = lgOf(u), r = res.get(u.pseudo) || { d: 0, r: 0, p: Math.floor(L.pts), idle: false }; L.prev = { t: L.t, d: r.d, r: r.r, p: r.p, idle: r.idle }; L.t = Math.max(0, Math.min(19, L.t + r.d)); if (!byT.has(L.t)) byT.set(L.t, []); byT.get(L.t).push(u); }
+  for (const u of users) { const L = lgOf(u), r = res.get(u.pseudo) || { d: 0, r: 0, p: Math.floor(L.pts), idle: false }; L.prev = { t: L.t, d: r.d, r: r.r, p: r.p, idle: r.idle, ack: 0 }; L.t = Math.max(0, Math.min(19, L.t + r.d)); if (!byT.has(L.t)) byT.set(L.t, []); byT.get(L.t).push(u); }
   for (const [t, arr] of byT) shuf(arr).forEach((u, i) => { const L = lgOf(u), g = Math.floor(i / LG_SIZE); L.g = g; L.sid = nid; L.pts = 0; L.act = 0; (reg.groups[t + ':' + g] ||= { r: 0, b: [] }).r++; });
   // les bots repartent dans le « vivier » puis remplissent les places vides (les plus forts dans les paliers les plus hauts)
   const pool = bots.sort((a, b) => Object.keys(b.cards || {}).length - Object.keys(a.cards || {}).length), dirty = new Set();
@@ -531,8 +532,8 @@ async function lgRoll(c) {
   reg.pool = pool.map((b) => b.pseudo);
   for (const b of dirty) await redis.set(key(b.pseudo), b);
   for (const u of users) {
-    const L = lgOf(u), p = L.prev, nm = LG_NAMES[L.t];
-    note(u, (p.d > 0 ? '🏆 Saison terminée : tu montes en ' + nm + ' !' : p.d < 0 ? '📉 Saison terminée : tu descends en ' + nm + (p.idle ? ' (aucune activité cette semaine)' : '') + '.' : '✅ Saison terminée : tu restes en ' + nm + '.') + ' Nouvelle saison : les points repartent à zéro.', false, 'none');
+    const L = lgOf(u), p = L.prev, nm = LG_NAMES[L.t]; if (p.d > 0) u.coins += LG_PROMO;
+    note(u, (p.d > 0 ? '🏆 Saison terminée : tu montes en ' + nm + ' ! +' + LG_PROMO + ' 🪙 de récompense.' : p.d < 0 ? '📉 Saison terminée : tu descends en ' + nm + (p.idle ? ' (aucune activité cette semaine)' : '') + '.' : '✅ Saison terminée : tu restes en ' + nm + '.') + ' Nouvelle saison : les points repartent à zéro.', false, 'none');
     await redis.set(key(u.pseudo), u);
   }
   await redis.set('lgg', reg);
@@ -556,7 +557,7 @@ async function lgView(u, cat) {
   const place = world.findIndex((x) => x.n === u.pseudo) + 1;
   return { vit: (u.vit || []).filter((id) => u.cards && u.cards[id]).slice(0, 3), id: c.id, end: c.end, t: L.t, g: L.g, pts: Math.floor(L.pts), size: LG_SIZE, names: LG_NAMES, rows, world: world.slice(0, 100), place, total: world.length };
 }
-const lgOp = async () => { const c = await lgSync(), names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], mem = list.filter((v) => v && !v.bot).map((v) => ({ n: v.pseudo, t: v.lg ? v.lg.t : 0, g: v.lg && v.lg.sid === c.id ? v.lg.g : -1 })).sort((a, b) => a.n.localeCompare(b.n)); return { id: c.id, end: c.end, bots: (await redis.get('lgob')) || [], names: LG_NAMES, nb: (await redis.smembers('lgbn')).length, mem, tm: list.filter((v) => v && !banOf(v)).map((v) => ({ n: v.pseudo, b: v.bot || '', t: v.lg ? v.lg.t : 0, r: rbTot(v) })).sort((a, b) => a.n.localeCompare(b.n)), tn: await tnSync() }; };
+const lgOp = async () => { const c = await lgSync(), names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], mem = list.filter((v) => v && !v.bot).map((v) => ({ n: v.pseudo, t: v.lg ? v.lg.t : 0, g: v.lg && v.lg.sid === c.id ? v.lg.g : -1 })).sort((a, b) => a.n.localeCompare(b.n)); return { id: c.id, end: c.end, bots: (await redis.get('lgob')) || [], names: LG_NAMES, nb: (await redis.smembers('lgbn')).length, mem, tm: list.filter((v) => v && !banOf(v) && tnOk(v)).map((v) => ({ n: v.pseudo, b: v.bot || '', t: v.lg ? v.lg.t : 0, r: rbTot(v) })).sort((a, b) => a.n.localeCompare(b.n)), tn: await tnSync() }; };
 // ================= TOURNOI INTER-LIGUES (tableau à élimination directe) =================
 // L'opérateur choisit les joueurs, la récompense et la mise maximale. Le tableau est tiré au sort (les places vides = qualifiés d'office).
 // Un match s'ouvre quand ses deux joueurs sont connus : ils ont 24 h pour le jouer en défi (Social → Défis), mise ≤ mise maximale. Le gagnant passe au tour suivant.
@@ -588,10 +589,37 @@ function tnStep(t) { // ouvre les matchs prêts, qualifie les byes, tire au sort
   return ev;
 }
 async function tnTell(ev) { const by = {}; for (const [n, tx] of ev) (by[n] ||= []).push(tx); for (const [n, l] of Object.entries(by)) { const v = await redis.get(key(n)); if (!v || v.bot) continue; for (const tx of l) note(v, tx); await redis.set(key(n), v); } }
+const TN_MAX = 64, TN_AWAY = 48 * 36e5;
+const tnOk = (v) => rbTot(v) > 0 && (v.bot || Date.now() - (v.seen || 0) < TN_AWAY); // peut jouer des défis : renaissance faite, et connecté il y a moins de 48 h (les bots n'ont pas de connexion)
+async function tnLocked(fn) { for (let i = 0; i < 12; i++) { if (await redis.set('tn:lock2', 1, { nx: true, ex: 5 })) { try { return await fn(); } finally { await redis.del('tn:lock2'); } } await new Promise((r) => setTimeout(r, 150)); } return 'Tournoi occupé, réessaie dans un instant'; }
+function tnPay(t, v) { const f = t.fee || 0; v.coins -= f; (t.paid ||= {})[v.pseudo] = f; if (t.pm === 'pot') t.pot = (t.pot || 0) + f; } // inscription : perdue ou versée à la cagnotte (au gagnant)
+async function tnRefund(t, why) { for (const [n, f] of Object.entries(t.paid || {})) { if (!f) continue; const v = await redis.get(key(n)); if (v && !v.bot) { v.coins += f; note(v, '🏅 « ' + t.name + ' » ' + why + ' : inscription remboursée (' + f + ' 🪙).'); await redis.set(key(n), v); } } t.paid = {}; t.pot = 0; }
+async function tnEnroll(t, names, nb) { // inscrit des joueurs/bots choisis par l'opérateur (les joueurs paient l'inscription, les bots non) ; retourne les refusés
+  const bad = []; t.pl ||= []; t.bots ||= {};
+  for (const n of [].concat(names || []).map(String)) {
+    if (t.pl.length >= TN_MAX) break;
+    const v = await redis.get(key(n)); if (!v || banOf(v) || t.pl.includes(v.pseudo)) continue;
+    if (v.bot) { t.pl.push(v.pseudo); t.bots[v.pseudo] = v.bot; continue; }
+    if (!tnOk(v)) { bad.push(v.pseudo + ' (inactif ou sans renaissance)'); continue; }
+    if (v.coins < (t.fee || 0)) { bad.push(v.pseudo + ' (pas assez de coins)'); continue; }
+    tnPay(t, v); note(v, '🏅 Tu es inscrit au tournoi « ' + t.name + ' »' + (t.fee ? ' (' + t.fee + ' 🪙 prélevés)' : '') + '. Récompense : ' + tnRw(t.rw || {}) + '.'); await redis.set(key(v.pseudo), v); t.pl.push(v.pseudo);
+  }
+  if (nb && t.pl.length < TN_MAX) { // bots ajoutés au hasard : comptes de bots existants, sinon nouveaux bots
+    const nms = await redis.smembers('users'), lst = nms.length ? await redis.mget(...nms.map(key)) : [], take = shuf(lst.filter((v) => v && v.bot && !banOf(v) && !t.pl.includes(v.pseudo))).slice(0, nb);
+    const extra = take.length < nb ? await lgNewBots(nb - take.length, new Set(nms.map((x) => x.toLowerCase()))) : [];
+    for (const v of [...take, ...extra]) { if (t.pl.length >= TN_MAX) break; t.pl.push(v.pseudo); t.bots[v.pseudo] = v.bot; }
+  }
+  return bad;
+}
 async function tnEnd(t, win) {
-  t.open = false; t.win = win || null; t.endedAt = Date.now(); const ev = [];
+  t.open = false; t.win = win || null; t.endedAt = Date.now(); const ev = [], fin = t.br[t.br.length - 1][0], fs = win && fin.a && fin.b ? (win === fin.a ? fin.b : fin.a) : null, isBot = (n) => !!(t.bots && t.bots[n]);
+  t.claimed = !win || isBot(win); // un bot ne touche pas la récompense ; le joueur gagnant la récupère lui-même (le tournoi est alors supprimé)
+  for (const [n, pt] of [[win, 15], [fs, 6]]) { // points de titre : 15 au vainqueur, 6 au finaliste (donnés tout de suite, jamais aux bots)
+    if (!n || isBot(n)) continue; const v = await redis.get(key(n)); if (!v || v.bot) continue;
+    await lgSync(); lgAdd(v, pt, false); note(v, '🏆 « ' + t.name + ' » : ' + (pt === 15 ? 'tu es champion' : 'tu es finaliste') + ', +' + pt + ' points de saison.'); await redis.set(key(n), v);
+  }
   for (const n of t.br[0].flatMap((m) => [m.a, m.b]).filter(Boolean)) {
-    if (n === win) { const v = await redis.get(key(n)); if (v && v.bot) { /* un bot ne touche pas la récompense */ } else if (v) { tick(v); const r = t.rw || {}; v.coins += r.coins || 0; v.packs += r.packs || 0; if (r.card) add(v, r.card, 1); note(v, '🏆 Tu gagnes le tournoi « ' + t.name + ' » ! Récompense : ' + tnRw(r)); await redis.set(key(n), v); } }
+    if (n === win) { if (!t.claimed) { const v = await redis.get(key(n)); if (v) { note(v, '🏆 Tu gagnes le tournoi « ' + t.name + ' » ! Récompense : ' + tnRw(t.rw || {}) + (t.pot ? ' + cagnotte ' + t.pot + ' 🪙' : '') + '. Récupère-la dans Social → Défis → Tournoi.'); await redis.set(key(n), v); } } }
     else ev.push([n, '🏅 Le tournoi « ' + t.name + ' » est terminé' + (win ? ' : victoire de ' + win + '.' : '.')]);
   }
   await redis.set('tn', t); await tnTell(ev); return t;
@@ -603,14 +631,21 @@ async function tnSync() {
   if (!(await redis.set('tn:lock', 1, { nx: true, ex: 5 }))) return t;
   const cur = await redis.get('tn'); return cur && cur.open ? tnCommit(cur) : cur;
 }
-async function tnScore(A, B, w, sa, sb, fmt) { // appelé à la fin de chaque défi
-  const t = await tnSync(); if (!t || !t.open || w === 0 || Math.max(sa, sb) > t.max || (fmt && fmt !== (t.fmt || 3))) return;
-  for (const [r, rd] of t.br.entries()) for (const m of rd) if (m.w == null && m.o && m.b && ((m.a === A.pseudo && m.b === B.pseudo) || (m.a === B.pseudo && m.b === A.pseudo))) {
-    m.w = w > 0 ? A.pseudo : B.pseudo; m.at = Date.now(); const lo = m.w === m.a ? m.b : m.a, last = r === t.br.length - 1;
-    return tnCommit(t, [[m.w, last ? '🏅 Tu gagnes la finale !' : '🏅 « ' + t.name + ' » : victoire contre ' + lo + ', tu passes au tour suivant !'], [lo, '🏅 « ' + t.name + ' » : défaite contre ' + m.w + ', tu es éliminé.']]);
-  }
+function tnFind(t, A, B, sa, sb, fmt, mode) { // le match de tournoi ouvert entre A et B si ce défi compte (bon format, bon mode, mise ≤ max en Guerre)
+  if (!t || !t.open || (fmt && fmt !== (t.fmt || 3)) || (mode && mode !== (t.mode || 'war')) || ((t.mode || 'war') === 'war' && Math.max(sa, sb) > t.max)) return null;
+  for (const [r, rd] of t.br.entries()) for (const m of rd) if (m.w == null && m.o && m.b && ((m.a === A.pseudo && m.b === B.pseudo) || (m.a === B.pseudo && m.b === A.pseudo))) return [r, m];
+  return null;
 }
-async function tnView(u) { const t = await tnSync(); return t ? { name: t.name, max: t.max, fmt: t.fmt || 3, open: t.open, win: t.win || null, rwt: tnRw(t.rw || {}), me: t.br[0].some((m) => m.a === u.pseudo || m.b === u.pseudo), bots: Object.keys(t.bots || {}), rounds: t.br.map((rd) => ({ n: tnRound(rd.length), ms: rd.map((m) => ({ a: m.a, b: m.b, w: m.w, dl: m.w == null ? m.dl || 0 : 0, rnd: !!m.rnd, bot: !!m.bot })) })) } : null; }
+async function tnIs(A, B, sa, sb, fmt, mode) { return !!tnFind(await tnSync(), A, B, sa, sb, fmt, mode); }
+async function tnScore(A, B, w, sa, sb, fmt, mode) { // appelé à la fin de chaque défi (nul = on rejoue)
+  const t = await tnSync(), f = w === 0 ? null : tnFind(t, A, B, sa, sb, fmt, mode); if (!f) return;
+  const [r, m] = f; m.w = w > 0 ? A.pseudo : B.pseudo; m.at = Date.now(); const lo = m.w === m.a ? m.b : m.a, last = r === t.br.length - 1;
+  return tnCommit(t, [[m.w, last ? '🏅 Tu gagnes la finale !' : '🏅 « ' + t.name + ' » : victoire contre ' + lo + ', tu passes au tour suivant !'], [lo, '🏅 « ' + t.name + ' » : défaite contre ' + m.w + ', tu es éliminé.']]);
+}
+async function tnView(u) {
+  const t = await tnSync(); if (!t) return null;
+  return { name: t.name, max: t.max, mode: t.mode || 'war', fmt: t.fmt || 3, open: t.open, reg: !!t.reg, fee: t.fee || 0, pm: t.pm || 'lost', pot: t.pot || 0, n: (t.pl || []).length, can: tnOk(u), win: t.win || null, claim: !t.open && !t.reg && t.win === u.pseudo && !t.claimed, rwt: tnRw(t.rw || {}), me: t.reg ? (t.pl || []).includes(u.pseudo) : t.br[0].some((m) => m.a === u.pseudo || m.b === u.pseudo), bots: Object.keys(t.bots || {}), rounds: t.br.map((rd) => ({ n: tnRound(rd.length), ms: rd.map((m) => ({ a: m.a, b: m.b, w: m.w, dl: m.w == null ? m.dl || 0 : 0, rnd: !!m.rnd, bot: !!m.bot })) })) };
+}
 async function raceFinish(cur, now) {
   const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], board = raceBoard(list, cur.id);
   const win = board.length && !board[0].bot && board[0].pos > 0 ? board[0] : null;
@@ -1454,34 +1489,45 @@ const handler = async (req, res) => {
         note(t, '🏆 Le staff t’a placé en ' + LG_NAMES[nt] + ' · groupe ' + (ng + 1) + '.');
         await redis.set('lgg', reg); await redis.set(key(t.pseudo), t); return ok({ done: true });
       }
-      if (['tnnew', 'tnwin', 'tnend', 'tncancel'].includes(b.action)) { // tournoi inter-ligues
-        const t = await tnSync();
+      if (b.action === 'lgendnow') { // fin de saison anticipée : même chemin que la fin normale (récompenses, montées/descentes, remise à zéro) ; la suivante dure jusqu'au dimanche 23 h 59
+        const now = Date.now();
+        if (!(await redis.set('lg:lock', now, { nx: true, ex: 120 }))) return fail('Une fin de saison est déjà en cours : réessaie dans un instant');
+        const c2 = await redis.get('lg'); if (!c2) return fail('Aucune saison en cours');
+        const nx = { id: c2.id + 1, start: now, end: lgEnd(now) }; await redis.set('lg', nx); await lgRoll(c2); LGC = nx; lgChk = now; return ok({ done: true });
+      }
+      if (['tnnew', 'tnadd', 'tnstart', 'tnwin', 'tnend', 'tncancel'].includes(b.action)) { // tournoi inter-ligues
+        const t = await tnSync(); let bad = [];
         if (b.action === 'tnnew') {
-          if (t && t.open) return fail('Un tournoi est déjà en cours : termine-le ou annule-le d’abord');
+          if (t && (t.open || t.reg)) return fail('Un tournoi est déjà en cours : termine-le ou annule-le d’abord');
+          if (t && t.win && !t.claimed) return fail('Le gagnant n’a pas encore récupéré sa récompense : attends, ou annule ce tournoi');
           const name = String(b.name || '').trim().slice(0, 40); if (name.length < 2) return fail('Nom du tournoi trop court');
           const card = String(b.card || '').trim(), rw = { coins: int(b.coins, 1e9), packs: int(b.packs, 1000), card: card || null };
           if (card && !rarOf(cat, card)) return fail('Carte inconnue');
           if (!rw.coins && !rw.packs && !rw.card) return fail('Ajoute une récompense (coins, sachets ou carte)');
-          const max = int(b.max, 1e9); if (!max) return fail('Mise maximale invalide');
-          const pl = [], bots = {}, nb = int(b.nbots, 64);
-          for (const n of [].concat(b.players || []).map(String)) { const v = await redis.get(key(n)); if (v && !banOf(v) && !pl.includes(v.pseudo)) { pl.push(v.pseudo); if (v.bot) bots[v.pseudo] = v.bot; } }
-          if (pl.length + nb < 2 || pl.length + nb > 64) return fail('Choisis entre 2 et 64 participants (joueurs + bots)');
-          if (nb) { // bots ajoutés au hasard : comptes de bots existants, sinon nouveaux bots
-            const nms = await redis.smembers('users'), lst = nms.length ? await redis.mget(...nms.map(key)) : [], take = shuf(lst.filter((v) => v && v.bot && !banOf(v) && !pl.includes(v.pseudo))).slice(0, nb);
-            const extra = take.length < nb ? await lgNewBots(nb - take.length, new Set(nms.map((x) => x.toLowerCase()))) : [];
-            for (const v of [...take, ...extra]) { pl.push(v.pseudo); bots[v.pseudo] = v.bot; }
-            if (pl.length < 2) return fail('Pas assez de participants');
-          }
-          const nt = { id: Date.now(), name, rw, max, fmt: [1, 2, 3].includes(+b.fmt) ? +b.fmt : 3, open: true, bots, br: tnBuild(pl) };
-          await tnCommit(nt, pl.map((n) => [n, '🏅 Tu participes au tournoi « ' + name + ' » ! Récompense : ' + tnRw(rw) + ' · mise max ' + max + ' 🪙.']));
-        } else if (!t || !t.open) return fail('Aucun tournoi en cours');
+          const mode = b.mode === 'fun' ? 'fun' : 'war', max = mode === 'war' ? int(b.max, 1e9) : 0; if (mode === 'war' && !max) return fail('Mise maximale invalide');
+          const fee = int(b.fee, 1e7), nt = { id: Date.now(), name, rw, max, mode, fmt: [1, 2, 3].includes(+b.fmt) ? +b.fmt : 3, fee, pm: fee && b.pm === 'pot' ? 'pot' : 'lost', pot: 0, paid: {}, reg: true, open: false, bots: {}, pl: [], br: [] };
+          bad = await tnEnroll(nt, b.players, int(b.nbots, 64)); await redis.set('tn', nt);
+        } else if (b.action === 'tncancel') {
+          if (!t) return fail('Aucun tournoi');
+          const live = t.open || t.reg; if (live) await tnRefund(t, 'a été annulé');
+          await redis.del('tn'); await tnTell((t.pl || t.br[0].flatMap((m) => [m.a, m.b]).filter(Boolean)).map((n) => [n, '🏅 Le tournoi « ' + t.name + ' » a été annulé.']));
+        } else if (!t) return fail('Aucun tournoi en cours');
+        else if (b.action === 'tnadd' || b.action === 'tnstart') {
+          const er = await tnLocked(async () => {
+            const c = await redis.get('tn'); if (!c || !c.reg) return 'Les inscriptions ne sont pas ouvertes';
+            if (b.action === 'tnadd') { bad = await tnEnroll(c, b.players, int(b.nbots, 64)); await redis.set('tn', c); return null; }
+            if ((c.pl || []).length < 2) return 'Il faut au moins 2 participants';
+            c.reg = false; c.open = true; c.br = tnBuild(c.pl);
+            await tnCommit(c, c.pl.filter((n) => !c.bots[n]).map((n) => [n, '🏅 Le tournoi « ' + c.name + ' » commence ! Ton premier match s’ouvre dès que ton adversaire est connu (Social → Défis → Tournoi).'])); return null;
+          });
+          if (er) return fail(er);
+        } else if (!t.open) return fail('Le tournoi n’a pas commencé ou est terminé');
         else if (b.action === 'tnwin') { // l'opérateur décide un match
           const m = ((t.br[int(b.r, 10)] || [])[int(b.i, 100)]);
           if (!m || m.w != null || !m.a || !m.b || ![m.a, m.b].includes(String(b.w))) return fail('Match introuvable ou déjà joué');
           m.w = String(b.w); m.at = Date.now(); await tnCommit(t, [[m.w, '🏅 « ' + t.name + ' » : le staff te qualifie pour le tour suivant.'], [m.w === m.a ? m.b : m.a, '🏅 « ' + t.name + ' » : tu es éliminé (décision du staff).']]);
         } else if (b.action === 'tnend') await tnEnd(t, null);
-        else { await redis.del('tn'); await tnTell(t.br[0].flatMap((m) => [m.a, m.b]).filter(Boolean).map((n) => [n, '🏅 Le tournoi « ' + t.name + ' » a été annulé.'])); }
-        return ok({ done: true });
+        return ok({ done: true, bad });
       }
       if (b.action === 'lgpts') {
         const t = await redis.get(key(String(b.pseudo || '')));
@@ -1777,8 +1823,31 @@ const handler = async (req, res) => {
       if (typeof r === 'string') return fail(r);
       lgAdd(u, 10);
       extra = r;
+    } else if (b.action === 'lgack') {
+      if (u.lg && u.lg.prev) u.lg.prev.ack = 1;
     } else if (b.action === 'lgrank') {
       extra = { lg: await lgView(u, cat) };
+    } else if (['tnjoin', 'tnleave', 'tnclaim'].includes(b.action)) {
+      const er = await tnLocked(async () => {
+        const t = await redis.get('tn'); if (!t) return 'Aucun tournoi en cours';
+        if (b.action === 'tnclaim') {
+          if (t.open || t.reg || t.win !== u.pseudo || t.claimed) return 'Aucune récompense à récupérer';
+          const rw = t.rw || {}; await redis.del('tn'); tick(u); u.coins += (rw.coins || 0) + (t.pot || 0); u.packs += rw.packs || 0; if (rw.card) add(u, rw.card, 1);
+          extra = { tnwon: { name: t.name, rw: tnRw(rw), pot: t.pot || 0 } }; return null;
+        }
+        if (!t.reg) return 'Les inscriptions sont fermées';
+        t.pl ||= [];
+        if (b.action === 'tnjoin') {
+          if (t.pl.includes(u.pseudo)) return 'Tu es déjà inscrit'; if (t.pl.length >= TN_MAX) return 'Tournoi complet';
+          if (!tnOk(u)) return 'Il faut avoir fait une première renaissance pour jouer des défis';
+          if (u.coins < (t.fee || 0)) return 'Pas assez de coins (inscription : ' + t.fee + ' 🪙)';
+          tnPay(t, u); t.pl.push(u.pseudo);
+        } else {
+          if (!t.pl.includes(u.pseudo)) return 'Tu n’es pas inscrit'; const f = (t.paid || {})[u.pseudo] || 0; u.coins += f; if (t.pm === 'pot') t.pot = Math.max(0, (t.pot || 0) - f); delete (t.paid || {})[u.pseudo]; t.pl = t.pl.filter((n) => n !== u.pseudo);
+        }
+        await redis.set('tn', t); extra = { tn: await tnView(u) }; return null;
+      });
+      if (er) return fail(er);
     } else if (b.action === 'tnget') {
       extra = { tn: await tnView(u) };
     } else if (b.action === 'rank') {
