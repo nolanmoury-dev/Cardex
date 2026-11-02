@@ -555,7 +555,7 @@ async function lgView(u, cat) {
   const nn = rows.filter((r) => !r.op).length; let z = 0; for (const r of rows) { if (r.op) { r.z = ''; continue; } r.z = z < LG_UP ? 'up' : z >= Math.max(LG_UP, nn - LG_UP) ? 'down' : ''; z++; }
   const world = [...acc.map(rowOf), ...ob.map(obRow)].sort((a, b) => b.cards - a.cards || b.ren - a.ren || a.n.localeCompare(b.n));
   const place = world.findIndex((x) => x.n === u.pseudo) + 1;
-  return { vit: (u.vit || []).filter((id) => u.cards && u.cards[id]).slice(0, 3), id: c.id, end: c.end, t: L.t, g: L.g, pts: Math.floor(L.pts), size: LG_SIZE, names: LG_NAMES, rows, world: world.slice(0, 100), place, total: world.length };
+  return { vit: (u.vit || []).filter((id) => u.cards && u.cards[id]).slice(0, 3), id: c.id, end: c.end, t: L.t, g: L.g, pts: Math.floor(L.pts), size: LG_SIZE, names: LG_NAMES, rows, world: world.slice(0, 100), place, me: world.find((x) => x.n === u.pseudo) || null, total: world.length };
 }
 const lgOp = async () => { const c = await lgSync(), names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], mem = list.filter((v) => v && !v.bot).map((v) => ({ n: v.pseudo, t: v.lg ? v.lg.t : 0, g: v.lg && v.lg.sid === c.id ? v.lg.g : -1 })).sort((a, b) => a.n.localeCompare(b.n)); return { id: c.id, end: c.end, bots: (await redis.get('lgob')) || [], names: LG_NAMES, nb: (await redis.smembers('lgbn')).length, mem, tm: list.filter((v) => v && !banOf(v) && tnOk(v)).map((v) => ({ n: v.pseudo, b: v.bot || '', t: v.lg ? v.lg.t : 0, r: rbTot(v) })).sort((a, b) => a.n.localeCompare(b.n)), tn: await tnSync() }; };
 // ================= TOURNOI INTER-LIGUES (tableau à élimination directe) =================
