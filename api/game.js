@@ -85,7 +85,7 @@ function applySub(u, T, d) {
 // --- Codes : { CODE: { code, label, t, coins, packs, rx, bought:{thème:n}, cards:{id:n}, sub:{t,days}|null, max (null = illimité), exp (ms|null), used:[pseudos en minuscules] } }
 const normCode = (s) => String(s || '').trim().toUpperCase().replace(/\s+/g, '');
 const fkMult = (u, id) => { const t = (u.fk || {})[id]; return t ? 1 + (FK_MAX - 1) * Math.min(1, (Date.now() - t) / (FK_DAYS * DAY)) : 1; };
-const stepOf = (k) => Math.round((10 + (4 * k) / 9) * 60000); // 10 min pour le 1er sachet, 14 min pour le 10e (total 2 h)
+const stepOf = (seed) => Math.round((10 + (h32('fp', Math.floor(seed / 1000)) % 1001) / 100) * 60000); // un sachet toutes les 10 à 20 min (durée tirée au hasard, stable pour un même départ de compteur)
 const pend = [];
 async function vapid() {
   let v = await redis.get('vapid');
@@ -153,7 +153,7 @@ const MENU_ACTS = {
   col: ['fav', 'sell', 'sellbd', 'list', 'rebirth', 'open'],
   mk: ['buymk', 'unlist', 'list', 'players', 'peek', 'gift', 'tradeoffer', 'tradeaccept', 'tradecounter', 'tradeconfirm', 'tradedecline'],
   jeu: ['bet', 'betend', 'roulette', 'slots', 'flip', 'scratch', 'battle', 'racepack', 'racelb', 'carcolor', 'carskin', 'wheelspin'],
-  rk: ['rank', 'chrank', 'chlist', 'chnew', 'chacc', 'chdec', 'chcancel', 'dmget', 'dmsend', 'players', 'peek', 'racelb'],
+  rk: ['rank', 'chrank', 'lgrank', 'chlist', 'chnew', 'chacc', 'chdec', 'chcancel', 'dmget', 'dmsend', 'players', 'peek', 'racelb'],
   set: ['settings', 'report', 'delnote'],
 };
 const menuOk = (mt, action) => !!mt && mt.type !== 'net' && (mt.open || []).some((k) => (MENU_ACTS[k] || []).includes(action));
@@ -311,7 +311,7 @@ async function settle(A, B, x, sb, cb, cat, cu) {
     const k = crypto.randomInt(cl.length); h.got = cl[k].id;
     cl.forEach((c, i) => { if (i === k) { if (c.tr) addB(W, c.id, c.tr); else add(W, c.id, 1); } else unlock(Lo, [c]); });
   }
-  { const H0 = (await redis.get('chh')) || []; for (const [P, m] of [[A, w], [B, -w]]) { const c = P.cs || (P.cs = csFrom(H0, P.pseudo)); if (m > 0) c.w++; else if (m < 0) c.l++; else c.d++; } }
+  { const H0 = (await redis.get('chh')) || []; for (const [P, m] of [[A, w], [B, -w]]) { const c = P.cs || (P.cs = csFrom(H0, P.pseudo)); if (m > 0) c.w++; else if (m < 0) c.l++; else c.d++; lgAdd(P, m > 0 ? 2 : m === 0 ? 1 : 0); } }
   dlUse(A, B.pseudo); dlUse(B, A.pseudo);
   const say = (P, O) => {
     const m = (P === A ? 1 : -1) * w, ms = P === A ? sa : sb;
@@ -363,18 +363,15 @@ async function dmDrop(u) { // suppression d'un compte : fils et résumés chez l
     if (o && o.dm) { delete o.dm[u.pseudo.toLowerCase()]; await redis.set('u:' + e.p.toLowerCase(), o); }
   }
 }
-// Sachets gratuits : un stock (10 max) et un compteur PAR NIVEAU de sachet. Niveau 1 = u.packs / u.last ; niveaux 2+ = u.fp[niveau] = { n, last }.
-// L'attente s'allonge avec le niveau : ×1 (niveau 1), ×1,5, ×2 … ×5 (niveau 9). Ouvrir un sachet d'un niveau retire 1 sachet de CE niveau seulement.
-const FM = (L) => 1 + 0.5 * (L - 1), stepL = (k, L) => Math.round(stepOf(k) * FM(L));
+// Sachets gratuits : UN seul stock (10 max) valable pour tous les niveaux ; 1 nouveau sachet toutes les 10 à 20 min. Les sachets achetés (u.bought) restent à part et ne comptent pas dans les 10.
 const maxLv = (u) => Math.max(1, ...LINES.map((b) => lineLv(u, b)));
-const freeOf = (u, L) => (L <= 1 ? u.packs : ((u.fp || {})[L] || { n: 0 }).n);
-const freeTake = (u, L, n) => { if (L <= 1) u.packs -= n; else u.fp[L].n -= n; };
-const tk1 = (x, L, now) => { if (x.n >= MAXP) { x.last = now; return; } let st; while (x.n < MAXP && now - x.last >= (st = stepL(x.n, L))) { x.last += st; x.n++; } if (x.n >= MAXP) x.last = now; };
+const freeOf = (u) => u.packs;
+const freeTake = (u, L, n) => { u.packs -= n; };
+const tk1 = (x, now) => { if (x.n >= MAXP) { x.last = now; return; } let st; while (x.n < MAXP && now - x.last >= (st = stepOf(x.last))) { x.last += st; x.n++; } if (x.n >= MAXP) x.last = now; };
 function tick(u) {
-  const now = Date.now(), x = { n: u.packs, last: u.last };
-  tk1(x, 1, now); u.packs = x.n; u.last = x.last;
-  const m = maxLv(u);
-  if (m > 1) { u.fp ||= {}; for (let L = 2; L <= m; L++) tk1((u.fp[L] ||= { n: 0, last: now }), L, now); }
+  const now = Date.now();
+  if (u.fp) { const add = Object.values(u.fp).reduce((a, f) => a + ((f && f.n) || 0), 0); if (u.packs < MAXP) u.packs = Math.min(MAXP, u.packs + add); delete u.fp; } // ancien système (un stock par niveau) : regroupé en un seul stock
+  const x = { n: u.packs, last: u.last }; tk1(x, now); u.packs = x.n; u.last = x.last;
 }
 const shopOf = async (cat) => {
   const s = (await redis.get('shop')) || {};
@@ -395,7 +392,7 @@ const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => x.seller === u.pseudo || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))), inbox: u.inbox || [],
   dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, pf: u.pf || null, sub: subOf(u) ? { t: u.sub.t, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial, subs: SUBS, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
   rw: (u.rw || []).map((x) => ({ rank: x.rank, name: x.name })), rws: (u.rw || [])[0] ? wSegs(u.rw[0].rank, u.rw[0].mult).map(wLabel) : null,
-  next: u.packs >= MAXP ? null : u.last + stepOf(u.packs), fp: Object.fromEntries(Array.from({ length: maxLv(u) }, (_, i) => i + 1).map((L) => { const n = freeOf(u, L), last = L <= 1 ? u.last : ((u.fp || {})[L] || { last: Date.now() }).last; return [L, { n, next: n >= MAXP ? null : last + stepL(n, L) }]; })), cards: u.cards, bd: u.bd || {}, fav: u.fav, theme: u.theme || null,
+  next: u.packs >= MAXP ? null : u.last + stepOf(u.last), fp: { 1: { n: u.packs, next: u.packs >= MAXP ? null : u.last + stepOf(u.last) } }, cards: u.cards, bd: u.bd || {}, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
   shop: Object.fromEntries(Object.entries(sh).map(([t, s]) => [t, { ...s, price: price(s, t, cat), full: PRICE * 2 ** (lvOf(cat, t) - 1), lvl: lvOf(cat, t) }])), lv: Object.fromEntries(LINES.map((b) => [b, lineLv(u, b)])), lvn: Object.fromEntries(LINES.map((b) => [b, (cat[b + (lineLv(u, b) + 1)] || {}).name || null])),
   objs: cu.objs.filter((x) => !x.gone), themes: Object.fromEntries(Object.entries(cat).filter(([t]) => known(u, cat, t))),
@@ -447,10 +444,121 @@ function raceBoard(list, id) {
   return [...real, ...list.filter((v) => v && v.bot)].map((v) => { const r = v.rc && v.rc.w === id ? v.rc : null, ps = r ? r.pos : 0; return { pseudo: v.pseudo, bot: !!v.bot, pos: v.bot ? Math.min(ps, real.length ? Math.max(0, top - 1) : ps) : ps, tt: (r && r.tt) || 0, car: v.car || null, sk: carSkin(v), pf: v.pf || null }; })
     .sort((a, c) => c.pos - a.pos || a.bot - c.bot || (a.tt || 9e15) - (c.tt || 9e15) || a.pseudo.localeCompare(c.pseudo)).map((x, i) => ({ ...x, rank: i + 1 }));
 }
+// ================= LIGUES (saisons d'une semaine) =================
+// 20 paliers (Bronze → Maître II), groupes de 18 : les places vides sont remplies par des bots automatiques = de vrais comptes (bot: niveau, lgb: 1) créés à partir de LGB, qui jouent comme des joueurs (achats, défis, courses) mais jamais plus vite qu'eux ; les bots de l'opérateur (redis 'lgob') s'ajoutent EN PLUS.
+// Points de saison : renaissance 10, victoire à la course 5, victoire en défi 2, nul 1. Fin de saison : dimanche 23 h 59 (Paris) → les 3 premiers montent, les 3 derniers et les inactifs descendent.
+const LG_NAMES = ['Bronze', 'Bronze II', 'Bronze III', 'Argent', 'Argent II', 'Argent III', 'Or', 'Or II', 'Or III', 'Platine', 'Platine II', 'Platine III', 'Diamant', 'Diamant II', 'Diamant III', 'Émeraude', 'Émeraude II', 'Émeraude III', 'Maître', 'Maître II'];
+const LG_SIZE = 18, LG_UP = 3;
+const LGB = 'Zekro Maxou42 Lunyx ShadowX Kiro Vortex Noxium Zayko NeoFlash Xyron Tazik Wolfy Kenzor Blazik Moonix RaptorX Elyon Zorak Nexium Skyrox Drakos Mavix Tynox Kyzen Frosty Velkan Axion Zunex Klyro RavenX Oziris Nivox Zentro Ryzen Darkino Flamy Xelion Vayko Noxer Skyzen Trixo Zylor Kairox Nexor Voltik PixelFox Lazer42 Gatyx Stormix Zyphor Kivano Orvex Drax Mylow Zekai Lunaris Xandor Krytox Vexio Naru Torky Blunex Azuro Klyx Zorion Nexy Valtor Ryuko Dravix Xylo FrostX Kenzai Moxer Zynko Elvyn Noctis Vayron Tazou Kyrox Lumix Xevan Zorix DarkWolf Nelyx Vortex42 KylianX Aztek Ryvox Solary Nexyra Zayrox KiroX Mavro Xentis Loxer AlphaFox BlueStorm NightCrow RedPixel TurboMax Ghosty IceNova FireZ BlackMoon SilverFox LuckyZen UltraNox MiniVex KingRyu NovaX DarkAce FastKiro Zenox SkyHunter PixelKing Vynox Zekson Kylor Mirox Axeron Zynar Velox Drayko Kenzix Noxar Xyven Tylor Zorven Klyven Rykan Vexar Nivor Zayven Xalor Kavor Elyxor Mavon Zykar Tervox Kylar Vynar Zexor Naxio Lyran Orkan Zoltar Nymox Kavix Xorion Vezak Loxyn Daryx Kynox Zuvio Tervan Axory Nyrak Zekor Vylix Kryven Xavor Melyx Torvix Zynox KavorX Skywalker42 TheGamer NoSkill ProNairo UltraGamer MisterFox CrazyMax SuperKiro GhostPlayer DarkLegend Vexium Noryx Xykar Zolix Kymor DravenX Tynar Velion Zaymor Kexio Naxor Xylox Ryvex Mylix ZorvenX Kynar Vaxor ElyonX Tazix Norix Blazzer IceDragon ThunderX FireStorm DarkShadow NightFox BlueNinja RedDragon ToxicBoy CrazyWolf MoonLight StarPlayer CyberMax NeonGhost FlashKing ThunderBoy AstroFox MegaNox LuckyPlayer GoldenBoy Zynel Kylax Voryn Xevor Nylor Dazik Zekyn Kavori Rynox Tylix Moxyn Xalix Vezor Naxen Zyran Kyven Lurix Orvyn Tazmor XyvenX LoupBlanc PetitNox MaxGaming LucasFR GatiX Emiliano Gloubi CraftyFox NairoFR FrenchFox Azeryx VynoxX Zarkon Klyzor Nexaro Xynero Draxor Zyntek Kenzaro Vexon RyzenX Noxify Torken MavixX Xandrix Zaykor Kryzon Velkar Norvex AxeronX ShadowNinja PixelStorm NeonTiger IcePhoenix FireKnight DarkRaven BlueFalcon SilverWolf CyberTiger NightHunter Zoriel Kylven Xyronix Vaxen NoryxX Tervik Zynor KlyvenX Mavory Daxor Xelkor Vynex Raxio Nylix KenzorX Zorax Tynex Voryx AxionX Loryn MrNobody JustPlayer UnknownX RandomFox Nobody42 PlayerOne PlayerTwo MisterX Anonymous NotFound Zeky Noxou Kiro42 Maxito Tazou42 Luny Vexy ZouzouX Kenz RoroX Xavox Naxou Mylou Zayou Kylou Vavix Tixou Loxou Nynox Zikro HyperMax MegaFox SuperNox UltraVex TurboFox HyperKiro MegaStorm ProHunter XtremeBoy InfinityX Vexaris Zynaris Kyloris Noxaris Xavoris Draxium Velaris Kenzium Ryvoria Zorvian FrostNova SolarX LunarWolf CosmicFox AstroNox GalaxyKing StarNinja SpaceVex MeteorX CometBoy Naxium Zexium Kylion Tazion Xylar Rykar Zovix Moryx Kaxor GreenWolf MagicMax FastNox DarkRyu VenomX Ghost42 KillerFox StormBoy IceKing FireFox NightZero BlackTiger BlueShadow RedStorm WhiteWolf SilverMoon GoldenFox ToxicX RapidMax NitroBoy Speedy42 FlashNox Zayden Kayro Xavien Nelyo Tylann MaelX Enzo42 Mathix Yanox LennyX Noam42 Soren Kaelis ElioX NolanX Tiago42 AxelPro Evanox LiamX Malo42 RayanX TheoStorm LucasMax TomyX Jules42 HugoNox LeoVex NathanX EnzoPro ZekorX Vynor Xymax KylosX Drayx Mavox NexorX Tazrox Klymax VexonX Noxen Xyvenor Zayrix Kenzox Rynex Valtix Orvax Tynor Zekyx Raven42 FoxyMax WolfX TigerBoy PandaX Lynx42 EaglePro FalconX CobraZ PantherX DragonMax Phoenix42 Sharky BearX HawkEye JaguarX Viper42 ScorpionX LynxPro WolfKing ZynoxFR Kairo42 NoxiumX Velox42 AxionFR DrakosX Skyrox42 XelionFR ZorionX Mavix42 Trixor Klyven42 NairoX ZekroFR VortexFR MaxouX Lunyx42 CraftyMax GatiGaming JujuX LucasPro EmilianoX Dana42 GloubiX Raptor42 StormNox DarkKiro FrostVex NeonRyu ShadowMax NinjaFox GhostNox FirePixel IceStorm ThunderFox DarkPixel NeonWolf AstroKing CyberNox LuckyFox'.split(' ');
+const h32 = (...a) => { let h = 2166136261; for (const ch of a.join('|')) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
+const hf = (...a) => h32(...a) / 4294967296;
+const lgCap = (t) => 50 + 10 * t; // points d'un bot qui finit la semaine en tête de son palier
+const parisOff = (ts) => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Paris', hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }).formatToParts(new Date(ts)).map((x) => [x.type, +x.value])); return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(ts / 1000) * 1000; };
+const lgEnd = (now) => { const L = new Date(now + parisOff(now)), days = (7 - L.getUTCDay()) % 7, endL = Date.UTC(L.getUTCFullYear(), L.getUTCMonth(), L.getUTCDate() + days, 23, 59, 59, 999); return endL - parisOff(endL - parisOff(now)); };
+const lgOf = (u) => (u.lg ||= { t: 0, g: -1, sid: 0, pts: 0, act: 0 });
+let LGC = null, lgChk = 0;
+function lgSyncUser(u, c) { const L = lgOf(u); if (L.sid !== c.id) { L.pts = 0; L.act = 0; L.g = -1; L.sid = c.id; } return L; }
+const lgAdd = (u, n, act = true) => { if (!u || u.pseudo === OP_NAME) return; const L = LGC ? lgSyncUser(u, LGC) : lgOf(u); L.pts = Math.max(0, L.pts + n); if (act) L.act++; };
+async function lgSync() {
+  const now = Date.now();
+  if (LGC && now < LGC.end && now - lgChk < 30000) return LGC;
+  let c = await redis.get('lg');
+  if (!c) { c = { id: 1, start: now, end: lgEnd(now) }; await redis.set('lg', c); }
+  if (now >= c.end && (await redis.set('lg:lock', now, { nx: true, ex: 120 }))) {
+    const c2 = await redis.get('lg');
+    if (c2 && now >= c2.end) { const nx = { id: c2.id + 1, start: now, end: lgEnd(now) }; await redis.set('lg', nx); await lgRoll(c2).catch((e) => console.error('lgRoll', e.message)); c = nx; } else c = c2 || c;
+  }
+  LGC = c; lgChk = now; return c;
+}
+const BLV = [['nul', 40], ['moy', 35], ['mf', 20], ['fort', 5]], LG_PACE = { nul: 10, moy: 25, mf: 45, fort: 70 }; // niveaux des bots de ligue (lents) ; points de saison visés par semaine (+ 3 par palier)
+const lgPick = () => { let r = Math.random() * 100; for (const [k, w] of BLV) if ((r -= w) < 0) return k; return 'nul'; };
+async function lgNewBot(name) {
+  if (await redis.get(key(name))) return null; // pseudo déjà pris (joueur ou bot)
+  const lvl = lgPick(), salt = crypto.randomBytes(16).toString('hex'), a = 6 + crypto.randomInt(4), b = 18 + crypto.randomInt(5);
+  const u = { pseudo: name, salt, hash: hash(crypto.randomBytes(8).toString('hex'), salt), coins: 200, packs: 1, bought: {}, last: Date.now(), cards: {}, since: {}, fav: [], notifs: [], bot: lvl, lgb: 1, bcfg: { shift: [a, b], every: 20 + crypto.randomInt(71) } };
+  await redis.set(key(name), u); await redis.sadd('users', name); await redis.sadd('lgbn', name);
+  return u;
+}
+async function lgNewBots(n, used) { const out = []; for (const nm of shuf([...LGB])) { if (out.length >= n) break; if (used.has(nm.toLowerCase())) continue; used.add(nm.toLowerCase()); const u = await lgNewBot(nm); if (u) out.push(u); } return out; }
+async function lgFill(t, g, reg, c) {
+  const G = (reg.groups[t + ':' + g] ||= { r: 0, b: [] }), need = LG_SIZE - G.r - G.b.length; if (need <= 0) return;
+  const got = []; while (got.length < need && reg.pool.length) { const u = await redis.get(key(reg.pool.shift())); if (u && u.bot) got.push(u); }
+  if (got.length < need) got.push(...(await lgNewBots(need - got.length, new Set((await redis.smembers('lgbn')).map((x) => x.toLowerCase())))));
+  for (const u of got) { u.lg = { t, g, sid: c.id, pts: 0, act: 0 }; G.b.push(u.pseudo); await redis.set(key(u.pseudo), u); }
+}
+async function lgEnsure(u) {
+  const c = await lgSync(); if (u.bot || u.pseudo === OP_NAME) return c;
+  const L = lgSyncUser(u, c);
+  if (L.g < 0) {
+    const reg = (await redis.get('lgg')) || { groups: {}, pool: [] }; let g = 0;
+    while (reg.groups[L.t + ':' + g] && reg.groups[L.t + ':' + g].r >= LG_SIZE) g++;
+    const G = (reg.groups[L.t + ':' + g] ||= { r: 0, b: [] });
+    if (G.b.length && G.r + G.b.length >= LG_SIZE) { const nm = G.b.pop(), b = await redis.get(key(nm)); if (b) { b.lg = null; await redis.set(key(nm), b); reg.pool.push(nm); } } // un vrai joueur prend la place d'un bot
+    G.r++; L.g = g;
+    await lgFill(L.t, g, reg, c);
+    await redis.set('lgg', reg);
+  }
+  return c;
+}
+async function lgRoll(c) {
+  const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
+  const all = list.filter((v) => v && v.pseudo !== OP_NAME), users = all.filter((v) => !v.bot), bots = all.filter((v) => v.bot && v.lgb);
+  const nid = c.id + 1, groups = new Map(), res = new Map();
+  for (const u of [...users, ...bots.filter((b) => b.lg && b.lg.g >= 0)]) { const L = lgOf(u); if (L.sid !== c.id) { L.pts = 0; L.act = 0; L.g = -1; } const k = L.t + ':' + L.g; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(u); }
+  for (const [k, R] of groups) {
+    const [t, g] = k.split(':').map(Number), rows = R.map((u) => ({ u, pts: lgOf(u).pts, real: u.bot ? 0 : 1 })).sort((a, b) => b.pts - a.pts || b.real - a.real);
+    rows.forEach((r, i) => {
+      if (r.u.bot) return;
+      const L = lgOf(r.u), idle = L.act === 0 && L.pts === 0; let d = 0;
+      if (g >= 0 && i < LG_UP && L.pts > 0 && t < 19) d = 1; else if ((g >= 0 && i >= Math.max(LG_UP, rows.length - LG_UP) && t > 0) || (idle && t > 0)) d = -1;
+      res.set(r.u.pseudo, { d, r: i + 1, p: Math.floor(L.pts), idle });
+    });
+  }
+  const byT = new Map(), reg = { groups: {}, pool: [] };
+  for (const u of users) { const L = lgOf(u), r = res.get(u.pseudo) || { d: 0, r: 0, p: Math.floor(L.pts), idle: false }; L.prev = { t: L.t, d: r.d, r: r.r, p: r.p, idle: r.idle }; L.t = Math.max(0, Math.min(19, L.t + r.d)); if (!byT.has(L.t)) byT.set(L.t, []); byT.get(L.t).push(u); }
+  for (const [t, arr] of byT) shuf(arr).forEach((u, i) => { const L = lgOf(u), g = Math.floor(i / LG_SIZE); L.g = g; L.sid = nid; L.pts = 0; L.act = 0; (reg.groups[t + ':' + g] ||= { r: 0, b: [] }).r++; });
+  // les bots repartent dans le « vivier » puis remplissent les places vides (les plus forts dans les paliers les plus hauts)
+  const pool = bots.sort((a, b) => Object.keys(b.cards || {}).length - Object.keys(a.cards || {}).length), dirty = new Set();
+  for (const b of pool) { b.lg = null; dirty.add(b); }
+  const keys = Object.keys(reg.groups).sort((a, b) => +b.split(':')[0] - +a.split(':')[0] || +a.split(':')[1] - +b.split(':')[1]);
+  let need = keys.reduce((a, k) => a + Math.max(0, LG_SIZE - reg.groups[k].r), 0), extra = [];
+  if (need > pool.length) extra = await lgNewBots(need - pool.length, new Set([...(await redis.smembers('lgbn')), ...pool.map((b) => b.pseudo)].map((x) => x.toLowerCase())));
+  for (const b of extra) { pool.push(b); dirty.add(b); }
+  for (const k of keys) { const [t, g] = k.split(':').map(Number), G = reg.groups[k]; while (G.r + G.b.length < LG_SIZE && pool.length) { const b = pool.shift(); b.lg = { t, g, sid: nid, pts: 0, act: 0 }; G.b.push(b.pseudo); } }
+  reg.pool = pool.map((b) => b.pseudo);
+  for (const b of dirty) await redis.set(key(b.pseudo), b);
+  for (const u of users) {
+    const L = lgOf(u), p = L.prev, nm = LG_NAMES[L.t];
+    note(u, (p.d > 0 ? '🏆 Saison terminée : tu montes en ' + nm + ' !' : p.d < 0 ? '📉 Saison terminée : tu descends en ' + nm + (p.idle ? ' (aucune activité cette semaine)' : '') + '.' : '✅ Saison terminée : tu restes en ' + nm + '.') + ' Nouvelle saison : les points repartent à zéro.', false, 'none');
+    await redis.set(key(u.pseudo), u);
+  }
+  await redis.set('lgg', reg);
+}
+const colSize = (cat, t) => [...R].reduce((a, r) => a + ((cat[t] || {})[r] || []).length, 0);
+const rarCount = (v, cat) => { const o = { u: 0, s: 0, m: 0, l: 0, e: 0, r: 0, c: 0 }; for (const id of Object.keys(v.cards || {})) { if (id.startsWith('obj:')) continue; const r = rarOf(cat, id); if (r) o[r]++; } return o; };
+// total de cartes = cartes possédées + cartes parties dans les renaissances (collection entière à chaque renaissance)
+const cardsTot = (v, cat, rr) => Object.values(rr).reduce((a, x) => a + x, 0) + Object.entries(v.rb || {}).reduce((a, [t, n]) => a + n * colSize(cat, t), 0);
+const rarSplit = (n) => { const P = [['u', 0.002], ['s', 0.01], ['m', 0.03], ['l', 0.06], ['e', 0.13], ['r', 0.27]], o = {}; let left = n; for (const [k, p] of P) { o[k] = Math.round(n * p); left -= o[k]; } o.c = Math.max(0, left); return o; };
+async function lgView(u, cat) {
+  const c = await lgEnsure(u), L = lgOf(u);
+  const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], H = (await redis.get('chh')) || [], ob = (await redis.get('lgob')) || [];
+  const acc = list.filter((v) => v && v.pseudo !== OP_NAME && !banOf(v) && v.pseudo !== u.pseudo); if (!banOf(u) && u.pseudo !== OP_NAME) acc.push(u);
+  const rowOf = (v) => { const cs = v.cs || csFrom(H, v.pseudo), rr = rarCount(v, cat), vl = v.lg && v.lg.sid === c.id ? v.lg : null; return { n: v.pseudo, pf: v.pf || null, bi: v.lg ? v.lg.t : 0, ren: rbTot(v), v: cs.w, nu: cs.d, d: cs.l, pts: vl ? Math.floor(vl.pts) : 0, co: v.coins, cards: cardsTot(v, cat, rr), rr }; };
+  const obRow = (x) => ({ n: x.n, pf: null, bi: x.t, ren: x.ren, v: x.v, nu: x.nu, d: x.d, pts: x.pts, co: x.co, cards: x.cards, rr: rarSplit(x.cards), op: 1 });
+  const rows = acc.filter((v) => v.lg && v.lg.sid === c.id && v.lg.t === L.t && v.lg.g === L.g).map(rowOf);
+  if (L.g === 0) for (const x of ob) if (x.t === L.t) rows.push(obRow(x));
+  rows.sort((a, b) => b.pts - a.pts || b.ren - a.ren || b.co - a.co || a.n.localeCompare(b.n));
+  const nn = rows.filter((r) => !r.op).length; let z = 0; for (const r of rows) { if (r.op) { r.z = ''; continue; } r.z = z < LG_UP ? 'up' : z >= Math.max(LG_UP, nn - LG_UP) ? 'down' : ''; z++; }
+  const world = [...acc.map(rowOf), ...ob.map(obRow)].sort((a, b) => b.cards - a.cards || b.ren - a.ren || a.n.localeCompare(b.n));
+  const place = world.findIndex((x) => x.n === u.pseudo) + 1;
+  return { id: c.id, end: c.end, t: L.t, g: L.g, pts: Math.floor(L.pts), size: LG_SIZE, names: LG_NAMES, rows, world: world.slice(0, 100), place, total: world.length };
+}
+const lgOp = async () => { const c = await lgSync(); return { id: c.id, end: c.end, bots: (await redis.get('lgob')) || [], names: LG_NAMES, nb: (await redis.smembers('lgbn')).length }; };
 async function raceFinish(cur, now) {
   const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], board = raceBoard(list, cur.id);
   const win = board.length && !board[0].bot && board[0].pos > 0 ? board[0] : null;
   await redis.set('race:last', { id: cur.id, name: cur.name, kind: cur.kind, winner: win ? { pseudo: win.pseudo, pos: win.pos } : null });
+  if (board.length < 3000) for (const x of board) { if (x.bot || x.pos <= 0) continue; const v = await redis.get(key(x.pseudo)); if (!v) continue; await lgSync(); lgAdd(v, win && x.rank === 1 ? 5 : 0); await redis.set(key(v.pseudo), v); }
   for (const x of board.slice(0, 2)) {
     if (x.bot || x.pos <= 0 || (x.rank === 2 && !win)) continue;
     const v = await redis.get(key(x.pseudo)); if (!v) continue;
@@ -542,7 +650,7 @@ async function botTurn(u, cat, cu, sh, mk) {
   for (let i = 0; i < 12; i++) {
     let t = Object.keys(u.bought).find((k) => u.bought[k] > 0 && sh[k] && !sh[k].blocked);
     if (t) u.bought[t]--; else {
-      const av = themes.filter((k) => freeOf(u, lvOf(cat, k)) > 0); // sachets gratuits : un stock par niveau
+      const av = themes.filter((k) => freeOf(u) > 0); // sachets gratuits : un seul stock
       if (!av.length) break;
       const miss = (k) => cids(cat[k], k).filter((id) => !u.cards[id]).length;
       t = u.bot === 'fort' || u.bot === 'mf' ? av.sort((a, c) => miss(c) - miss(a))[0] : pick(av);
@@ -655,6 +763,18 @@ async function runBots() {
     u.lastAct = now; mk = await botTurn(u, cat, cu, sh, mk);
     await redis.set(key(u.pseudo), u);
   }
+  // bots de ligue : de vrais comptes qui jouent comme des joueurs (5 au maximum par passage, selon leur rythme et leur plage horaire)
+  { const bn = await redis.smembers('lgbn'), q = (await redis.get('lgbq')) || {}, due = shuf(bn.filter((n) => (q[n] || 0) <= now)).slice(0, 5);
+    for (const n of due) {
+      const u = await redis.get(key(n)); if (!u || !u.bot) { q[n] = now + DAY; continue; }
+      u.since ||= {}; u.fav ||= []; u.bought ||= {}; const cf = u.bcfg || { shift: [8, 20], every: 40 };
+      if (h < cf.shift[0] || h >= cf.shift[1]) { q[n] = now + 30 * 60000; continue; }
+      mk ||= (await redis.get('market')) || [];
+      u.lastAct = now; mk = await botTurn(u, cat, cu, sh, mk);
+      if (u.lg && u.lg.g >= 0) { const exp = Math.max(40, (((cf.shift[1] - cf.shift[0]) * 60) / cf.every) * 7); lgAdd(u, ((LG_PACE[u.bot] || 10) + 3 * u.lg.t) / exp * (0.4 + 1.2 * Math.random()), true); }
+      await redis.set(key(u.pseudo), u); q[n] = now + Math.round(cf.every * 60000 * (0.7 + 0.6 * Math.random()));
+    }
+    if (due.length) await redis.set('lgbq', q); }
   if (mk) await redis.set('market', mk);
   // Notification de course aux joueurs avec notifications push (même appli fermée) : déclenchée dès que quelqu'un utilise le site
   const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
@@ -804,7 +924,7 @@ const handler = async (req, res) => {
         const names = (await redis.smembers('users')).sort();
         const list = names.length ? await redis.mget(...names.map(key)) : [];
         const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, bd: u.bd || {}, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u), pf: !!u.pf, push: (u.subs || []).length > 0 }; });
-        return ok({ ...(await skinState()), skinc: await skinList(), ...(await maintOp()), maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), subs: SUBS, users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
+        return ok({ ...(await skinState()), skinc: await skinList(), ...(await maintOp()), lg: await lgOp(), maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), subs: SUBS, users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
       }
       if (b.action === 'shop') {
         if (!cat[b.theme] || b.theme === 'obj') return fail('Thème inconnu');
@@ -1262,6 +1382,23 @@ const handler = async (req, res) => {
         await redis.set(key(u.pseudo), u);
         return ok({ done: true });
       }
+      if (b.action === 'lgpts') {
+        const t = await redis.get(key(String(b.pseudo || '')));
+        if (!t || t.bot) return fail('Joueur introuvable');
+        const n = Math.trunc(Number(b.n)); if (!Number.isFinite(n) || n === 0 || Math.abs(n) > 100000) return fail('Points invalides (1 à 100000, négatif pour retirer)');
+        await lgSync(); lgAdd(t, n, false); note(t, (n > 0 ? '🏆 Le staff t’a donné ' + n : '🏆 Le staff t’a retiré ' + -n) + ' point' + (Math.abs(n) > 1 ? 's' : '') + ' de saison.');
+        await redis.set(key(t.pseudo), t); return ok({ done: true });
+      }
+      if (b.action === 'lgbotadd') {
+        const n = String(b.n || '').trim();
+        if (!/^[A-Za-z0-9_]{3,20}$/.test(n)) return fail('Pseudo du bot : 3 à 20 caractères (lettres sans accent, chiffres, _)');
+        const L = (await redis.get('lgob')) || [];
+        if (L.length >= 200) return fail('200 bots maximum');
+        if (L.some((x) => x.n.toLowerCase() === n.toLowerCase()) || isBotName(n) || n.toLowerCase() === OP_NAME.toLowerCase() || (await redis.get('u:' + n.toLowerCase()))) return fail('Ce pseudo est déjà pris');
+        L.push({ id: crypto.randomBytes(4).toString('hex'), n, t: Math.min(19, int(b.t, 19)), ren: int(b.ren, 9999), v: int(b.v, 99999), nu: int(b.nu, 99999), d: int(b.d, 99999), pts: int(b.pts, 100000), co: int(b.co, 1e9), cards: int(b.cards, 99999) });
+        await redis.set('lgob', L); return ok({ done: true });
+      }
+      if (b.action === 'lgbotdel') { await redis.set('lgob', ((await redis.get('lgob')) || []).filter((x) => x.id !== b.id)); return ok({ done: true }); }
       if (b.action === 'delreport') {
         await redis.set('reports', ((await redis.get('reports')) || []).filter((x) => x.id !== b.id));
         return ok({ done: true });
@@ -1275,6 +1412,7 @@ const handler = async (req, res) => {
     u.bought ||= {}; u.since ||= {}; u.fav ||= []; u.notifs ||= []; u.inbox ||= [];
     tick(u);
     u.seen = Date.now();
+    await lgEnsure(u).catch((e) => console.error('lgEnsure', e.message));
     raceNote(u);
     subCheck(u);
     if (u.ban && u.ban.until != null && u.ban.until <= Date.now()) { delete u.ban; note(u, '✅ Ton bannissement est terminé : bon retour !'); }
@@ -1282,7 +1420,7 @@ const handler = async (req, res) => {
     if (banned && !['me', 'report', 'settings', 'delnote'].includes(b.action)) return fail('⛔ Compte banni : seuls les Réglages sont accessibles');
     const mt = await maintGet();
     const maintOn = !!mt && (mt.type === 'net' || u.pseudo !== OP_NAME);
-    if (maintOn && !['me', 'report', 'settings', 'rank', 'chrank'].includes(b.action) && !menuOk(mt, b.action)) return fail(mt.type === 'net' ? '📡 Erreur réseau : réessaie dans un moment' : '🔧 Maintenance : une mise à jour arrive bientôt');
+    if (maintOn && !['me', 'report', 'settings', 'rank', 'chrank', 'lgrank'].includes(b.action) && !menuOk(mt, b.action)) return fail(mt.type === 'net' ? '📡 Erreur réseau : réessaie dans un moment' : '🔧 Maintenance : une mise à jour arrive bientôt');
     const shAll = await shopOf(cat), sh = visShop(u, shAll, cat);
     let mk = (await redis.get('market')) || [];
     let extra = {};
@@ -1531,7 +1669,10 @@ const handler = async (req, res) => {
     } else if (b.action === 'rebirth') {
       const t = String(b.t || ''), r = rebirthDo(u, t, cat, cu);
       if (typeof r === 'string') return fail(r);
+      lgAdd(u, 10);
       extra = r;
+    } else if (b.action === 'lgrank') {
+      extra = { lg: await lgView(u, cat) };
     } else if (b.action === 'rank') {
       const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
       extra = { rank: list.filter(Boolean).map((v) => {
