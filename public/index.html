@@ -971,7 +971,9 @@ function lgDraw() {
       + '<small>Rond vert = victoire, gris = nul, rouge = défaite (5 derniers défis, le plus récent à droite). Rareté : mythiques, célestes, légendaires, épiques possédées. Classé par nombre de cartes possédées, toutes ligues confondues. Les cartes parties dans les renaissances comptent aussi.</small>';
   }
   const place = '<div class="box" style="display:flex;align-items:center;gap:10px;margin:8px 0">' + LGBADGE(LG.t, 34) + '<span style="flex:1">Ta place dans le classement monde</span><b style="font-size:18px">' + (LG.place ? lgNth(LG.place) : '–') + '</b><small>/ ' + LG.total + '</small></div>';
-  el.innerHTML = tabs + place + body;
+  const me = LG.me, mine = lgV !== 'l' && me ? '<div class="box" style="padding:8px;margin:8px 0"><table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th>5 derniers</th><th>♻️</th><th>Cartes</th><th>Rareté</th></tr><tr class="me"><td>' + (LG.place || '–') + '</td><td class="pn">' + LGBADGE(me.bi, 30) + ' ' + esc(me.n) + pfImg(me.pf) + '</td><td>' + lgDots(me.l5) + '</td><td>' + me.ren + '</td><td><b>' + me.cards + '</b></td><td style="white-space:nowrap">' + lgRar(me.rr) + '</td></tr></table><div class="row" style="justify-content:center;margin-top:6px"><button class="g" id="lgsee" type="button">📍 Voir dans le classement</button><small>sur ' + LG.total + '</small></div></div>' : '';
+  el.innerHTML = tabs + (mine || place) + body;
+  const sb = $('#lgsee'); if (sb) sb.onclick = () => { const r = el.querySelector('tr[data-lr].me'); if (!r) return msg('Tu es hors du top 100 affiché'); r.scrollIntoView({ block: 'center', behavior: 'smooth' }); r.animate([{ background: '#F5C54299' }, { background: 'transparent' }], { duration: 1800 }); };
   el.querySelectorAll('[data-lv]').forEach((b) => (b.onclick = () => { lgV = b.dataset.lv; lgDraw(); }));
   el.querySelectorAll('[data-lr]').forEach((r) => (r.onclick = () => lgDetail((lgV === 'l' ? LG.rows : LG.world)[+r.dataset.lr])));
   clearInterval(window.lgT);
