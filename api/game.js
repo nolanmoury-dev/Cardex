@@ -13,6 +13,9 @@ const SL = [['🚲', 22, [2, 6, 30]], ['⚽', 22, [2, 6, 30]], ['🤾', 20, [2.5
 const TK = [[6095, 0], [2100, 1], [1200, 2], [500, 4], [80, 10], [20, 50], [5, 100]]; // [poids sur 10000, multiplicateur du ticket]
 const mgInfo = (u) => { const m = u.mg && u.mg.d === parisDay() ? u.mg : {}; return Object.fromEntries(Object.entries(MG_MAX).map(([k, n]) => [k, Math.max(0, n - (m[k] || 0))])); };
 const mgUse = (u, k) => { if (!u.mg || u.mg.d !== parisDay()) u.mg = { d: parisDay() }; if ((u.mg[k] || 0) >= MG_MAX[k]) return 'Limite du jour atteinte : ' + MG_MAX[k] + ' parties par jour pour ce jeu. Reviens demain !'; u.mg[k] = (u.mg[k] || 0) + 1; };
+// Pubs 🎬 de la Boutique : 5 par jour (heure de Paris), chacune donne 1 sachet de la collection choisie. L'écran dure au moins AD_MIN ms (vérifié côté serveur).
+const AD_MAX = 5, AD_MIN = 5500;
+const adLeft = (u) => Math.max(0, AD_MAX - (u.ad && u.ad.d === parisDay() ? u.ad.n || 0 : 0));
 const shuf = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const DAY = 864e5, MAXP = 10, PRICE = 100, PACK = 5, OPEN_MAX = 50;
 // Connexion quotidienne : jour 1 à 7 (heure de Paris). Un jour raté remet la série à zéro ; après le jour 7 on repart au jour 1.
@@ -149,7 +152,7 @@ const MAINT_PRESETS = {
 };
 // Menus que l'opérateur peut laisser ouverts pendant une maintenance (mêmes clés que MAINT_PRESETS) : actions serveur débloquées par chaque menu.
 const MENU_ACTS = {
-  shop: ['buy', 'buyobj', 'open', 'daily'],
+  shop: ['buy', 'buyobj', 'open', 'daily', 'adstart', 'adpack'],
   col: ['fav', 'sell', 'sellbd', 'list', 'rebirth', 'open'],
   mk: ['buymk', 'unlist', 'list', 'players', 'peek', 'gift', 'tradeoffer', 'tradeaccept', 'tradecounter', 'tradeconfirm', 'tradedecline'],
   jeu: ['bet', 'betend', 'roulette', 'slots', 'flip', 'scratch', 'battle', 'racepack', 'racelb', 'carcolor', 'carskin', 'wheelspin'],
@@ -392,7 +395,7 @@ const price = (sh, t, cat) => Math.round((PRICE * 2 ** (lvOf(cat, t) - 1) * (100
 const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t), ob = cat[t]; if (ob && ob.until != null && !ob.base && ((u.rb || {})[t] || 0) >= 1) return false; return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
 const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => x.seller === u.pseudo || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))), inbox: u.inbox || [],
-  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), dn: u.dn || null, lgev: u.lg && u.lg.prev && u.lg.prev.d && !u.lg.prev.ack ? { from: u.lg.prev.t, to: u.lg.t, d: u.lg.prev.d, coins: u.lg.prev.d > 0 ? LG_PROMO : 0 } : null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, vit: (u.vit || []).filter((id) => u.cards[id]).slice(0, 3), pf: u.pf || null, sub: subOf(u) ? { t: u.sub.t, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial, subs: SUBS, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
+  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), ad: adLeft(u), dn: u.dn || null, lgev: u.lg && u.lg.prev && u.lg.prev.d && !u.lg.prev.ack ? { from: u.lg.prev.t, to: u.lg.t, d: u.lg.prev.d, coins: u.lg.prev.d > 0 ? LG_PROMO : 0 } : null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, vit: (u.vit || []).filter((id) => u.cards[id]).slice(0, 3), pf: u.pf || null, sub: subOf(u) ? { t: u.sub.t, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial, subs: SUBS, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
   rw: (u.rw || []).map((x) => ({ rank: x.rank, name: x.name })), rws: (u.rw || [])[0] ? wSegs(u.rw[0].rank, u.rw[0].mult).map(wLabel) : null,
   next: u.packs >= MAXP ? null : u.last + stepOf(u.last), fp: { 1: { n: u.packs, next: u.packs >= MAXP ? null : u.last + stepOf(u.last) } }, cards: u.cards, bd: u.bd || {}, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
@@ -1586,6 +1589,20 @@ const handler = async (req, res) => {
       if (u.coins < p) return fail('Pas assez de coins');
       u.coins -= p;
       u.bought[b.theme] = (u.bought[b.theme] || 0) + 1;
+    } else if (b.action === 'adstart' || b.action === 'adpack') { // 🎬 regarder une pub = 1 sachet de cette collection (5 par jour, tous sachets confondus)
+      const e = pack(); if (e) return fail(e);
+      if (sh[b.theme] && sh[b.theme].nobuy) return fail("Ce sachet n'est plus disponible : passe au niveau supérieur");
+      if (adLeft(u) < 1) return fail('Limite du jour atteinte : ' + AD_MAX + ' pubs par jour. Reviens demain !');
+      if (b.action === 'adstart') u.adT = Date.now();
+      else {
+        const dt = Date.now() - (u.adT || 0);
+        if (!u.adT || dt < AD_MIN) return fail('Regarde la pub jusqu’au bout pour gagner ton sachet');
+        if (dt > 10 * 60 * 1000) { delete u.adT; return fail('Pub expirée : relance-la'); }
+        delete u.adT;
+        if (!u.ad || u.ad.d !== parisDay()) u.ad = { d: parisDay(), n: 0 };
+        u.ad.n += 1;
+        u.bought[b.theme] = (u.bought[b.theme] || 0) + 1;
+      }
     } else if (b.action === 'open') {
       const e = pack(); if (e) return fail(e);
       const LV0 = lvOf(cat, b.theme), have = (u.bought[b.theme] || 0) + freeOf(u, LV0);
