@@ -16,6 +16,12 @@ const mgUse = (u, k) => { if (!u.mg || u.mg.d !== parisDay()) u.mg = { d: parisD
 // Pubs 🎬 de la Boutique : 5 par jour (heure de Paris), chacune donne 1 sachet de la collection choisie. L'écran dure au moins AD_MIN ms (vérifié côté serveur).
 const AD_MAX = 5, AD_MIN = 5500;
 const adUsed = (u) => (u.ad && u.ad.d === parisDay() ? u.ad.n || 0 : 0); // u.adX = pubs en plus données par l'opérateur (elles ne se remettent pas à zéro chaque jour)
+const PUB_PRICES = [500, 1000, 2000], PUB_DAYS = 3, PUB_RATE = 0.02; // 📢 pub de joueur : demande validée par l'opérateur ; 500, puis 1000, puis 2000 (max) ; dure 3 jours ; à chaque vue complète, le joueur gagne 2 % de ce qu'il a payé
+const pubPrice = (u) => PUB_PRICES[Math.min(u.pubN || 0, PUB_PRICES.length - 1)];
+const pubClean = (v, n) => String(v || '').replace(/[<>&"'`\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, n);
+const pubReqs = async () => (await redis.get('pubreq')) || [];
+const pubCollect = async (u) => { const k = 'pubg:' + u.pseudo, v = Number(await redis.get(k)) || 0; if (v > 0) { await redis.incrby(k, -v); u.coins += v; } }; // gains des pubs vues par d'autres joueurs
+const pubsAct = async () => { const l = (await redis.get('pubs')) || [], a = l.filter((p) => p.until > Date.now()); if (a.length !== l.length) await redis.set('pubs', a); return a; };
 const adLeft = (u) => Math.max(0, AD_MAX - adUsed(u)) + (u.adX || 0), adMax = (u) => AD_MAX + (u.adX || 0);
 const shuf = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const DAY = 864e5, MAXP = 10, PRICE = 100, PACK = 5, OPEN_MAX = 50;
@@ -396,7 +402,7 @@ const price = (sh, t, cat) => Math.round((PRICE * 2 ** (lvOf(cat, t) - 1) * (100
 const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t), ob = cat[t]; if (ob && ob.until != null && !ob.base && ((u.rb || {})[t] || 0) >= 1) return false; return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
 const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => x.seller === u.pseudo || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))), inbox: u.inbox || [],
-  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), ad: adLeft(u), adm: adMax(u), dn: u.dn || null, lgev: u.lg && u.lg.prev && u.lg.prev.d && !u.lg.prev.ack ? { from: u.lg.prev.t, to: u.lg.t, d: u.lg.prev.d, coins: u.lg.prev.d > 0 ? LG_PROMO : 0 } : null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, vit: (u.vit || []).filter((id) => u.cards[id]).slice(0, 3), pf: u.pf || null, sub: subOf(u) ? { t: u.sub.t, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial, subs: SUBS, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
+  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), ad: adLeft(u), adm: adMax(u), pubp: pubPrice(u), pubf: u.pubFree || 0, dn: u.dn || null, lgev: u.lg && u.lg.prev && u.lg.prev.d && !u.lg.prev.ack ? { from: u.lg.prev.t, to: u.lg.t, d: u.lg.prev.d, coins: u.lg.prev.d > 0 ? LG_PROMO : 0 } : null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, vit: (u.vit || []).filter((id) => u.cards[id]).slice(0, 3), pf: u.pf || null, sub: subOf(u) ? { t: u.sub.t, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial, subs: SUBS, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
   rw: (u.rw || []).map((x) => ({ rank: x.rank, name: x.name })), rws: (u.rw || [])[0] ? wSegs(u.rw[0].rank, u.rw[0].mult).map(wLabel) : null,
   next: u.packs >= MAXP ? null : u.last + stepOf(u.last), fp: { 1: { n: u.packs, next: u.packs >= MAXP ? null : u.last + stepOf(u.last) } }, cards: u.cards, bd: u.bd || {}, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
@@ -1020,7 +1026,7 @@ const handler = async (req, res) => {
         const names = (await redis.smembers('users')).sort();
         const list = names.length ? await redis.mget(...names.map(key)) : [];
         const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, bd: u.bd || {}, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u), pf: !!u.pf, push: (u.subs || []).length > 0 }; });
-        return ok({ ...(await skinState()), skinc: await skinList(), ...(await maintOp()), lg: await lgOp(), maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), subs: SUBS, users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
+        return ok({ ...(await skinState()), skinc: await skinList(), ...(await maintOp()), lg: await lgOp(), maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), subs: SUBS, users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pubs: await pubsAct(), pubreq: await pubReqs(), pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
       }
       if (b.action === 'shop') {
         if (!cat[b.theme] || b.theme === 'obj') return fail('Thème inconnu');
@@ -1034,11 +1040,13 @@ const handler = async (req, res) => {
         if (!u) return fail('Joueur introuvable');
         u.fav ||= []; u.since ||= {}; u.notifs ||= [];
         tick(u);
-        const sg = b.mode === 'take' ? -1 : 1, c = int(b.coins), p = int(b.packs, 1000), ad = int(b.ads, 1000), parts = [];
+        const sg = b.mode === 'take' ? -1 : 1, c = int(b.coins), p = int(b.packs, 1000), ad = int(b.ads, 1000), pf = int(b.pubfree, 100), parts = [];
         u.coins = Math.max(0, u.coins + sg * c);
         u.packs = Math.max(0, u.packs + sg * p);
         u.adX = Math.max(0, (u.adX || 0) + sg * ad);
+        u.pubFree = Math.max(0, (u.pubFree || 0) + sg * pf);
         if (c) parts.push(c + ' coins');
+        if (pf) parts.push(pf + ' création' + (pf > 1 ? 's' : '') + ' de pub 📢 offerte' + (pf > 1 ? 's' : ''));
         if (ad) parts.push(ad + ' pub' + (ad > 1 ? 's' : '') + ' 🎬');
         if (p) parts.push(p + ' sachet' + (p > 1 ? 's' : ''));
         const ids = [].concat(b.cards || (b.card ? [b.card] : [])).map(String), bt = BDM[int(b.badge, 3)] ? int(b.badge, 3) : 0; // bt : 0 = sans badge, 1 Bronze, 2 Argent, 3 Or
@@ -1054,6 +1062,32 @@ const handler = async (req, res) => {
         if (b.full && ids.length) parts.push('toutes les cartes de la collection ' + ids[0].slice(0, ids[0].indexOf(':')) + (sg > 0 ? ' : à toi de faire la renaissance ♻️' : ''));
         if (parts.length) note(u, (sg > 0 ? "🎁 L'opérateur t'a donné : " : "⚠️ L'opérateur t'a retiré : ") + parts.join(', '));
         await redis.set(key(u.pseudo), u);
+        return ok({ done: true });
+      }
+      if (b.action === 'pubok' || b.action === 'pubno') { // 📢 l'opérateur accepte ou refuse une demande de pub
+        const l = await pubReqs(), x = l.find((p) => p.id === String(b.id || ''));
+        if (!x) return fail('Demande introuvable (déjà traitée ?)');
+        await redis.set('pubreq', l.filter((p) => p.id !== x.id));
+        const o = await redis.get(key(x.owner));
+        if (o) o.notifs ||= [];
+        if (b.action === 'pubok') {
+          const act = await pubsAct();
+          act.push({ id: x.id, owner: x.owner, title: x.title, text: x.text, icon: x.icon, color: x.color, paid: x.paid, t: Date.now(), until: Date.now() + PUB_DAYS * DAY });
+          await redis.set('pubs', act);
+          if (o) { if (!x.free) o.pubN = (o.pubN || 0) + 1; note(o, '📢 Ta pub « ' + x.title + ' » est acceptée : elle passe pendant ' + PUB_DAYS + ' jours. Tu gagnes ' + Math.max(1, Math.round(x.paid * PUB_RATE)) + ' 🪙 à chaque fois qu’un joueur la regarde en entier.'); }
+        } else if (o) {
+          if (x.free) o.pubFree = (o.pubFree || 0) + 1; else o.coins += x.cost;
+          note(o, '📢 Ta pub « ' + x.title + ' » a été refusée : ' + (x.free ? 'ta création offerte t’est rendue.' : x.cost + ' 🪙 te sont rendus.'));
+        }
+        if (o) await redis.set(key(o.pseudo), o);
+        return ok({ done: true });
+      }
+      if (b.action === 'pubdel') {
+        const l = (await redis.get('pubs')) || [], x = l.find((p) => p.id === String(b.id || ''));
+        if (!x) return fail('Pub introuvable');
+        await redis.set('pubs', l.filter((p) => p.id !== x.id));
+        const o = await redis.get(key(x.owner));
+        if (o) { o.notifs ||= []; note(o, '📢 Ta pub « ' + x.title + ' » a été retirée par le staff.'); await redis.set(key(o.pseudo), o); }
         return ok({ done: true });
       }
       if (b.action === 'imgup') {
@@ -1564,6 +1598,7 @@ const handler = async (req, res) => {
     if (!u) return fail('Session expirée, reconnecte-toi', 401);
     u.bought ||= {}; u.since ||= {}; u.fav ||= []; u.notifs ||= []; u.inbox ||= [];
     tick(u);
+    await pubCollect(u).catch((e) => console.error('pubCollect', e.message));
     u.seen = Date.now();
     await lgEnsure(u).catch((e) => console.error('lgEnsure', e.message));
     await tnSync().catch((e) => console.error('tnSync', e.message));
@@ -1596,16 +1631,40 @@ const handler = async (req, res) => {
       const e = pack(); if (e) return fail(e);
       if (sh[b.theme] && sh[b.theme].nobuy) return fail("Ce sachet n'est plus disponible : passe au niveau supérieur");
       if (adLeft(u) < 1) return fail('Limite du jour atteinte : ' + AD_MAX + ' pubs par jour. Reviens demain !');
-      if (b.action === 'adstart') u.adT = Date.now();
-      else {
+      if (b.action === 'adstart') {
+        u.adT = Date.now();
+        const pl = (await pubsAct()).filter((p) => p.owner !== u.pseudo);
+        if (pl.length && Math.random() < 0.35) { const p = pl[Math.random() * pl.length | 0]; u.adK = 'p'; u.adP = p.id; extra = { adv: { p: { owner: p.owner, title: p.title, text: p.text, icon: p.icon, color: p.color } } }; }
+        else { const n = Math.random() * 12 | 0; u.adK = n === 10 ? 'hk' : 'n'; extra = { adv: { n } }; } // 10 = the_Hacker
+      } else {
         const dt = Date.now() - (u.adT || 0);
         if (!u.adT || dt < AD_MIN) return fail('Regarde la pub jusqu’au bout pour gagner ton sachet');
         if (dt > 10 * 60 * 1000) { delete u.adT; return fail('Pub expirée : relance-la'); }
         delete u.adT;
-        if (!u.ad || u.ad.d !== parisDay()) u.ad = { d: parisDay(), n: 0 };
-        if (u.ad.n < AD_MAX) u.ad.n += 1; else u.adX = Math.max(0, (u.adX || 0) - 1); // les 5 pubs du jour d'abord, puis celles données par l'opérateur
-        u.bought[b.theme] = (u.bought[b.theme] || 0) + 1;
+        const kind = u.adK, pid = u.adP; delete u.adK; delete u.adP;
+        if (kind === 'hk') extra = { hk: 1 }; // 💀 the_Hacker : aucun gain (ni sachet, ni pub comptée) : le joueur doit lui écrire en message privé
+        else {
+          if (!u.ad || u.ad.d !== parisDay()) u.ad = { d: parisDay(), n: 0 };
+          if (u.ad.n < AD_MAX) u.ad.n += 1; else u.adX = Math.max(0, (u.adX || 0) - 1);
+          u.bought[b.theme] = (u.bought[b.theme] || 0) + 1;
+          if (kind === 'p' && pid) { // 📢 pub d'un joueur vue en entier : il gagne de quoi couvrir une partie de ce qu'il a payé
+            const a = (await pubsAct()).find((p) => p.id === pid);
+            if (a) { const v = Math.max(1, Math.round((a.paid || 0) * PUB_RATE)); await redis.incrby('pubg:' + a.owner, v); await redis.incrby('pubt:' + a.id, v); await redis.incrby('pubn:' + a.id, 1); }
+          }
+        }
       }
+    } else if (b.action === 'pubreq') { // 📢 Réglages → Ta pub ici : demande envoyée à l'opérateur (payée tout de suite, rendue si refusée)
+      const title = pubClean(b.title, 24), text = pubClean(b.text, 100), icon = Array.from(pubClean(b.icon, 8)).slice(0, 2).join('') || '📢', color = /^#[0-9a-f]{6}$/i.test(String(b.color)) ? String(b.color).toLowerCase() : '#0f766e';
+      if (title.length < 2) return fail('Titre trop court');
+      if (text.length < 5) return fail('Slogan trop court');
+      const act = await pubsAct(), rq = await pubReqs();
+      if (act.some((p) => p.owner === u.pseudo) || rq.some((p) => p.owner === u.pseudo)) return fail('Tu as déjà une pub en cours ou en attente');
+      const price = pubPrice(u), free = (u.pubFree || 0) > 0;
+      if (free) u.pubFree -= 1;
+      else { if (u.coins < price) return fail('Pas assez de coins : il faut ' + price + ' 🪙'); u.coins -= price; }
+      rq.push({ id: crypto.randomBytes(5).toString('hex'), owner: u.pseudo, title, text, icon, color, paid: price, cost: free ? 0 : price, free, t: Date.now() });
+      await redis.set('pubreq', rq);
+      await opNote('📢 ' + u.pseudo + ' demande une pub : « ' + title + ' » (à valider dans l’espace opérateur)');
     } else if (b.action === 'open') {
       const e = pack(); if (e) return fail(e);
       const LV0 = lvOf(cat, b.theme), have = (u.bought[b.theme] || 0) + freeOf(u, LV0);
@@ -2157,7 +2216,7 @@ const handler = async (req, res) => {
 
     if (b.action === 'me') { extra = { notifs: u.notifs }; u.notifs = []; }
     await redis.set(key(u.pseudo), u);
-    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), qz: maintOn || banned ? null : await qzPend(u), maint: maintOn, maintinfo: maintOn ? { ...(await maintInfo()), type: mt.type, until: mt.until, code: mt.code, open: mt.open } : null, ...(await skinState()) } });
+    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), pubm: await (async () => { const a = (await pubsAct()).find((p) => p.owner === u.pseudo); if (a) return { ...a, st: 'on', views: Number(await redis.get('pubn:' + a.id)) || 0, gain: Number(await redis.get('pubt:' + a.id)) || 0 }; const q = (await pubReqs()).find((p) => p.owner === u.pseudo); return q ? { ...q, st: 'wait' } : null; })(), qz: maintOn || banned ? null : await qzPend(u), maint: maintOn, maintinfo: maintOn ? { ...(await maintInfo()), type: mt.type, until: mt.until, code: mt.code, open: mt.open } : null, ...(await skinState()) } });
   } catch (e) {
     console.error(e);
     return fail('Erreur serveur : ' + e.message, 500);
