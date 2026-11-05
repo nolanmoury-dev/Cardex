@@ -22,6 +22,15 @@ const vidDrop = async (vid) => { try { const m = await redis.get('pvid:' + vid +
 const pubPrice = (u) => PUB_PRICES[Math.min(u.pubN || 0, PUB_PRICES.length - 1)];
 const pubClean = (v, n) => String(v || '').replace(/[<>&"'`\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, n);
 const pubReqs = async () => (await redis.get('pubreq')) || [];
+// 🗂️ Collections provisoires créées par les joueurs : 5000 🪙 payés, demande validée par l'opérateur, 50 cartes max, 7 jours max ; le créateur gagne 500 🪙 à chaque renaissance faite par un autre joueur
+const COLP_COST = 5000, COLP_GAIN = 500, COLP_MAX = 50, COLP_DAYS = 7, COLP_ACTIVE = 2;
+const colReqs = async () => (await redis.get('colreq')) || [];
+const colmsOf = async (u, cu) => { // mes collections (en attente + créées) pour l'écran Réglages
+  const out = [];
+  for (const q of await colReqs()) if (q.owner === u.pseudo) out.push({ id: q.id, name: q.name, icon: q.icon, st: 'wait', days: q.days, n: q.n, t: q.t });
+  for (const c of cu.cols) if (c.owner === u.pseudo) out.push({ id: c.key, name: c.name, icon: c.icon, st: c.until > Date.now() ? 'on' : 'end', until: c.until, gain: Number(await redis.get('colg:' + c.key)) || 0, t: c.until });
+  return out;
+};
 const pubCollect = async (u) => { const k = 'pubg:' + u.pseudo, v = Number(await redis.get(k)) || 0; if (v > 0) { await redis.incrby(k, -v); u.coins += v; } }; // gains des pubs vues par d'autres joueurs
 const pubsAct = async () => { const l = (await redis.get('pubs')) || [], a = l.filter((p) => p.until > Date.now()); if (a.length !== l.length) { await redis.set('pubfin', ((await redis.get('pubfin')) || []).concat(l.filter((p) => p.until <= Date.now()))); await redis.set('pubs', a); } return a; }; // les pubs terminées vont dans 'pubfin' : leur dernier récap part avec pubRecap
 const adLeft = (u) => Math.max(0, AD_MAX - adUsed(u)) + (u.adX || 0), adMax = (u) => AD_MAX + (u.adX || 0);
@@ -214,6 +223,24 @@ const live = (o) => !o.hidden && (!o.until || o.until > Date.now());
 const loadCu = async () => ({ cols: [], objs: [], vals: {}, stats: {}, ...((await redis.get('custom')) || {}) });
 // Lien de photo facultatif d'une carte (collection provisoire ou objet) : https uniquement, remplace l'image Wikipédia
 const picOf = (s) => { const x = String(s || '').trim(); return /^https:\/\/[^\s"'<>\\]{4,300}$/.test(x) || /^\/api\/game\?img=[a-f0-9]{12}$/.test(x) ? x : null; };
+// Lecture des cartes d'une collection de joueur (même format que l'opérateur) : renvoie un texte d'erreur, ou null. max = nombre de cartes maximum (erreur si dépassé, rien n'est coupé en silence)
+function colParse(o, text, max) {
+  let last = null, nb = 0;
+  for (const ln0 of String(text || '').split('\n').slice(0, 600)) {
+    const ln = ln0.trim(); if (!ln) continue;
+    if (/^(https?:\/\/|\/api\/game\?img=)/i.test(ln)) {
+      if (!/^https:\/\//i.test(ln)) return 'Le lien de photo doit commencer par https:// : ' + ln.slice(0, 60);
+      if (!last) return 'Un lien de photo doit être juste sous le nom de sa carte : ' + ln.slice(0, 60);
+      const p = picOf(ln); if (!p) return 'Lien de photo invalide pour « ' + last + ' »';
+      (o.im ||= {})[last] = p; last = null; continue;
+    }
+    const m = ln.match(/^([crelmsu]):(.+)$/i), r = m ? m[1].toLowerCase() : 'c', n = (m ? m[2] : ln).trim().slice(0, 60);
+    last = n || null;
+    if (n && ![...R].some((x) => (o[x] || []).includes(n))) { if (nb >= max) return 'Maximum ' + max + ' cartes par collection'; o[r].push(n); nb++; }
+  }
+  if (!o.c.length) return 'Mets au moins une carte commune (ligne sans préfixe)';
+  return null;
+}
 const full = (cu) => {
   const t = { ...T0 };
   cu.cols.forEach((c) => (t[c.key] = c));
@@ -1074,7 +1101,7 @@ const handler = async (req, res) => {
         const names = (await redis.smembers('users')).sort();
         const list = names.length ? await redis.mget(...names.map(key)) : [];
         const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, bd: u.bd || {}, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u), pf: !!u.pf, push: (u.subs || []).length > 0 }; });
-        return ok({ ...(await skinState()), skinc: await skinList(), ...(await maintOp()), lg: await lgOp(), maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), subs: SUBS, users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pubs: await pubsAct(), pubreq: await pubReqs(), pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
+        return ok({ ...(await skinState()), skinc: await skinList(), ...(await maintOp()), lg: await lgOp(), maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), subs: SUBS, users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pubs: await pubsAct(), pubreq: await pubReqs(), colreq: await colReqs(), pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
       }
       if (b.action === 'shop') {
         if (!cat[b.theme] || b.theme === 'obj') return fail('Thème inconnu');
@@ -1110,6 +1137,21 @@ const handler = async (req, res) => {
         if (b.full && ids.length) parts.push('toutes les cartes de la collection ' + ids[0].slice(0, ids[0].indexOf(':')) + (sg > 0 ? ' : à toi de faire la renaissance ♻️' : ''));
         if (parts.length) note(u, (sg > 0 ? "🎁 L'opérateur t'a donné : " : "⚠️ L'opérateur t'a retiré : ") + parts.join(', '));
         await redis.set(key(u.pseudo), u);
+        return ok({ done: true });
+      }
+      if (b.action === 'colok' || b.action === 'colno') { // 🗂️ l'opérateur accepte ou refuse une collection créée par un joueur
+        const l = await colReqs(), x = l.find((p) => p.id === String(b.id || ''));
+        if (!x) return fail('Demande introuvable (déjà traitée ?)');
+        const ow = await redis.get(key(x.owner));
+        if (b.action === 'colok') {
+          const t0 = Date.now(), o = { key: 'x' + t0, name: x.name, icon: x.icon, color: x.color, until: t0 + x.days * DAY, owner: x.owner, c: [], r: [], e: [], l: [], m: [], s: [], u: [] };
+          const er = colParse(o, x.cards, COLP_MAX); if (er) return fail(er);
+          cu.cols.push(o);
+          await redis.set('custom', cu);
+          if (ow) note(ow, '🗂️ Ta collection « ' + x.name + ' » est acceptée : elle est ouverte pendant ' + x.days + ' jour' + (x.days > 1 ? 's' : '') + '. Tu gagnes ' + COLP_GAIN + ' 🪙 à chaque fois qu’un autre joueur en fait la renaissance.');
+        } else if (ow) { ow.coins += x.cost; note(ow, '🗂️ Ta collection « ' + x.name + ' » a été refusée : ' + x.cost + ' 🪙 te sont rendus.'); }
+        await redis.set('colreq', l.filter((p) => p.id !== x.id));
+        if (ow) await redis.set(key(ow.pseudo), ow);
         return ok({ done: true });
       }
       if (b.action === 'pubok' || b.action === 'pubno') { // 📢 l'opérateur accepte ou refuse une demande de pub
@@ -1749,6 +1791,23 @@ const handler = async (req, res) => {
       rq.push({ id, owner: u.pseudo, title, text, icon: '📢', color: '#0f766e', vid, link: lk, dur, paid: price, cost: free ? 0 : price, free, t: Date.now() });
       await redis.set('pubreq', rq);
       await opNote('📢 ' + u.pseudo + ' demande une pub : « ' + title + ' » (à valider dans l’espace opérateur : vidéo et lien à vérifier)');
+    } else if (b.action === 'colreq') { // 🗂️ Réglages → Ma collection : demande envoyée à l'opérateur (5000 🪙 payés tout de suite, rendus si refusée)
+      const name = String(b.name || '').trim().slice(0, 30);
+      if (name.length < 2) return fail('Nom trop court');
+      const days = Math.max(1, Math.min(COLP_DAYS, int(b.days, COLP_DAYS) || 1));
+      const o = { name, c: [], r: [], e: [], l: [], m: [], s: [], u: [] };
+      const er = colParse(o, b.cards, COLP_MAX); if (er) return fail(er);
+      const n = [...R].reduce((a, r) => a + o[r].length, 0), rq = await colReqs();
+      if (rq.some((x) => x.owner === u.pseudo)) return fail('Tu as déjà une demande en attente');
+      if (cu.cols.filter((c) => c.owner === u.pseudo && c.until > Date.now()).length >= COLP_ACTIVE) return fail('Tu as déjà ' + COLP_ACTIVE + ' collections en cours : attends qu’une se termine');
+      const nl = name.toLowerCase();
+      if (Object.values(cat).some((c) => String(c.name).toLowerCase() === nl) || rq.some((x) => x.name.toLowerCase() === nl)) return fail('Une collection porte déjà ce nom');
+      if (u.coins < COLP_COST) return fail('Pas assez de coins : il faut ' + COLP_COST + ' 🪙');
+      u.coins -= COLP_COST;
+      const id = crypto.randomBytes(5).toString('hex');
+      rq.push({ id, owner: u.pseudo, name, icon: String(b.icon || '').trim().slice(0, 4) || '⭐', color: /^#[0-9a-f]{6}$/i.test(b.color) ? b.color : '#0ea5e9', days, cards: String(b.cards || '').slice(0, 20000), n, cost: COLP_COST, t: Date.now() });
+      await redis.set('colreq', rq);
+      await opNote('🗂️ ' + u.pseudo + ' demande une collection : « ' + name + ' » (' + n + ' cartes, ' + days + ' j) : à valider dans l’espace opérateur');
     } else if (b.action === 'open') {
       const e = pack(); if (e) return fail(e);
       const LV0 = lvOf(cat, b.theme), have = (u.bought[b.theme] || 0) + freeOf(u, LV0);
@@ -1986,6 +2045,7 @@ const handler = async (req, res) => {
       if (typeof r === 'string') return fail(r);
       lgAdd(u, 10);
       extra = r;
+      { const oc = cat[t]; if (oc && oc.owner && oc.owner !== u.pseudo) { const ow = await redis.get(key(oc.owner)); if (ow) { ow.coins += COLP_GAIN; note(ow, '🗂️ ' + u.pseudo + ' a fait la renaissance de ta collection « ' + oc.name + ' » : +' + COLP_GAIN + ' 🪙'); await redis.set(key(ow.pseudo), ow); await redis.incrby('colg:' + t, COLP_GAIN); } } } // 🗂️ le créateur de la collection est payé à chaque renaissance d'un autre joueur
     } else if (b.action === 'lgack') {
       if (u.lg && u.lg.prev) u.lg.prev.ack = 1;
     } else if (b.action === 'lgrank') {
@@ -2300,7 +2360,7 @@ const handler = async (req, res) => {
 
     if (b.action === 'me') { extra = { notifs: u.notifs }; u.notifs = []; }
     await redis.set(key(u.pseudo), u);
-    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), pubms: await (async () => { const act = (await pubsAct()).filter((p) => p.owner === u.pseudo), rq = (await pubReqs()).filter((p) => p.owner === u.pseudo), out = []; for (const a of act) out.push({ id: a.id, title: a.title, text: a.text, link: a.link || '', st: 'on', until: a.until, t: a.t, views: Number(await redis.get('pubn:' + a.id)) || 0, gain: Number(await redis.get('pubt:' + a.id)) || 0 }); for (const q of rq) out.push({ id: q.id, title: q.title, text: q.text, link: q.link || '', st: 'wait', t: q.t }); return out.sort((x, y) => y.t - x.t); })(), qz: maintOn || banned ? null : await qzPend(u), maint: maintOn, maintinfo: maintOn ? { ...(await maintInfo()), type: mt.type, until: mt.until, code: mt.code, open: mt.open } : null, ...(await skinState()) } });
+    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), pubms: await (async () => { const act = (await pubsAct()).filter((p) => p.owner === u.pseudo), rq = (await pubReqs()).filter((p) => p.owner === u.pseudo), out = []; for (const a of act) out.push({ id: a.id, title: a.title, text: a.text, link: a.link || '', st: 'on', until: a.until, t: a.t, views: Number(await redis.get('pubn:' + a.id)) || 0, gain: Number(await redis.get('pubt:' + a.id)) || 0 }); for (const q of rq) out.push({ id: q.id, title: q.title, text: q.text, link: q.link || '', st: 'wait', t: q.t }); return out.sort((x, y) => y.t - x.t); })(), colms: await colmsOf(u, cu), qz: maintOn || banned ? null : await qzPend(u), maint: maintOn, maintinfo: maintOn ? { ...(await maintInfo()), type: mt.type, until: mt.until, code: mt.code, open: mt.open } : null, ...(await skinState()) } });
   } catch (e) {
     console.error(e);
     return fail('Erreur serveur : ' + e.message, 500);
