@@ -1369,6 +1369,7 @@ function setHTML() {
     (S.maint || S.ban ? '' : subHTML()) +
     (S.maint || S.ban ? '' : '<form class="box" id="fcode" style="display:grid;gap:10px;max-width:400px"><h2>🎟️ Code</h2><p>Tu as un code ? Entre-le ici pour recevoir sa récompense. Un même code ne s’utilise qu’une fois par joueur.</p><input id="cdi" placeholder="Ton code" maxlength="24" autocomplete="off" autocapitalize="characters" required><button>Valider</button></form>') +
     (S.maint || S.ban ? '' : pubBox()) +
+    (S.maint || S.ban ? '' : colBox()) +
 
     pfpBox() +
     (S.maint || S.ban ? '' : '<form class="box" id="frn" style="display:grid;gap:10px;max-width:400px"><h2>Pseudo</h2>' + (S.renames ? '<p>Tu as utilisé ton changement gratuit. Pour changer à nouveau, fais une demande au staff (« Contacter un staff » ci-dessous).</p>' : '<p>Tu as un changement de pseudo gratuit. Ensuite, il faudra le demander au staff.</p><input id="rn2" placeholder="Nouveau pseudo" maxlength="20" required><button>Changer</button>') + '</form>') +
@@ -1614,6 +1615,7 @@ function playerView() {
     if ($('#subcr')) $('#subcr').onclick = () => subCol('');
     if ($('#pbs')) $('#pbs').onchange = () => { const f = $('#pbs').value === 'f'; $('#pbf').style.display = f ? '' : 'none'; $('#pbu').style.display = f ? 'none' : ''; };
     if ($('#fpub')) $('#fpub').onsubmit = (e) => { e.preventDefault(); pubSend(); };
+    if ($('#fcol')) $('#fcol').onsubmit = (e) => { e.preventDefault(); const bt = $('#fcol button'); if (bt.disabled) return; bt.disabled = true; run(async () => { try { const j = await api('colreq', { name: $('#cln').value, icon: $('#cli').value, color: $('#clc').value, days: $('#cld').value, cards: $('#cll').value }); setS(j.state); playerView(); msg('🗂️ Demande envoyée à l’opérateur !', true); } finally { const b2 = $('#fcol button'); if (b2) b2.disabled = false; } }); };
     if ($('#fcode')) $('#fcode').onsubmit = (e) => { e.preventDefault(); run(async () => { const j = await api('redeem', { code: $('#cdi').value }); setS(j.state); playerView(); msg('🎟️ Code validé : tu as reçu ' + j.redeemed, true); }); };
     if ($('#vtp')) { (S.vit || []).forEach((id) => $('#vtp').append(cardEl(id, 1))); $('#vtb').onclick = lgVit; }
     $('#sndt').onchange = (e) => { localStorage.nsnd = e.target.checked ? '1' : '0'; if (e.target.checked) playSnd('account'); };
@@ -1854,6 +1856,21 @@ function pubBox() { // 📢 Réglages : mes pubs + demander une nouvelle pub vid
     + '<input id="pbf" type="file" accept="video/*"><input id="pbu" type="url" placeholder="https://…/ma-video.mp4 (ou .webm)" style="display:none">'
     + '<input id="pbl" type="url" placeholder="Lien à ouvrir quand on touche la pub (facultatif, https://…)">'
     + '<button>' + (f ? 'Envoyer la demande (offerte)' : 'Payer ' + p + ' 🪙 et envoyer la demande') + '</button></form>';
+}
+function colBox() { // 🗂️ Réglages : mes collections + demander ma propre collection provisoire (validée par l'opérateur)
+  const l = S.colms || [];
+  const list = l.length ? '<div class="box"><h2>🗂️ Mes collections (' + l.length + ')</h2>' + l.map((m) => '<p style="border-top:1px solid var(--line);padding-top:8px"><b>' + esc(m.icon || '⭐') + ' ' + esc(m.name) + '</b><br>'
+    + (m.st === 'wait' ? '⏳ En attente de l’opérateur (' + m.n + ' cartes, ' + m.days + ' jour' + (m.days > 1 ? 's' : '') + ') : si elle est refusée, tu es remboursé' : (m.st === 'on' ? '🟢 Ouverte jusqu’au ' + new Date(m.until).toLocaleString('fr-FR') : '⚪ Terminée') + '<br>🪙 ' + m.gain + ' gagné' + (m.gain > 1 ? 's' : '')) + '</p>').join('') + '</div>' : '';
+  if (l.some((m) => m.st === 'wait') || l.filter((m) => m.st === 'on').length >= 2) return list;
+  return list + '<form class="box" id="fcol" style="display:grid;gap:10px;max-width:400px"><h2>🗂️ Crée ta collection</h2><p>Crée ta collection provisoire (50 cartes maximum). Si l’opérateur l’accepte, tous les joueurs peuvent la collectionner, et tu gagnes <b>500 🪙</b> à chaque fois qu’un autre joueur en fait la renaissance. Prix : <b>5 000 🪙</b>, payés maintenant et rendus si elle est refusée.</p>'
+    + '<input id="cln" placeholder="Nom de la collection" maxlength="30" required><input id="cli" placeholder="Emoji (ex : 🎃)" maxlength="4">'
+    + '<label class="row" style="gap:8px">Durée <select id="cld">' + [1, 2, 3, 4, 5, 6, 7].map((d) => '<option value="' + d + '"' + (d === 7 ? ' selected' : '') + '>' + d + ' jour' + (d > 1 ? 's' : '') + '</option>').join('') + '</select></label>'
+    + '<label class="row" style="gap:8px">Couleur du fond <input id="clc" type="color" value="#0ea5e9" style="width:60px;height:36px;padding:2px"></label>'
+    + '<textarea id="cll" rows="8" required placeholder="Une carte par ligne (titre Wikipédia), 50 maximum. Préfixe r: e: l: m: s: u: pour la rareté (m = Mythique, s = Céleste, u = Unique), sans préfixe = commune.&#10;Photo (facultatif) : colle un lien https:// sur la ligne juste en dessous du nom de la carte.&#10;Exemple :&#10;l:Mon joueur&#10;https://exemple.com/photo.jpg"></textarea>'
+    + '<button>Payer 5 000 🪙 et envoyer la demande</button></form>';
+}
+function colOpHTML(rq) { // espace opérateur : demandes de collection des joueurs
+  return '<div class="box"><h2>🗂️ Demandes de collection (' + rq.length + ')</h2>' + (rq.length ? rq.map((p) => '<div class="row" style="border-top:1px solid var(--line);padding:8px 0"><div style="flex:1"><b>' + esc(p.icon || '⭐') + ' ' + esc(p.name) + '</b> <small>de ' + esc(p.owner) + ' · ' + p.n + ' cartes · ' + p.days + ' j · ' + p.cost + ' 🪙 payés</small><br><details><summary>Voir les cartes</summary><pre style="white-space:pre-wrap;max-width:100%;overflow:auto">' + esc(p.cards) + '</pre></details><small>Vérifie les noms et les liens de photos avant d’accepter. Les jours comptent à partir de l’acceptation.</small></div><button data-cok="' + esc(p.id) + '">✅ Accepter</button><button class="g" data-cno="' + esc(p.id) + '">❌ Refuser</button></div>').join('') : '<p>Aucune demande.</p>') + '<div class="err" id="ecq"></div></div>';
 }
 function pubOpHTML(l, rq) { // espace opérateur : demandes de pub (avec aperçu de la vidéo et du lien) + pubs en cours
   const vsrc = (p) => (p.vid ? (p.vid.startsWith('f:') ? '/api/game?vid=' + p.vid.slice(2) : p.vid.slice(2)) : '');
@@ -2637,6 +2654,7 @@ async function opView(m) {
     skinOpHTML() +
     pfbox +
     pubOpHTML(j.pubs || [], j.pubreq || []) +
+    colOpHTML(j.colreq || []) +
     '<form class="box" id="f" style="display:grid;gap:10px"><h2>Donner ou retirer</h2><select id="u" required><option value="">Choisir un joueur</option>' + users.map((u) => '<option value="' + u.pseudo + '">' + u.pseudo + ' — 🪙 ' + u.coins + '</option>').join('') + '</select><select id="m"><option value="give">Donner</option><option value="take">Retirer</option></select><input id="co" type="number" min="0" placeholder="Coins (optionnel)"><input id="pk" type="number" min="0" placeholder="Nombre de sachets (optionnel)"><input id="ad" type="number" min="0" placeholder="Pubs 🎬 en plus (optionnel)"><input id="pbf" type="number" min="0" placeholder="Créations de pub 📢 offertes (optionnel)"><select id="cac" aria-label="Collection"></select><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="cfull"> ♻️ Collection complète (le joueur fait lui-même la renaissance)</label><select id="ca" multiple size="6" aria-label="Cartes"></select><select id="cab" aria-label="Badge"><option value="0">Sans badge</option><option value="1">🥉 Badge Bronze</option><option value="2">🥈 Badge Argent</option><option value="3">🥇 Badge Or</option></select><small id="ch"></small><button>Valider</button><div class="err" id="e"></div></form>' +
     ntOpHTML(users) +
     lgOpHTML(users, j) +
@@ -2781,6 +2799,8 @@ async function opView(m) {
   app.querySelectorAll('[data-ec]').forEach((b) => (b.onclick = act('e3', () => api('endcol', { key: b.dataset.ec }), 'Collection terminée')));
   app.querySelectorAll('[data-pok]').forEach((b) => (b.onclick = act('epq', () => api('pubok', { id: b.dataset.pok }), 'Pub acceptée')));
   app.querySelectorAll('[data-pno]').forEach((b) => (b.onclick = act('epq', () => api('pubno', { id: b.dataset.pno }), 'Demande refusée')));
+  app.querySelectorAll('[data-cok]').forEach((b) => (b.onclick = act('ecq', () => api('colok', { id: b.dataset.cok }), 'Collection acceptée')));
+  app.querySelectorAll('[data-cno]').forEach((b) => (b.onclick = act('ecq', () => api('colno', { id: b.dataset.cno }), 'Demande refusée')));
   app.querySelectorAll('[data-pdel]').forEach((b) => (b.onclick = act('epd', () => api('pubdel', { id: b.dataset.pdel }), 'Pub supprimée')));
   app.querySelectorAll('[data-do]').forEach((b) => (b.onclick = act('e4', () => api('delobj', { name: b.dataset.do }), 'Objet retiré')));
   // --- Marché (opérateur) : présentation en cartes, filtres, rendre / modifier le prix / mettre en vente
