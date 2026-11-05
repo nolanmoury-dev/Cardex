@@ -16,12 +16,14 @@ const mgUse = (u, k) => { if (!u.mg || u.mg.d !== parisDay()) u.mg = { d: parisD
 // Pubs 🎬 de la Boutique : 5 par jour (heure de Paris), chacune donne 1 sachet de la collection choisie. L'écran dure au moins AD_MIN ms (vérifié côté serveur).
 const AD_MAX = 5, AD_MIN = 5500;
 const adUsed = (u) => (u.ad && u.ad.d === parisDay() ? u.ad.n || 0 : 0); // u.adX = pubs en plus données par l'opérateur (elles ne se remettent pas à zéro chaque jour)
-const PUB_PRICES = [500, 1000, 2000], PUB_DAYS = 3, PUB_RATE = 0.02; // 📢 pub de joueur : demande validée par l'opérateur ; 500, puis 1000, puis 2000 (max) ; dure 3 jours ; à chaque vue complète, le joueur gagne 2 % de ce qu'il a payé
+const PUB_PRICES = [500, 1000, 2000], PUB_DAYS = 3, PUB_REC = 5 * 36e5, PUB_MAXN = 10, VID_MAXLEN = 4000000; // 📢 pub de joueur (vidéo 20 s max) : demande validée par l'opérateur ; 500, puis 1000, puis 2000 (max) ; plusieurs pubs possibles ; dure 3 jours ; à chaque vue complète, le propriétaire gagne 10 à 30 🪙 (200 🪙 ≈ 1 chance sur 1000) ; récap toutes les ~5 h
+const pubGain = () => (crypto.randomInt(1000) === 0 ? 200 : 10 + Math.floor(21 * Math.pow(crypto.randomInt(1e6) / 1e6, 2))); // petits montants plus fréquents
+const vidDrop = async (vid) => { try { const m = await redis.get('pvid:' + vid + ':m'); if (!m) return; await redis.del('pvid:' + vid + ':m', ...Array.from({ length: m.n || 0 }, (_, i) => 'pvid:' + vid + ':' + i)); } catch (e) { console.error('vidDrop', e.message); } };
 const pubPrice = (u) => PUB_PRICES[Math.min(u.pubN || 0, PUB_PRICES.length - 1)];
 const pubClean = (v, n) => String(v || '').replace(/[<>&"'`\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, n);
 const pubReqs = async () => (await redis.get('pubreq')) || [];
 const pubCollect = async (u) => { const k = 'pubg:' + u.pseudo, v = Number(await redis.get(k)) || 0; if (v > 0) { await redis.incrby(k, -v); u.coins += v; } }; // gains des pubs vues par d'autres joueurs
-const pubsAct = async () => { const l = (await redis.get('pubs')) || [], a = l.filter((p) => p.until > Date.now()); if (a.length !== l.length) await redis.set('pubs', a); return a; };
+const pubsAct = async () => { const l = (await redis.get('pubs')) || [], a = l.filter((p) => p.until > Date.now()); if (a.length !== l.length) { await redis.set('pubfin', ((await redis.get('pubfin')) || []).concat(l.filter((p) => p.until <= Date.now()))); await redis.set('pubs', a); } return a; }; // les pubs terminées vont dans 'pubfin' : leur dernier récap part avec pubRecap
 const adLeft = (u) => Math.max(0, AD_MAX - adUsed(u)) + (u.adX || 0), adMax = (u) => AD_MAX + (u.adX || 0);
 const shuf = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const DAY = 864e5, MAXP = 10, PRICE = 100, PACK = 5, OPEN_MAX = 50;
@@ -935,6 +937,35 @@ async function runSched(force) {
   return due.length;
 }
 
+// --- 📢 Récap des pubs de joueurs : toutes les ~5 h, un seul message par propriétaire (vues + coins gagnés depuis le dernier récap). Rien n'est envoyé s'il n'y a eu aucune vue.
+// Une pub terminée envoie son dernier récap avec le total. Comme les notifications programmées : part dès qu'un joueur utilise le jeu après l'heure.
+let recChk = 0;
+async function pubRecap() {
+  const now = Date.now(); if (now - recChk < 60000) return; recChk = now;
+  const act = await pubsAct(), fin = (await redis.get('pubfin')) || [];
+  if (!act.length && !fin.length) return;
+  if (!(await redis.set('pubrec:lock', 1, { nx: true, ex: 45 }))) return; // un seul serveur à la fois
+  const cnt = async (id) => [Number(await redis.get('pubn:' + id)) || 0, Number(await redis.get('pubt:' + id)) || 0];
+  for (const ow of new Set([...act, ...fin].map((p) => p.owner))) {
+    const mine = act.filter((p) => p.owner === ow), done = fin.filter((p) => p.owner === ow);
+    const meta = (await redis.get('pubrec:' + ow)) || { t: 0, s: {} }, base = meta.t || Math.min(...mine.concat(done).map((p) => p.t || now));
+    if (!done.length && now - base < PUB_REC) continue;
+    const parts = []; let vn = 0, vg = 0; const snap = {};
+    for (const p of mine) { const [n, g] = await cnt(p.id), pv = meta.s[p.id] || [0, 0]; snap[p.id] = [n, g]; if (n > pv[0]) { vn += n - pv[0]; vg += g - pv[1]; parts.push('« ' + p.title + ' » : ' + (n - pv[0]) + ' vue' + (n - pv[0] > 1 ? 's' : '') + ', +' + (g - pv[1]) + ' 🪙'); } }
+    const ends = [];
+    for (const p of done) { const [n, g] = await cnt(p.id); ends.push('« ' + p.title + ' » est terminée : ' + n + ' vue' + (n > 1 ? 's' : '') + ' au total, ' + g + ' 🪙 gagnés'); }
+    const o = parts.length || ends.length ? await redis.get(key(ow)) : null;
+    if (o) {
+      const txt = (parts.length ? '📢 Récap de tes pubs depuis le dernier récap : ' + (parts.length > 1 ? vn + ' vues, +' + vg + ' 🪙 (' + parts.join(' ; ') + ')' : parts[0]) + '.' : '') + (ends.length ? (parts.length ? ' ' : '') + '🏁 ' + ends.join(' ; ') + '.' : '');
+      note(o, txt.trim()); await redis.set(key(o.pseudo), o);
+    }
+    await redis.set('pubrec:' + ow, { t: now, s: snap });
+    for (const p of done) { await redis.del('pubn:' + p.id, 'pubt:' + p.id); await vidDrop(p.vid && p.vid.startsWith('f:') ? p.vid.slice(2) : ''); }
+  }
+  if (fin.length) await redis.set('pubfin', ((await redis.get('pubfin')) || []).filter((p) => !fin.some((f) => f.id === p.id)));
+  await flush();
+}
+
 // --- Questionnaires : 1 à 10 questions (choix multiple ou étoiles 1-5), envoyés à tous (même ceux qui s'inscrivent ensuite) ou à une sélection.
 // Le joueur le voit à chaque arrivée jusqu'à sa réponse (une seule, définitive). Seul le staff le clôt. Réponses nominatives dans le hash 'qza:<id>'.
 const qzL = async () => { const l = await redis.get('qzl'); return Array.isArray(l) ? l : []; };
@@ -951,7 +982,8 @@ const handler = async (req, res) => {
   const ok = (d) => res.status(200).json(d);
   const cron = req.method === 'GET' && new URL(req.url, 'http://x').searchParams.get('cron') === '1';
   const imgId = req.method === 'GET' ? new URL(req.url, 'http://x').searchParams.get('img') : null; // photo de carte envoyée par l'opérateur depuis sa galerie
-  if (req.method !== 'POST' && !cron && !imgId) return fail('POST uniquement', 405);
+  const vidId = req.method === 'GET' ? new URL(req.url, 'http://x').searchParams.get('vid') : null; // 🎞️ vidéo d'une pub de joueur
+  if (req.method !== 'POST' && !cron && !imgId && !vidId) return fail('POST uniquement', 405);
   if (cron && process.env.CRON_SECRET) {
     const sent = (req.headers.authorization || '').replace(/^Bearer /, '') || new URL(req.url, 'http://x').searchParams.get('key');
     if (sent !== process.env.CRON_SECRET) return fail('Non autorisé', 401);
@@ -969,8 +1001,24 @@ const handler = async (req, res) => {
       res.setHeader('Content-Type', 'image/' + m[1]); res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       return res.status(200).send(Buffer.from(m[2], 'base64'));
     }
-    if (cron) { const sc = await runSched(true).catch((e) => { console.error('sched', e.message); return 0; }); return ok({ ...(await dailyPush()), sched: sc }); }
+    if (vidId) { // vidéo d'une pub : morceaux recollés, lecture par plages (Range) pour que iPhone et Chrome puissent la lire
+      const m = /^[a-f0-9]{12}$/.test(vidId) ? await redis.get('pvid:' + vidId + ':m') : null;
+      if (!m || !m.ok) return fail('Vidéo inconnue', 404);
+      const parts = await redis.mget(...Array.from({ length: m.n }, (_, i) => 'pvid:' + vidId + ':' + i));
+      if (parts.some((x) => typeof x !== 'string')) return fail('Vidéo incomplète', 404);
+      const buf = Buffer.from(parts.join(''), 'base64'), rg = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ''));
+      res.setHeader('Content-Type', m.mime || 'video/mp4'); res.setHeader('Accept-Ranges', 'bytes'); res.setHeader('Cache-Control', 'public, max-age=86400');
+      if (rg && (rg[1] || rg[2])) {
+        let a = rg[1] === '' ? Math.max(0, buf.length - Number(rg[2])) : Number(rg[1]), z = rg[1] === '' || rg[2] === '' ? buf.length - 1 : Math.min(Number(rg[2]), buf.length - 1);
+        if (a > z || a >= buf.length) { res.setHeader('Content-Range', 'bytes */' + buf.length); return res.status(416).send(''); }
+        res.setHeader('Content-Range', 'bytes ' + a + '-' + z + '/' + buf.length);
+        return res.status(206).send(buf.subarray(a, z + 1));
+      }
+      return res.status(200).send(buf);
+    }
+    if (cron) { const sc = await runSched(true).catch((e) => { console.error('sched', e.message); return 0; }); await pubRecap().catch((e) => console.error('pubRecap', e.message)); return ok({ ...(await dailyPush()), sched: sc }); }
     await runSched().catch((e) => console.error('sched', e.message));
+    await pubRecap().catch((e) => console.error('pubRecap', e.message));
     await raceSync().catch((e) => console.error('raceSync', e.message));
     await ensureBots().catch((e) => console.error('ensureBots', e.message));
     await runBots().catch((e) => console.error('bots', e.message));
@@ -1072,11 +1120,12 @@ const handler = async (req, res) => {
         if (o) o.notifs ||= [];
         if (b.action === 'pubok') {
           const act = await pubsAct();
-          act.push({ id: x.id, owner: x.owner, title: x.title, text: x.text, icon: x.icon, color: x.color, paid: x.paid, t: Date.now(), until: Date.now() + PUB_DAYS * DAY });
+          act.push({ id: x.id, owner: x.owner, title: x.title, text: x.text, icon: x.icon, color: x.color, vid: x.vid, link: x.link || '', dur: x.dur || 0, paid: x.paid, t: Date.now(), until: Date.now() + PUB_DAYS * DAY });
           await redis.set('pubs', act);
-          if (o) { if (!x.free) o.pubN = (o.pubN || 0) + 1; note(o, '📢 Ta pub « ' + x.title + ' » est acceptée : elle passe pendant ' + PUB_DAYS + ' jours. Tu gagnes ' + Math.max(1, Math.round(x.paid * PUB_RATE)) + ' 🪙 à chaque fois qu’un joueur la regarde en entier.'); }
+          if (o) note(o, '📢 Ta pub « ' + x.title + ' » est acceptée : elle passe pendant ' + PUB_DAYS + ' jours. Tu gagnes entre 10 et 30 🪙 à chaque fois qu’un joueur la regarde en entier, et tu reçois un récap toutes les 5 h environ.');
         } else if (o) {
-          if (x.free) o.pubFree = (o.pubFree || 0) + 1; else o.coins += x.cost;
+          if (x.vid && x.vid.startsWith('f:')) await vidDrop(x.vid.slice(2));
+          if (x.free) o.pubFree = (o.pubFree || 0) + 1; else { o.coins += x.cost; o.pubN = Math.max(0, (o.pubN || 0) - 1); }
           note(o, '📢 Ta pub « ' + x.title + ' » a été refusée : ' + (x.free ? 'ta création offerte t’est rendue.' : x.cost + ' 🪙 te sont rendus.'));
         }
         if (o) await redis.set(key(o.pseudo), o);
@@ -1086,6 +1135,7 @@ const handler = async (req, res) => {
         const l = (await redis.get('pubs')) || [], x = l.find((p) => p.id === String(b.id || ''));
         if (!x) return fail('Pub introuvable');
         await redis.set('pubs', l.filter((p) => p.id !== x.id));
+        await redis.del('pubn:' + x.id, 'pubt:' + x.id); if (x.vid && x.vid.startsWith('f:')) await vidDrop(x.vid.slice(2));
         const o = await redis.get(key(x.owner));
         if (o) { o.notifs ||= []; note(o, '📢 Ta pub « ' + x.title + ' » a été retirée par le staff.'); await redis.set(key(o.pseudo), o); }
         return ok({ done: true });
@@ -1597,6 +1647,26 @@ const handler = async (req, res) => {
     const u = await redis.get(key(s.p));
     if (!u) return fail('Session expirée, reconnecte-toi', 401);
     u.bought ||= {}; u.since ||= {}; u.fav ||= []; u.notifs ||= []; u.inbox ||= [];
+    if (b.action === 'pubvup') { // 🎞️ envoi d'une vidéo de pub par morceaux (photothèque) : le morceau 0 crée l'envoi, les suivants le complètent
+      if (banOf(u)) return fail('⛔ Compte banni');
+      const i = int(b.i, 99), n = int(b.n, 99), d = String(b.d || '');
+      if (n < 1 || n > 12 || i >= n) return fail('Envoi invalide');
+      if (!d || d.length > 400000 || d.length % 4 || !/^[A-Za-z0-9+/]+=*$/.test(d)) return fail('Morceau de vidéo invalide');
+      let vid = String(b.vid || ''), m;
+      if (i === 0) {
+        const h = Buffer.from(d.slice(0, 24), 'base64'), webm = h[0] === 0x1a && h[1] === 0x45 && h[2] === 0xdf && h[3] === 0xa3, mp4 = h.slice(4, 8).toString() === 'ftyp';
+        if (!webm && !mp4) return fail('Format de vidéo non accepté : choisis un .mp4, .mov ou .webm');
+        vid = crypto.randomBytes(6).toString('hex'); m = { o: u.pseudo, n, len: 0, got: [], mime: webm ? 'video/webm' : 'video/mp4', t: Date.now() };
+      } else {
+        if (!/^[a-f0-9]{12}$/.test(vid)) return fail('Envoi invalide'); m = await redis.get('pvid:' + vid + ':m');
+        if (!m || m.o !== u.pseudo || m.n !== n || m.ok) return fail('Envoi invalide');
+      }
+      if (m.len + d.length > VID_MAXLEN) return fail('Vidéo trop lourde : 3 Mo maximum');
+      await redis.set('pvid:' + vid + ':' + i, d, { ex: 21600 });
+      m.len += d.length; if (!m.got.includes(i)) m.got.push(i);
+      await redis.set('pvid:' + vid + ':m', m, { ex: 21600 });
+      return ok({ vid, got: m.got.length });
+    }
     tick(u);
     await pubCollect(u).catch((e) => console.error('pubCollect', e.message));
     u.seen = Date.now();
@@ -1634,7 +1704,7 @@ const handler = async (req, res) => {
       if (b.action === 'adstart') {
         u.adT = Date.now();
         const pl = (await pubsAct()).filter((p) => p.owner !== u.pseudo);
-        if (pl.length && Math.random() < 0.35) { const p = pl[Math.random() * pl.length | 0]; u.adK = 'p'; u.adP = p.id; extra = { adv: { p: { owner: p.owner, title: p.title, text: p.text, icon: p.icon, color: p.color } } }; }
+        if (pl.length && Math.random() < 1 / 3) { const p = pl[Math.random() * pl.length | 0]; u.adK = 'p'; u.adP = p.id; extra = { adv: { p: { owner: p.owner, title: p.title, text: p.text, icon: p.icon, color: p.color, link: p.link || '', vurl: p.vid && p.vid.startsWith('f:') ? '/api/game?vid=' + p.vid.slice(2) : p.vid ? p.vid.slice(2) : '' } } }; }
         else { const n = Math.random() * 12 | 0; u.adK = n === 10 ? 'hk' : 'n'; extra = { adv: { n } }; } // 10 = the_Hacker
       } else {
         const dt = Date.now() - (u.adT || 0);
@@ -1647,24 +1717,38 @@ const handler = async (req, res) => {
           if (!u.ad || u.ad.d !== parisDay()) u.ad = { d: parisDay(), n: 0 };
           if (u.ad.n < AD_MAX) u.ad.n += 1; else u.adX = Math.max(0, (u.adX || 0) - 1);
           u.bought[b.theme] = (u.bought[b.theme] || 0) + 1;
-          if (kind === 'p' && pid) { // 📢 pub d'un joueur vue en entier : il gagne de quoi couvrir une partie de ce qu'il a payé
+          if (kind === 'p' && pid) { // 📢 pub d'un joueur vue en entier : le propriétaire gagne 10 à 30 🪙 (il est prévenu par le récap)
             const a = (await pubsAct()).find((p) => p.id === pid);
-            if (a) { const v = Math.max(1, Math.round((a.paid || 0) * PUB_RATE)); await redis.incrby('pubg:' + a.owner, v); await redis.incrby('pubt:' + a.id, v); await redis.incrby('pubn:' + a.id, 1); }
+            if (a) { const v = pubGain(); await redis.incrby('pubg:' + a.owner, v); await redis.incrby('pubt:' + a.id, v); await redis.incrby('pubn:' + a.id, 1); }
           }
         }
       }
-    } else if (b.action === 'pubreq') { // 📢 Réglages → Ta pub ici : demande envoyée à l'opérateur (payée tout de suite, rendue si refusée)
-      const title = pubClean(b.title, 24), text = pubClean(b.text, 100), icon = Array.from(pubClean(b.icon, 8)).slice(0, 2).join('') || '📢', color = /^#[0-9a-f]{6}$/i.test(String(b.color)) ? String(b.color).toLowerCase() : '#0f766e';
+    } else if (b.action === 'pubreq') { // 📢 Réglages → Ta pub ici : demande envoyée à l'opérateur (payée tout de suite, rendue si refusée). Plusieurs pubs possibles : 500, puis 1000, puis 2000 🪙
+      const title = pubClean(b.title, 24), text = pubClean(b.text, 100), vf = /^[a-f0-9]{12}$/.test(String(b.vf || '')) ? String(b.vf) : '', vu = String(b.vu || '').trim().slice(0, 300), lk = String(b.link || '').trim().slice(0, 300);
       if (title.length < 2) return fail('Titre trop court');
       if (text.length < 5) return fail('Slogan trop court');
+      const urlOk = (v) => { try { const x = new URL(v); return x.protocol === 'https:' && !/[\s<>"'`\\]/.test(v) ? x : null; } catch { return null; } };
+      if (lk && !urlOk(lk)) return fail('Le lien de la pub doit commencer par https://');
+      let vid = '', dur = Math.max(0, Math.min(20, Number(b.dur) || 0));
+      if (vf) {
+        const m = await redis.get('pvid:' + vf + ':m');
+        if (!m || m.o !== u.pseudo || m.ok) return fail('Vidéo introuvable : renvoie-la');
+        if (!Array.isArray(m.got) || m.got.length !== m.n) return fail('Vidéo incomplète : renvoie-la');
+        vid = 'f:' + vf;
+      } else {
+        const x = urlOk(vu); if (!x || !/\.(mp4|webm)$/i.test(x.pathname)) return fail('Le lien de la vidéo doit être une adresse https:// qui finit par .mp4 ou .webm');
+        vid = 'u:' + vu;
+      }
       const act = await pubsAct(), rq = await pubReqs();
-      if (act.some((p) => p.owner === u.pseudo) || rq.some((p) => p.owner === u.pseudo)) return fail('Tu as déjà une pub en cours ou en attente');
+      if (act.filter((p) => p.owner === u.pseudo).length + rq.filter((p) => p.owner === u.pseudo).length >= PUB_MAXN) return fail('Tu as déjà ' + PUB_MAXN + ' pubs en cours ou en attente');
       const price = pubPrice(u), free = (u.pubFree || 0) > 0;
       if (free) u.pubFree -= 1;
-      else { if (u.coins < price) return fail('Pas assez de coins : il faut ' + price + ' 🪙'); u.coins -= price; }
-      rq.push({ id: crypto.randomBytes(5).toString('hex'), owner: u.pseudo, title, text, icon, color, paid: price, cost: free ? 0 : price, free, t: Date.now() });
+      else { if (u.coins < price) return fail('Pas assez de coins : il faut ' + price + ' 🪙'); u.coins -= price; u.pubN = (u.pubN || 0) + 1; }
+      if (vf) { const m = await redis.get('pvid:' + vf + ':m'); m.ok = 1; await redis.set('pvid:' + vf + ':m', m); await redis.persist('pvid:' + vf + ':m'); for (let i = 0; i < m.n; i++) await redis.persist('pvid:' + vf + ':' + i); } // la vidéo ne s'efface plus toute seule
+      const id = crypto.randomBytes(5).toString('hex');
+      rq.push({ id, owner: u.pseudo, title, text, icon: '📢', color: '#0f766e', vid, link: lk, dur, paid: price, cost: free ? 0 : price, free, t: Date.now() });
       await redis.set('pubreq', rq);
-      await opNote('📢 ' + u.pseudo + ' demande une pub : « ' + title + ' » (à valider dans l’espace opérateur)');
+      await opNote('📢 ' + u.pseudo + ' demande une pub : « ' + title + ' » (à valider dans l’espace opérateur : vidéo et lien à vérifier)');
     } else if (b.action === 'open') {
       const e = pack(); if (e) return fail(e);
       const LV0 = lvOf(cat, b.theme), have = (u.bought[b.theme] || 0) + freeOf(u, LV0);
@@ -2216,7 +2300,7 @@ const handler = async (req, res) => {
 
     if (b.action === 'me') { extra = { notifs: u.notifs }; u.notifs = []; }
     await redis.set(key(u.pseudo), u);
-    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), pubm: await (async () => { const a = (await pubsAct()).find((p) => p.owner === u.pseudo); if (a) return { ...a, st: 'on', views: Number(await redis.get('pubn:' + a.id)) || 0, gain: Number(await redis.get('pubt:' + a.id)) || 0 }; const q = (await pubReqs()).find((p) => p.owner === u.pseudo); return q ? { ...q, st: 'wait' } : null; })(), qz: maintOn || banned ? null : await qzPend(u), maint: maintOn, maintinfo: maintOn ? { ...(await maintInfo()), type: mt.type, until: mt.until, code: mt.code, open: mt.open } : null, ...(await skinState()) } });
+    return ok({ ...extra, state: { ...view(u, visShop(u, shAll, cat), cat, cu, mk), pubms: await (async () => { const act = (await pubsAct()).filter((p) => p.owner === u.pseudo), rq = (await pubReqs()).filter((p) => p.owner === u.pseudo), out = []; for (const a of act) out.push({ id: a.id, title: a.title, text: a.text, link: a.link || '', st: 'on', until: a.until, t: a.t, views: Number(await redis.get('pubn:' + a.id)) || 0, gain: Number(await redis.get('pubt:' + a.id)) || 0 }); for (const q of rq) out.push({ id: q.id, title: q.title, text: q.text, link: q.link || '', st: 'wait', t: q.t }); return out.sort((x, y) => y.t - x.t); })(), qz: maintOn || banned ? null : await qzPend(u), maint: maintOn, maintinfo: maintOn ? { ...(await maintInfo()), type: mt.type, until: mt.until, code: mt.code, open: mt.open } : null, ...(await skinState()) } });
   } catch (e) {
     console.error(e);
     return fail('Erreur serveur : ' + e.message, 500);
