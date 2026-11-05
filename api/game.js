@@ -216,6 +216,18 @@ async function renameUser(u, nn, count) {
 }
 const OP_CODE = process.env.OPERATOR_CODE || '100823';
 const key = (p) => 'u:' + p.toLowerCase();
+// 🖼️ Photos de profil par défaut : 20 ronds (public/pp/1.webp … 20.webp), rangés dans u.pf comme une vraie photo (doublons permis)
+const PP_N = 20, ppRand = () => '/pp/' + (1 + crypto.randomInt(PP_N)) + '.webp', isDefPp = (p) => typeof p === 'string' && /^\/pp\/\d+\.webp$/.test(p);
+const ppByName = (n) => { let h = 0; for (const c of String(n || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0; return '/pp/' + (1 + (h % PP_N)) + '.webp'; }; // fixe pour un pseudo donné (faux bots de l'opérateur)
+let ppChk = false;
+async function ppBackfill() { // une seule passe pour les anciens comptes sans pp (drapeau Redis 'ppdone')
+  if (ppChk) return; ppChk = true;
+  if (await redis.get('ppdone')) return;
+  await redis.set('ppdone', Date.now());
+  try {
+    for (const n of await redis.smembers('users')) { const v = await redis.get(key(n)); if (v && !v.pf) { v.pf = ppRand(); await redis.set(key(n), v); } }
+  } catch (e) { await redis.del('ppdone'); console.error('ppBackfill', e.message); }
+}
 const hash = (pw, salt) => crypto.scryptSync(pw, salt, 32).toString('hex');
 const int = (v, max = 1e6) => Math.max(0, Math.min(max, parseInt(v, 10) || 0));
 const envFind = (re) => { const k = Object.keys(process.env).find((x) => re.test(x) && process.env[x]); return k && process.env[k]; };
@@ -518,7 +530,7 @@ const lgPick = () => { let r = Math.random() * 100; for (const [k, w] of BLV) if
 async function lgNewBot(name) {
   if (await redis.get(key(name))) return null; // pseudo déjà pris (joueur ou bot)
   const lvl = lgPick(), salt = crypto.randomBytes(16).toString('hex'), a = 6 + crypto.randomInt(4), b = 18 + crypto.randomInt(5);
-  const u = { pseudo: name, salt, hash: hash(crypto.randomBytes(8).toString('hex'), salt), coins: 200, packs: 1, bought: {}, last: Date.now(), cards: {}, since: {}, fav: [], notifs: [], bot: lvl, lgb: 1, bcfg: { shift: [a, b], every: 20 + crypto.randomInt(71) } };
+  const u = { pseudo: name, salt, hash: hash(crypto.randomBytes(8).toString('hex'), salt), coins: 200, packs: 1, bought: {}, last: Date.now(), cards: {}, since: {}, fav: [], notifs: [], bot: lvl, lgb: 1, pf: ppRand(), bcfg: { shift: [a, b], every: 20 + crypto.randomInt(71) } };
   await redis.set(key(name), u); await redis.sadd('users', name); await redis.sadd('lgbn', name);
   return u;
 }
@@ -587,7 +599,7 @@ async function lgView(u, cat) {
   const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], H = (await redis.get('chh')) || [], ob = (await redis.get('lgob')) || [];
   const acc = list.filter((v) => v && !banOf(v) && v.pseudo !== u.pseudo); if (!banOf(u)) acc.push(u);
   const rowOf = (v) => { const cs = v.cs || csFrom(H, v.pseudo), rr = rarCount(v, cat), vl = v.lg && v.lg.sid === c.id ? v.lg : null; const l5 = H.filter((h) => h.a === v.pseudo || h.b === v.pseudo).slice(0, 5).map((h) => h.w * (h.a === v.pseudo ? 1 : -1)); return { l5, n: v.pseudo, pf: v.pf || null, bi: v.lg ? v.lg.t : 0, ren: rbTot(v), v: cs.w, nu: cs.d, d: cs.l, pts: vl ? Math.floor(vl.pts) : 0, co: v.coins, cards: cardsTot(v, cat, rr), rr, vit: (v.vit || []).filter((id) => v.cards && v.cards[id] && rarOf(cat, id)).slice(0, 3) }; };
-  const obRow = (x) => ({ l5: [], n: x.n, pf: null, bi: x.t, ren: x.ren, v: x.v, nu: x.nu, d: x.d, pts: x.pts, co: x.co, cards: x.cards, rr: rarSplit(x.cards), vit: [], op: 1 });
+  const obRow = (x) => ({ l5: [], n: x.n, pf: ppByName(x.n), bi: x.t, ren: x.ren, v: x.v, nu: x.nu, d: x.d, pts: x.pts, co: x.co, cards: x.cards, rr: rarSplit(x.cards), vit: [], op: 1 });
   const rows = acc.filter((v) => v.lg && v.lg.sid === c.id && v.lg.t === L.t && v.lg.g === L.g).map(rowOf);
   if (L.g === 0) for (const x of ob) if (x.t === L.t) rows.push(obRow(x));
   rows.sort((a, b) => b.pts - a.pts || b.ren - a.ren || b.co - a.co || a.n.localeCompare(b.n));
@@ -863,7 +875,7 @@ async function ensureBots() {
     const u = await redis.get(key(B.name));
     if (!u) {
       const salt = crypto.randomBytes(16).toString('hex');
-      await redis.set(key(B.name), { pseudo: B.name, salt, hash: hash(crypto.randomBytes(8).toString('hex'), salt), coins: 200, packs: 1, bought: {}, last: now, cards: {}, since: {}, fav: [], notifs: [], bot: B.lvl });
+      await redis.set(key(B.name), { pseudo: B.name, salt, hash: hash(crypto.randomBytes(8).toString('hex'), salt), coins: 200, packs: 1, bought: {}, last: now, cards: {}, since: {}, fav: [], notifs: [], bot: B.lvl, pf: ppRand() });
     } else if (!u.bot) { console.error('bots: le pseudo ' + B.name + ' est pris par un vrai joueur'); continue; }
     await redis.sadd('users', B.name);
   }
@@ -885,7 +897,7 @@ async function runBots() {
     let u = await redis.get(key(B.name));
     if (!u) {
       const salt = crypto.randomBytes(16).toString('hex');
-      u = { pseudo: B.name, salt, hash: hash(crypto.randomBytes(8).toString('hex'), salt), coins: 200, packs: 1, bought: {}, last: now, cards: {}, since: {}, fav: [], notifs: [], bot: B.lvl };
+      u = { pseudo: B.name, salt, hash: hash(crypto.randomBytes(8).toString('hex'), salt), coins: 200, packs: 1, bought: {}, last: now, cards: {}, since: {}, fav: [], notifs: [], bot: B.lvl, pf: ppRand() };
       await redis.set(key(B.name), u); await redis.sadd('users', B.name);
     } else if (!u.bot) continue;
     u.since ||= {}; u.fav ||= []; u.bought ||= {};
@@ -1048,6 +1060,7 @@ const handler = async (req, res) => {
     await pubRecap().catch((e) => console.error('pubRecap', e.message));
     await raceSync().catch((e) => console.error('raceSync', e.message));
     await ensureBots().catch((e) => console.error('ensureBots', e.message));
+    await ppBackfill().catch((e) => console.error('ppBackfill', e.message));
     await runBots().catch((e) => console.error('bots', e.message));
 
     if (b.action === 'register' || b.action === 'login') {
@@ -1068,12 +1081,12 @@ const handler = async (req, res) => {
         if (bi && (bi.until == null || bi.until > Date.now())) return fail("Inscription impossible depuis cette connexion pour le moment");
         if (u || pseudo.toLowerCase() === OP_ID || pseudo.toLowerCase() === OP_NAME.toLowerCase() || isBotName(pseudo)) return fail('Ce pseudo est déjà pris');
         const salt = crypto.randomBytes(16).toString('hex');
-        u = { pseudo, salt, hash: hash(pw, salt), coins: 200, packs: 1, bought: {}, last: Date.now(), cards: {}, since: {}, fav: [], notifs: [], ips: ih ? [ih] : [], seen: Date.now() };
+        u = { pseudo, salt, hash: hash(pw, salt), coins: 200, packs: 1, bought: {}, last: Date.now(), cards: {}, since: {}, fav: [], notifs: [], ips: ih ? [ih] : [], seen: Date.now(), pf: ppRand() };
         await redis.set(key(pseudo), u);
         await redis.sadd('users', pseudo);
         await opNote('🆕 Nouvelle inscription : ' + pseudo);
       } else if (!u || hash(pw, u.salt) !== u.hash) return fail('Pseudo ou mot de passe incorrect', 401);
-      else if (ih) { addIp(u, ih); if (banOf(u)) await banIp(ih, u, u.ban.until); await redis.set(key(u.pseudo), u); }
+      else { let ch = false; if (!u.pf) { u.pf = ppRand(); ch = true; } if (ih) { addIp(u, ih); if (banOf(u)) await banIp(ih, u, u.ban.until); ch = true; } if (ch) await redis.set(key(u.pseudo), u); }
       const token = crypto.randomBytes(24).toString('hex');
       await redis.set('s:' + token, { p: u.pseudo }, { ex: 86400 * 30 });
       return ok({ token });
@@ -1100,7 +1113,7 @@ const handler = async (req, res) => {
       if (b.action === 'users') {
         const names = (await redis.smembers('users')).sort();
         const list = names.length ? await redis.mget(...names.map(key)) : [];
-        const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, bd: u.bd || {}, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u), pf: !!u.pf, push: (u.subs || []).length > 0 }; });
+        const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, bd: u.bd || {}, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u), pf: !!u.pf && !isDefPp(u.pf), pp: u.pf || null, push: (u.subs || []).length > 0 }; });
         return ok({ ...(await skinState()), skinc: await skinList(), ...(await maintOp()), lg: await lgOp(), maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), subs: SUBS, users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pubs: await pubsAct(), pubreq: await pubReqs(), colreq: await colReqs(), pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
       }
       if (b.action === 'shop') {
@@ -1596,7 +1609,7 @@ const handler = async (req, res) => {
       if (b.action === 'pfpok' || b.action === 'pfpno' || b.action === 'pfpdel') {
         const u = await redis.get(key(String(b.pseudo || '')));
         if (!u) return fail('Joueur introuvable');
-        if (b.action === 'pfpdel') { if (!u.pf) return fail("Ce joueur n'a pas de photo"); delete u.pf; note(u, '🖼️ Le staff a retiré ta photo de profil'); }
+        if (b.action === 'pfpdel') { if (!u.pf || isDefPp(u.pf)) return fail("Ce joueur n'a pas de photo envoyée"); u.pf = ppRand(); note(u, '🖼️ Le staff a retiré ta photo de profil'); }
         else {
           if (!u.pfpReq) return fail('Aucune demande en attente pour ce joueur');
           if (b.action === 'pfpok') { u.pf = u.pfpReq.img; u.pfpN = (u.pfpN || 0) + 1; note(u, '✅ Ta nouvelle photo de profil a été validée'); }
