@@ -108,6 +108,20 @@ main{padding:8px 8px calc(84px + env(safe-area-inset-bottom))}
 .pills{flex-wrap:wrap;overflow:visible}
 .dm{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--panel);margin-bottom:8px;cursor:pointer}
 .dm:active{background:var(--cb)}.dm .tx{flex:1;min-width:0}.dm .tx b,.dm .tx small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pg{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px 6px;margin-top:8px}
+.pc{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;cursor:pointer;min-width:0;padding:4px 2px;border-radius:12px}
+.pc:active{background:var(--cb)}
+.pc .pr{position:relative;width:64px;height:64px}
+.pc .pr img,.pc .pr .av{width:64px;height:64px;border-radius:50%;object-fit:cover;display:block;font-size:24px}
+.pc.bn .pr img,.pc.bn .pr .av{filter:grayscale(1);opacity:.55}
+.pc .bz{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:40px;line-height:1;pointer-events:none}
+.pc .bl{position:absolute;top:-4px;right:-6px;font-size:16px;line-height:1;background:var(--panel);border-radius:50%;padding:2px}
+.pc .bt{position:absolute;top:-4px;left:-6px;font-size:16px;line-height:1;background:var(--panel);border-radius:50%;padding:2px}
+.pc .dt{position:absolute;right:1px;bottom:1px;border-radius:50%;box-shadow:0 0 0 2px var(--panel);line-height:0}
+.pc .dt span{margin:0!important}
+.pc .nm{width:100%;font-size:12px;font-weight:700;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc .sb{width:100%;font-size:10px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(min-width:900px){.pg{grid-template-columns:repeat(auto-fill,minmax(96px,1fr))}}
 .av{flex:none;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff}
 .un{flex:none;background:#e5484d;color:#fff;border-radius:999px;min-width:22px;padding:1px 7px;text-align:center;font-size:12px;font-weight:700}
 #dmt{display:flex;flex-direction:column;max-height:52vh;overflow-y:auto;padding:4px 2px}
@@ -358,7 +372,7 @@ const RN = { c: 'Commune', r: 'Rare', e: 'Épique', l: 'Légendaire', m: 'Mythiq
 const RA = 'crelmsu', RAREV = 'usmlerc', BDN = { 1: 'Bronze', 2: 'Argent', 3: 'Or' }, BDI = { 1: '🥉', 2: '🥈', 3: '🥇' }; // raretés (de la plus commune à la plus rare) ; badges
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pfImg = (p) => (p ? '<img class="pf" src="' + p + '" alt="">' : '');
-let tok = localStorage.tok, isOp = localStorage.op === '1', asP = localStorage.asp === '1', S, CAT = {}, RAR = {}, tab = 'shop', timer, sort = 'def', openT = new Set();
+let tok = localStorage.tok, isOp = localStorage.op === '1', asP = localStorage.asp === '1', S, CAT = {}, RAR = {}, tab = 'shop', timer, sort = 'def', openT = new Set(), opPk = 'all';
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 // --- Thème de saison (choisi par l'opérateur, identique pour tous) : Octobre rose, Été, Hiver, Halloween + thèmes créés par l'opérateur
@@ -949,10 +963,28 @@ async function tnPlayer(name) { // fiche d'un joueur depuis le tableau du tourno
   } catch (e) { msg(e.message); }
 }
 function lgVit() {
-  const sel = new Set((S.vit || []).slice(0, 3)), ids = Object.keys(S.cards || {}).filter((id) => RAR[id]);
-  const ov = overlay('<div class="box" style="max-width:520px;margin:30px auto;color:var(--txt)"><h2>⭐ Ma vitrine</h2><small>Choisis jusqu’à 3 cartes : les autres joueurs les voient quand ils touchent ton nom dans le classement.</small><div class="tr" id="lgp" style="margin:10px 0;max-height:55vh;overflow:auto"></div><button id="lgs" style="width:100%">Enregistrer</button> <button id="lgc" class="g" style="width:100%;margin-top:6px">Annuler</button><div class="err" id="lge"></div></div>');
-  const g = ov.querySelector('#lgp'), mark = () => g.querySelectorAll('.card').forEach((c) => { c.style.outline = sel.has(c.dataset.id) ? '3px solid var(--or)' : ''; });
-  ids.forEach((id) => { const c = cardEl(id, 1); c.dataset.id = id; c.style.cursor = 'pointer'; c.onclick = () => { if (sel.has(id)) sel.delete(id); else if (sel.size < 3) sel.add(id); mark(); }; g.append(c); }); mark();
+  const sel = new Set((S.vit || []).slice(0, 3)), all = Object.keys(S.cards || {}).filter((id) => RAR[id]), F = { s: 'all', t: '', r: '' };
+  const cols = [...new Set(all.map((id) => id.slice(0, id.indexOf(':'))))].filter((t) => CAT[t]), rars = [...RAREV].filter((r) => all.some((id) => RAR[id] === r));
+  const ov = overlay('<div class="box" style="max-width:560px;margin:30px auto;color:var(--txt)"><h2>⭐ Ma vitrine</h2><small>Choisis jusqu’à 3 cartes : les autres joueurs les voient quand ils touchent ton nom dans le classement.</small>'
+    + '<div class="tr" id="lgsel" style="margin:10px 0;min-height:30px"></div>'
+    + '<div class="row" style="gap:6px;margin-bottom:6px"><select id="vfs" aria-label="Source"><option value="all">Toutes mes cartes</option><option value="fav">⭐ Mes favorites</option></select>'
+    + '<select id="vft" aria-label="Collection"><option value="">Toutes collections</option>' + cols.map((t) => '<option value="' + esc(t) + '">' + esc(CAT[t].icon + ' ' + CAT[t].name) + '</option>').join('') + '</select>'
+    + '<select id="vfr" aria-label="Rareté"><option value="">Toutes raretés</option>' + rars.map((r) => '<option value="' + r + '">' + RN[r] + '</option>').join('') + '</select></div>'
+    + '<small id="vfc"></small><div class="tr" id="lgp" style="margin:6px 0 10px;max-height:50vh;overflow:auto"></div><button id="lgs" style="width:100%">Enregistrer</button> <button id="lgc" class="g" style="width:100%;margin-top:6px">Annuler</button><div class="err" id="lge"></div></div>');
+  const g = ov.querySelector('#lgp'), sl = ov.querySelector('#lgsel'); let lim = 60;
+  const mark = () => g.querySelectorAll('.card').forEach((c) => { c.style.outline = sel.has(c.dataset.id) ? '3px solid var(--or)' : ''; });
+  const toggle = (id) => { ov.querySelector('#lge').textContent = ''; if (sel.has(id)) sel.delete(id); else if (sel.size < 3) sel.add(id); else return (ov.querySelector('#lge').textContent = '3 cartes maximum : retire-en une d’abord'); drawSel(); mark(); };
+  const drawSel = () => { sl.innerHTML = sel.size ? '' : '<small>Aucune carte choisie.</small>'; [...sel].forEach((id) => { const c = cardEl(id, 1); c.style.cursor = 'pointer'; c.title = 'Retirer de la vitrine'; c.onclick = () => toggle(id); sl.append(c); }); };
+  const draw = () => {
+    const ids = all.filter((id) => (F.s === 'all' || S.fav.includes(id)) && (!F.t || id.startsWith(F.t + ':')) && (!F.r || RAR[id] === F.r)).sort((a, b) => RAREV.indexOf(RAR[a]) - RAREV.indexOf(RAR[b]) || cname(a).localeCompare(cname(b)));
+    ov.querySelector('#vfc').textContent = ids.length + ' carte' + (ids.length > 1 ? 's' : '') + ' · ' + sel.size + '/3 choisie' + (sel.size > 1 ? 's' : '');
+    g.innerHTML = ids.length ? '' : '<small>Aucune carte ne correspond à ces filtres.</small>';
+    ids.slice(0, lim).forEach((id) => { const c = cardEl(id, 1); c.dataset.id = id; c.style.cursor = 'pointer'; c.onclick = () => toggle(id); g.append(c); });
+    if (ids.length > lim) { const b = document.createElement('button'); b.className = 'g'; b.style.width = '100%'; b.textContent = 'Afficher plus (' + (ids.length - lim) + ')'; b.onclick = () => { lim += 60; draw(); }; g.append(b); }
+    mark();
+  };
+  [['#vfs', 's'], ['#vft', 't'], ['#vfr', 'r']].forEach(([q, k]) => (ov.querySelector(q).onchange = (e) => { F[k] = e.target.value; lim = 60; draw(); }));
+  drawSel(); draw();
   ov.querySelector('#lgc').onclick = () => ov.remove();
   ov.querySelector('#lgs').onclick = async () => { try { setS((await api('vitset', { cards: [...sel] })).state); ov.remove(); playerView(); msg('Vitrine enregistrée'); } catch (e) { ov.querySelector('#lge').textContent = e.message; } };
 }
@@ -2628,10 +2660,12 @@ function lgOpHTML(users, j) {
 async function opView(m) {
   const j = await api('users'), { users, shop, custom, reports } = j; setCat(j.themes); (j.skinc || []).forEach((d) => (SKC[d.id] = d)); setSkin(j.skin);
   const opts = Object.entries(CAT).map(([t, o]) => '<optgroup label="' + esc(o.name) + '">' + [...RA].flatMap((r) => (o[r] || []).map((n) => '<option value="' + esc(t + ':' + n) + '">' + RN[r] + ' — ' + esc(n) + '</option>')).join('') + '</optgroup>').join('');
-  const list = users.map((u) => {
-    const nb = u.packs + Object.values(u.bought).reduce((a, b) => a + b, 0);
-    return '<div class="dm" data-pu="' + esc(u.pseudo) + '" data-pn="' + esc(u.pseudo.toLowerCase()) + '">' + avEl(u.pseudo) + '<div class="tx"><b>' + dotOf(u.seen) + (u.bot ? '🤖 ' : '') + (u.banned ? '⛔ ' : '') + esc(u.pseudo) + (u.push ? ' <span title="Notifications activées">🔔</span>' : '') + '</b><small>🪙 ' + u.coins + ' · 📦 ' + nb + ' · ' + Object.keys(u.cards).length + ' cartes</small></div><small>Ouvrir ›</small></div>';
-  }).join('') || '<p>Aucun joueur pour le moment.</p>';
+  const nbP = users.filter((u) => !u.bot).length, nbB = users.filter((u) => u.bot).length, nbX = users.filter((u) => u.banned).length;
+  const chips = '<div class="row" id="pchips" style="margin-bottom:6px;gap:6px">' + [['all', 'Tous', users.length], ['p', 'Joueurs', nbP], ['b', '🤖 Bots', nbB], ['x', '🚫 Bannis', nbX]].map(([k, n, c]) => '<button type="button" class="' + (opPk === k ? '' : 'g') + '" data-pk="' + k + '">' + n + ' (' + c + ')</button>').join('') + '</div>';
+  const list = chips + '<div class="pg">' + (users.map((u) => {
+    const av = u.pp ? '<img src="' + esc(u.pp) + '" alt="" loading="lazy" decoding="async">' : avEl(u.pseudo);
+    return '<div class="pc' + (u.banned ? ' bn' : '') + '" data-pu="' + esc(u.pseudo) + '" data-pn="' + esc(u.pseudo.toLowerCase()) + '" data-k="' + (u.bot ? 'b' : 'p') + (u.banned ? 'x' : '') + '" title="' + esc(u.pseudo) + ' · ' + u.coins + ' 🪙"><div class="pr">' + av + (u.banned ? '<span class="bz" title="Banni">🚫</span>' : '') + (u.push ? '<span class="bl" title="Notifications activées">🔔</span>' : '') + (u.bot ? '<span class="bt" title="Bot">🤖</span>' : '') + '<span class="dt">' + dotOf(u.seen) + '</span></div><div class="nm">' + esc(u.pseudo) + '</div><div class="sb">🪙 ' + u.coins + ' · ' + Object.keys(u.cards).length + ' 🃏</div></div>';
+  }).join('') || '<p>Aucun joueur pour le moment.</p>') + '</div>';
   const now = Date.now(), mnf = j.maintinfo || {};
   const cols = custom.cols.filter((c) => c.until > now).map((c) => '<div class="row">' + c.icon + ' <b>' + esc(c.name) + '</b> jusqu\'au ' + new Date(c.until).toLocaleDateString('fr-FR') + ' <input type="date" data-ed="' + c.key + '" value="' + dstr(c.until) + '" min="' + dstr(Date.now() + 864e5) + '"> <button class="g" data-ee="' + c.key + '">Changer la fin</button> <button class="g" data-ec="' + c.key + '">Terminer maintenant</button></div>').join('');
   const objs = custom.objs.filter((o) => !o.gone).map((o) => '<div class="row">🎁 <b>' + esc(o.name) + '</b> ' + RN[o.r] + ' — ' + o.price + ' coins' + (o.stock != null ? ' (reste ' + o.stock + ')' : '') + ' <button class="g" data-do="' + esc(o.name) + '">Retirer</button></div>').join('');
@@ -2687,8 +2721,9 @@ async function opView(m) {
   };
   $('#u').onchange = fillCards; $('#m').onchange = fillCards; $('#cac').onchange = fillCards; fillCards();
   // --- Recherche + fiche d'un joueur ciblé
-  const filt = () => { const q = $('#pq').value.trim().toLowerCase(); app.querySelectorAll('[data-pn]').forEach((e) => (e.style.display = e.dataset.pn.includes(q) ? '' : 'none')); };
-  $('#pq').oninput = filt;
+  const filt = () => { const q = $('#pq').value.trim().toLowerCase(); app.querySelectorAll('#pls [data-pn]').forEach((e) => { const k = e.dataset.k || ''; e.style.display = e.dataset.pn.includes(q) && (opPk === 'all' || k.includes(opPk)) ? '' : 'none'; }); };
+  app.querySelectorAll('[data-pk]').forEach((b) => (b.onclick = () => { opPk = b.dataset.pk; app.querySelectorAll('[data-pk]').forEach((x) => x.classList.toggle('g', x.dataset.pk !== opPk)); filt(); }));
+  $('#pq').oninput = filt; if (opPk !== 'all') filt();
   const backList = () => { $('#pf').innerHTML = ''; $('#plist').style.display = ''; };
   const openFiche = async (name) => {
     const pf = $('#pf'); $('#plist').style.display = 'none';
