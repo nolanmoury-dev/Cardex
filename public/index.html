@@ -509,10 +509,22 @@ function setS(s) { S = s; if (s.lgev && !LGEV) { LGEV = 1; setTimeout(() => lgEv
 // Erreur réseau automatique : serveur injoignable, plus de connexion, base saturée (limite Upstash), page d’erreur, code 5xx ou 429.
 // Le texte technique n’est jamais montré : un écran « Erreur réseau » avec « Réessayer » le remplace (o.quiet = sans écran, utilisé par le suivi automatique).
 let netOn = false, pollFail = 0;
-function netFail(o, why) { console.warn('Erreur réseau :', why); const e = new Error('Erreur réseau'); e.net = true; if (!o.quiet) netScreen(); throw e; }
-function netScreen() {
+let lastNet = null; // dernière erreur réseau : { code, why } (affichée sur l’écran « Erreur réseau »)
+function netInfo(status, err) { // transforme l’erreur technique en code + raison lisible
+  if (err) return { code: 'NET', why: 'Le serveur est injoignable ou ta connexion a coupé' + (err.message ? ' (' + err.message + ')' : '') };
+  if (status === 429) return { code: 'E429', why: 'Trop de requêtes ou base de données saturée (limite atteinte) : réessaie dans un moment' };
+  if (status === 500) return { code: 'E500', why: 'Le serveur a rencontré une erreur interne' };
+  if (status === 502) return { code: 'E502', why: 'Le serveur de passerelle a reçu une mauvaise réponse' };
+  if (status === 503) return { code: 'E503', why: 'Le serveur est indisponible (surcharge ou mise à jour en cours)' };
+  if (status === 504) return { code: 'E504', why: 'Le serveur a mis trop de temps à répondre' };
+  if (status >= 500) return { code: 'E' + status, why: 'Le serveur a répondu avec une erreur (code ' + status + ')' };
+  return { code: 'E' + status + '-JSON', why: 'Le serveur a renvoyé une réponse illisible (page d’erreur ou réponse vide)' };
+}
+function netFail(o, info) { console.warn('Erreur réseau :', info); lastNet = info; const e = new Error('Erreur réseau'); e.net = true; e.info = info; if (!o.quiet) netScreen(info); throw e; }
+function netScreen(info) {
+  info = info || lastNet;
   if (netOn) return; netOn = true;
-  const el = document.createElement('div'); el.id = 'netscr'; el.className = 'nso'; el.innerHTML = esHTML({ type: 'net' }); document.body.append(el);
+  const el = document.createElement('div'); el.id = 'netscr'; el.className = 'nso'; el.innerHTML = esHTML({ type: 'net', code: info && info.code, why: info && info.why }); document.body.append(el);
   el.querySelector('#esr').onclick = () => netRetry(false);
 }
 async function netRetry(auto) {
@@ -528,9 +540,9 @@ async function api(action, d = {}, o = {}) {
   try {
     r = await fetch('/api/game', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, token: tok, ...(isOp && asP ? { as: 'player' } : {}), ...d }) });
     t = await r.text();
-  } catch (e) { return netFail(o, e.message); }
+  } catch (e) { return netFail(o, netInfo(0, e)); }
   let j; try { j = JSON.parse(t); } catch { j = null; }
-  if (!j || r.status >= 500 || r.status === 429) return netFail(o, 'code ' + r.status);
+  if (!j || r.status >= 500 || r.status === 429) return netFail(o, netInfo(r.status));
   if (!r.ok) { if (r.status === 401 && tok) logout(); throw new Error(j.error || 'Erreur'); }
   return j;
 }
@@ -676,6 +688,7 @@ function esHTML(o) {
     + '<div class="es-msg" role="status"><b>' + (net ? 'Erreur réseau' : 'Maintenance en cours') + '</b>'
     + '<p>' + (net ? 'Le serveur est indisponible ou ta connexion a coupé. Réessaie dans un moment.' : 'Une mise à jour arrive bientôt. Tes cartes, tes pièces et ton compte ne sont pas touchés.') + '</p>'
     + (o.until ? '<p class="es-un">' + esUntil(o.until) + '</p>' : '')
+    + (o.why ? '<p class="es-un">Raison : ' + esc(o.why) + '</p>' : '')
     + (o.code ? '<p class="es-un">' + (net ? 'Code d’erreur' : 'Code de maintenance') + ' : <b>' + esc(o.code) + '</b></p>' : '')
     + (ms.length ? '<p><b>Au programme :</b></p><ul>' + ms.map((m) => '<li>' + esc(m) + '</li>').join('') + '</ul>' : '')
     + (o.msg ? '<p>💬 <b>Message du staff :</b> ' + esc(o.msg) + '</p>' : '')
@@ -3063,7 +3076,7 @@ async function poll() {
     qzPopup();
     if (tab === 'rk' && rkSub === 'm' && dmWith) { if (j.notifs && j.notifs.length) notify(j.notifs); dmLoad(false).catch(() => {}); return; }
     if (j.notifs && j.notifs.length) { notify(j.notifs); if (!document.querySelector('.ov') && tab !== 'jeu' && tab !== 'set' && !(tab === 'rk' && rkSub === 'd' && chForm)) playerView(); }
-  } catch (e) { if (e.net && ++pollFail >= 2) netScreen(); }
+  } catch (e) { if (e.net && ++pollFail >= 2) netScreen(e.info); }
 }
 setInterval(poll, 5000);
 document.addEventListener('visibilitychange', poll);
