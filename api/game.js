@@ -492,6 +492,17 @@ const LV = {
   nul: { s: [0.3, 3], b: 99, bm: 99, rb: 0.25, tm: 99, ct: 0, off: 0, cu: 0.05, dc: 0.5, dl: 0 },
 };
 // Classement d'une course : joueurs réels + bots (un bot reste toujours derrière le meilleur joueur : il peut être 2e, jamais 1er).
+// Cache mémoire (30 s) de la liste complète des joueurs, pour les classements (lecture seule) : évite de relire tous les comptes à chaque ouverture d'un écran.
+// Ne JAMAIS modifier ni réécrire les comptes renvoyés ici. Le compte de celui qui demande (me) est toujours remplacé par sa version à jour.
+let AU = null, AUt = 0;
+const allUsers = async (me) => {
+  const now = Date.now();
+  if (!AU || now - AUt > 30000) { const names = await redis.smembers('users'); AU = names.length ? await redis.mget(...names.map(key)) : []; AUt = now; }
+  if (!me) return AU;
+  const l = AU.map((v) => (v && v.pseudo === me.pseudo ? me : v));
+  if (!AU.some((v) => v && v.pseudo === me.pseudo)) l.push(me);
+  return l;
+};
 function raceBoard(list, id) {
   const real = list.filter((v) => v && !v.bot && !banOf(v)), pos = (v) => (v.rc && v.rc.w === id ? v.rc.pos : 0), top = Math.max(0, ...real.map(pos));
   return [...real, ...list.filter((v) => v && v.bot)].map((v) => { const r = v.rc && v.rc.w === id ? v.rc : null, ps = r ? r.pos : 0; return { pseudo: v.pseudo, bot: !!v.bot, pos: v.bot ? Math.min(ps, real.length ? Math.max(0, top - 1) : ps) : ps, tt: (r && r.tt) || 0, car: v.car || null, sk: carSkin(v), pf: v.pf || null }; })
@@ -596,7 +607,7 @@ const cardsTot = (v, cat, rr) => Object.values(rr).reduce((a, x) => a + x, 0) + 
 const rarSplit = (n) => { const P = [['u', 0.002], ['s', 0.01], ['m', 0.03], ['l', 0.06], ['e', 0.13], ['r', 0.27]], o = {}; let left = n; for (const [k, p] of P) { o[k] = Math.round(n * p); left -= o[k]; } o.c = Math.max(0, left); return o; };
 async function lgView(u, cat) {
   const c = await lgEnsure(u), L = lgOf(u);
-  const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], H = (await redis.get('chh')) || [], ob = (await redis.get('lgob')) || [];
+  const list = await allUsers(u), H = (await redis.get('chh')) || [], ob = (await redis.get('lgob')) || [];
   const acc = list.filter((v) => v && !banOf(v) && v.pseudo !== u.pseudo); if (!banOf(u)) acc.push(u);
   const rowOf = (v) => { const cs = v.cs || csFrom(H, v.pseudo), rr = rarCount(v, cat), vl = v.lg && v.lg.sid === c.id ? v.lg : null; const l5 = H.filter((h) => h.a === v.pseudo || h.b === v.pseudo).slice(0, 5).map((h) => h.w * (h.a === v.pseudo ? 1 : -1)); return { l5, n: v.pseudo, pf: v.pf || null, bi: v.lg ? v.lg.t : 0, ren: rbTot(v), v: cs.w, nu: cs.d, d: cs.l, pts: vl ? Math.floor(vl.pts) : 0, co: v.coins, cards: cardsTot(v, cat, rr), rr, vit: (v.vit || []).filter((id) => v.cards && v.cards[id] && rarOf(cat, id)).slice(0, 3) }; };
   const obRow = (x) => ({ l5: [], n: x.n, pf: ppByName(x.n), bi: x.t, ren: x.ren, v: x.v, nu: x.nu, d: x.d, pts: x.pts, co: x.co, cards: x.cards, rr: rarSplit(x.cards), vit: [], op: 1 });
@@ -881,7 +892,7 @@ async function ensureBots() {
   }
   botsOk = true;
 }
-let botChk = 0;
+let botChk = 0, RNchk = 0;
 async function runBots() {
   const now = Date.now();
   if (now - botChk < 30000) return;
@@ -920,8 +931,12 @@ async function runBots() {
     if (due.length) await redis.set('lgbq', q); }
   if (mk) await redis.set('market', mk);
   // Notification de course aux joueurs avec notifications push (même appli fermée) : déclenchée dès que quelqu'un utilise le site
-  const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
-  for (const v of list) if (v && !v.bot && (v.subs || []).length && now - (v.seen || 0) < 7 * DAY && raceNote(v)) await redis.set(key(v.pseudo), v);
+  // (au plus une fois toutes les 5 min pour tout le site : c'était la plus grosse lecture de la base)
+  if (now - RNchk >= 300000 && (await redis.set('rn:t', now, { nx: true, ex: 300 }))) {
+    RNchk = now;
+    const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
+    for (const v of list) if (v && !v.bot && (v.subs || []).length && now - (v.seen || 0) < 7 * DAY && raceNote(v)) await redis.set(key(v.pseudo), v);
+  }
 }
 
 // --- Notification quotidienne : "Viens ouvrir tes packs gratuits" vers 12h30 (heure de Paris), via Vercel Cron (GET /api/game?cron=1).
@@ -1016,6 +1031,7 @@ const qzPend = async (u) => {
 };
 const qzAns = async (id) => { const h = await redis.hgetall('qza:' + id); return Object.values(h || {}).map((v) => (typeof v === 'string' ? JSON.parse(v) : v)).sort((a, b) => a.t - b.t); };
 
+const VC = new Map(); // cache mémoire des vidéos de pubs déjà lues (3 max)
 const handler = async (req, res) => {
   const fail = (m, c = 400) => res.status(c).json({ error: m });
   const ok = (d) => res.status(200).json(d);
@@ -1043,9 +1059,13 @@ const handler = async (req, res) => {
     if (vidId) { // vidéo d'une pub : morceaux recollés, lecture par plages (Range) pour que iPhone et Chrome puissent la lire
       const m = /^[a-f0-9]{12}$/.test(vidId) ? await redis.get('pvid:' + vidId + ':m') : null;
       if (!m || !m.ok) return fail('Vidéo inconnue', 404);
-      const parts = await redis.mget(...Array.from({ length: m.n }, (_, i) => 'pvid:' + vidId + ':' + i));
-      if (parts.some((x) => typeof x !== 'string')) return fail('Vidéo incomplète', 404);
-      const buf = Buffer.from(parts.join(''), 'base64'), rg = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ''));
+      let buf = VC.get(vidId);
+      if (!buf) {
+        const parts = await redis.mget(...Array.from({ length: m.n }, (_, i) => 'pvid:' + vidId + ':' + i));
+        if (parts.some((x) => typeof x !== 'string')) return fail('Vidéo incomplète', 404);
+        buf = Buffer.from(parts.join(''), 'base64'); VC.set(vidId, buf); if (VC.size > 3) VC.delete(VC.keys().next().value);
+      }
+      const rg = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ''));
       res.setHeader('Content-Type', m.mime || 'video/mp4'); res.setHeader('Accept-Ranges', 'bytes'); res.setHeader('Cache-Control', 'public, max-age=86400');
       if (rg && (rg[1] || rg[2])) {
         let a = rg[1] === '' ? Math.max(0, buf.length - Number(rg[2])) : Number(rg[1]), z = rg[1] === '' || rg[2] === '' ? buf.length - 1 : Math.min(Number(rg[2]), buf.length - 1);
@@ -2010,7 +2030,7 @@ const handler = async (req, res) => {
       if (u.coins < CAR_COST) return fail('Pas assez de coins : ' + CAR_COST + ' 🪙 pour repeindre ta voiture');
       u.coins -= CAR_COST; u.car = c;
     } else if (b.action === 'racelb') {
-      const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
+      const list = await allUsers(u);
       const all = raceBoard(list, raceWeek()).map(({ bot: _b, ...x }) => x), last = (await redis.get('race:last')) || null;
       const n = [5, 10].includes(+b.n) ? +b.n : 200, rows = all.slice(0, n), me = all.find((x) => x.pseudo === u.pseudo);
       if (me && !rows.includes(me)) rows.push(me);
@@ -2087,14 +2107,14 @@ const handler = async (req, res) => {
     } else if (b.action === 'tnget') {
       extra = { tn: await tnView(u) };
     } else if (b.action === 'rank') {
-      const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [];
+      const list = await allUsers(u);
       extra = { rank: list.filter(Boolean).map((v) => {
         const n = { l: 0, e: 0, r: 0, c: 0 };
         for (const [id, q] of Object.entries(v.cards || {})) { const r = rarOf(cat, id); if (n[r] != null && !id.startsWith('obj:')) n[r] += r === 'l' ? q : 1; } // légendaires : chaque exemplaire compte (2 fois la même = 2 légendaires)
         return { pseudo: v.pseudo, ...n, rb: Object.values(v.rb || {}).reduce((a, x) => a + x, 0), coins: v.coins, pf: v.pf || null };
       }).sort((a, b) => b.rb - a.rb || b.l - a.l || b.e - a.e || b.r - a.r || b.c - a.c || b.coins - a.coins).slice(0, [5, 10].includes(+b.n) ? +b.n : 10000).map((x, i) => (i < 10 ? x : { ...x, pf: null })) };
     } else if (b.action === 'chrank') { // classement des défis : ouvert à tous, même vide
-      const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : [], H = (await redis.get('chh')) || [];
+      const list = await allUsers(u), H = (await redis.get('chh')) || [];
       const rows = list.filter((v) => v && !v.bot && !banOf(v)).map((v) => { const c = v.cs || csFrom(H, v.pseudo); return { pseudo: v.pseudo, w: c.w, l: c.l, d: c.d, n: c.w + c.l + c.d, pf: v.pf || null }; })
         .filter((r) => r.n > 0).sort((x, y) => y.w - x.w || y.w / y.n - x.w / x.n || y.n - x.n || x.pseudo.localeCompare(y.pseudo));
       extra = { chrank: rows.slice(0, [5, 10].includes(+b.n) ? +b.n : 10000).map((x, i) => (i < 10 ? x : { ...x, pf: null })) };
@@ -2294,7 +2314,7 @@ const handler = async (req, res) => {
       const now = Date.now(), L = ((await redis.get('challenges')) || []).filter((x) => x.exp > now), H = (await redis.get('chh')) || [];
       const cl = (x) => ({ id: x.id, from: x.from, to: x.to, mode: x.mode, fmt: x.fmt, s: x.s, exp: x.exp }); // jamais les cartes de l'adversaire
       extra = { inc: L.filter((x) => x.to === u.pseudo).map(cl), open: L.filter((x) => !x.to && x.from !== u.pseudo).map(cl), sent: L.filter((x) => x.from === u.pseudo).map(cl), res: H.filter((h) => h.a === u.pseudo || h.b === u.pseudo).slice(0, 10) };
-      if (b.pl) { const names = await redis.smembers('users'), list = names.length ? await redis.mget(...names.map(key)) : []; extra.players = list.filter((v) => v && v.pseudo !== u.pseudo && rbTot(v) > 0 && !banOf(v)).map((v) => v.pseudo).sort(); }
+      if (b.pl) { const list = await allUsers(u); extra.players = list.filter((v) => v && v.pseudo !== u.pseudo && rbTot(v) > 0 && !banOf(v)).map((v) => v.pseudo).sort(); }
     } else if (b.action === 'chnew') {
       if (!rbTot(u)) return fail('Les défis se débloquent à ta première renaissance');
       const mode = b.mode === 'fun' ? 'fun' : 'war', fmt = [1, 2, 3].includes(+b.fmt) ? +b.fmt : 3, st = int(b.stake, CH.max), di = dlInfo(u);
