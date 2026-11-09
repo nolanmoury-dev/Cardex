@@ -4,6 +4,20 @@ const crypto = require('crypto');
 const T0 = require('../lib/cards');
 
 let redis;
+// Cache mémoire des clés lues à CHAQUE requête mais qui changent rarement (évite des centaines de milliers de lectures par mois).
+// Vidé dès que CE serveur écrit la clé ; les autres serveurs la voient au plus tard après le délai (15-20 s).
+const HOT = { maint: 15000, pubs: 15000, pubreq: 15000, custom: 20000, ppdone: 3600000 }, HC = new Map();
+const cpv = (v) => (v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v);
+function hotCache(r) {
+  const og = r.get.bind(r), os = r.set.bind(r), od = r.del.bind(r);
+  r.get = async (k, ...a) => {
+    const t = typeof k === 'string' ? HOT[k] : 0; if (!t) return og(k, ...a);
+    const c = HC.get(k), now = Date.now(); if (c && now - c.t < c.ttl) return cpv(c.v);
+    const v = await og(k, ...a); HC.set(k, { t: now, v: cpv(v), ttl: v ? t : Math.min(t, 15000) }); return v;
+  };
+  r.set = async (k, ...a) => { const x = await os(k, ...a); if (typeof k === 'string' && HOT[k]) HC.delete(k); return x; };
+  r.del = async (...ks) => { const x = await od(...ks); for (const k of ks) if (typeof k === 'string' && HOT[k]) HC.delete(k); return x; };
+}
 const W = { c: 60, r: 25, e: 11, l: 4 }, BASE = { c: 2, r: 8, e: 25, l: 80, m: 250, s: 800, u: 2500 }, R = 'crelmsu'; // m = Mythique, s = Céleste, u = Unique : créées par l'opérateur uniquement (aucun sachet n'en contient)
 const RL_MAX = 10, RL_WAIT = 30000, parisDay = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
 const rlInfo = (u) => { const r = u.rl && u.rl.d === parisDay() ? u.rl : { n: 0, t: 0 }; return { left: Math.max(0, RL_MAX - r.n), next: r.t + RL_WAIT }; };
@@ -443,7 +457,7 @@ const price = (sh, t, cat) => Math.round((PRICE * 2 ** (lvOf(cat, t) - 1) * (100
 const visShop = (u, sh, cat) => Object.fromEntries(Object.entries(sh).filter(([t]) => { const b = baseOf(cat, t), ob = cat[t]; if (ob && ob.until != null && !ob.base && ((u.rb || {})[t] || 0) >= 1) return false; return !LINES.includes(b) || lvOf(cat, t) === lineLv(u, b) || (u.bought || {})[t] > 0; }).map(([t, s]) => [t, { ...s, nobuy: LINES.includes(baseOf(cat, t)) && lvOf(cat, t) !== lineLv(u, baseOf(cat, t)) }]));
 const view = (u, sh, cat, cu, mk) => ({
   market: (mk || []).filter((x) => !x.to || x.to === u.pseudo || x.seller === u.pseudo).filter((x) => x.seller === u.pseudo || (knownId(u, cat, x.card) && (!x.want || knownId(u, cat, x.want)))), inbox: u.inbox || [],
-  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), ad: adLeft(u), adm: adMax(u), pubp: pubPrice(u), pubf: u.pubFree || 0, dn: u.dn || null, lgev: u.lg && u.lg.prev && u.lg.prev.d && !u.lg.prev.ack ? { from: u.lg.prev.t, to: u.lg.t, d: u.lg.prev.d, coins: u.lg.prev.d > 0 ? LG_PROMO : 0 } : null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, vit: (u.vit || []).filter((id) => u.cards[id]).slice(0, 3), pf: u.pf || null, sub: subOf(u) ? { t: u.sub.t, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial, subs: SUBS, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
+  dms: Object.values(u.dm || {}).sort((a, b) => b.t - a.t), pseudo: u.pseudo, ban: banOf(u), ch: { ok: rbTot(u) > 0, left: dlInfo(u).left, max: dlInfo(u).max }, st: Object.fromEntries(Object.keys(u.cards).map((id) => { const s = statsOf(id, cat, cu); return [id, s ? [s.hp, s.atk, playable(u, id, cat, cu) ? 1 : 0] : null]; })), rl: rlInfo(u), mg: mgInfo(u), ad: adLeft(u), adm: adMax(u), pubp: pubPrice(u), pubf: u.pubFree || 0, dn: u.dn || null, lgev: u.lg && u.lg.prev && u.lg.prev.d && !u.lg.prev.ack ? { from: u.lg.prev.t, to: u.lg.t, d: u.lg.prev.d, coins: u.lg.prev.d > 0 ? LG_PROMO : 0 } : null, renames: u.renames || 0, rb: u.rb || {}, dy: dyInfo(u), rc: raceView(u), fk: u.fk || {}, vit: (u.vit || []).filter((id) => u.cards[id]).slice(0, 3), pf: pfOut(u.pf), sub: subOf(u) ? { t: u.sub.t, until: u.sub.until, trial: !!u.sub.trial, col: u.subCol || null } : null, subTrial: !!u.subTrial, subs: SUBS, pfn: u.pfpN || 0, pfq: !!u.pfpReq, coins: u.coins, packs: u.packs, bought: u.bought || {},
   rw: (u.rw || []).map((x) => ({ rank: x.rank, name: x.name })), rws: (u.rw || [])[0] ? wSegs(u.rw[0].rank, u.rw[0].mult).map(wLabel) : null,
   next: u.packs >= MAXP ? null : u.last + stepOf(u.last), fp: { 1: { n: u.packs, next: u.packs >= MAXP ? null : u.last + stepOf(u.last) } }, cards: u.cards, bd: u.bd || {}, fav: u.fav, theme: u.theme || null,
   vals: Object.fromEntries(Object.keys(u.cards).map((id) => [id, val(u, id, cat, cu)])),
@@ -495,7 +509,24 @@ const LV = {
 // Cache mémoire (30 s) de la liste complète des joueurs, pour les classements (lecture seule) : évite de relire tous les comptes à chaque ouverture d'un écran.
 // Ne JAMAIS modifier ni réécrire les comptes renvoyés ici. Le compte de celui qui demande (me) est toujours remplacé par sa version à jour.
 // Photo de profil envoyée dans les classements : seulement pour les vrais joueurs vus il y a moins de 3 jours (pas de photo pour les bots ni les absents).
-const pfOk = (v) => (v && !v.bot && Date.now() - (v.seen || 0) < 3 * DAY ? v.pf || null : null);
+// u.pf peut valoir : /pp/N.webp (photo par défaut), x:<id> (photo envoyée, rangée à part dans 'pfimg:<id>' et servie par /api/game?pf=<id>), ou une ancienne photo en base64 (migrée automatiquement).
+const pfOut = (p) => (typeof p === 'string' && p.startsWith('x:') ? '/api/game?pf=' + p.slice(2) : p || null);
+const PF_RE = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+=*)$/;
+const pfStore = async (img) => { if (typeof img !== 'string' || !PF_RE.test(img)) return img; const id = crypto.randomBytes(6).toString('hex'); await redis.set('pfimg:' + id, img); return 'x:' + id; };
+let pfmChk = 0, pfmDone = false;
+async function pfMigrate() { // une seule fois : sort les anciennes photos des comptes (20 comptes à la fois)
+  const now = Date.now(); if (pfmDone || now - pfmChk < 20000) return; pfmChk = now;
+  const st = (await redis.get('pfmig')) || { i: 0 };
+  if (st.done) { pfmDone = true; return; }
+  if (!(await redis.set('pfmig:lock', 1, { nx: true, ex: 15 }))) return;
+  const names = (await redis.smembers('users')).sort(), part = names.slice(st.i, st.i + 20);
+  if (part.length) {
+    const list = await redis.mget(...part.map(key));
+    for (const v of list) if (v && typeof v.pf === 'string' && v.pf.startsWith('data:')) { v.pf = await pfStore(v.pf); await redis.set(key(v.pseudo), v); }
+  }
+  await redis.set('pfmig', part.length < 20 ? { i: st.i + part.length, done: true } : { i: st.i + part.length });
+}
+const pfOk = (v) => (v && !v.bot && Date.now() - (v.seen || 0) < 3 * DAY ? pfOut(v.pf) : null);
 // Taille d'une page de classement : 10 par 10 (10 par défaut, 200 au maximum).
 const pageN = (n) => Math.min(200, Math.max(10, Math.ceil((+n || 10) / 10) * 10));
 let AU = null, AUt = 0;
@@ -1045,7 +1076,8 @@ const handler = async (req, res) => {
   const cron = req.method === 'GET' && new URL(req.url, 'http://x').searchParams.get('cron') === '1';
   const imgId = req.method === 'GET' ? new URL(req.url, 'http://x').searchParams.get('img') : null; // photo de carte envoyée par l'opérateur depuis sa galerie
   const vidId = req.method === 'GET' ? new URL(req.url, 'http://x').searchParams.get('vid') : null; // 🎞️ vidéo d'une pub de joueur
-  if (req.method !== 'POST' && !cron && !imgId && !vidId) return fail('POST uniquement', 405);
+  const pfId = req.method === 'GET' ? new URL(req.url, 'http://x').searchParams.get('pf') : null; // photo de profil d'un joueur
+  if (req.method !== 'POST' && !cron && !imgId && !vidId && !pfId) return fail('POST uniquement', 405);
   if (cron && process.env.CRON_SECRET) {
     const sent = (req.headers.authorization || '').replace(/^Bearer /, '') || new URL(req.url, 'http://x').searchParams.get('key');
     if (sent !== process.env.CRON_SECRET) return fail('Non autorisé', 401);
@@ -1055,10 +1087,16 @@ const handler = async (req, res) => {
     if (!redis) {
       const url = envFind(/(REST_API_URL|REDIS_REST_URL)$/), token = envFind(/(REST_API_TOKEN|REDIS_REST_TOKEN)$/);
       if (!url || !token) return fail('Base de données non reliée : dans Vercel, ajoute Upstash Redis au projet (Storage > Connect Project), puis fais Redeploy', 500);
-      redis = new (require('@upstash/redis').Redis)({ url, token });
+      redis = new (require('@upstash/redis').Redis)({ url, token }); hotCache(redis);
     }
     if (imgId) {
       const d = /^[a-f0-9]{12}$/.test(imgId) ? await redis.get('cimg:' + imgId) : null, m = typeof d === 'string' && d.match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+=*)$/);
+      if (!m) return fail('Image inconnue', 404);
+      res.setHeader('Content-Type', 'image/' + m[1]); res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.status(200).send(Buffer.from(m[2], 'base64'));
+    }
+    if (pfId) {
+      const d = /^[a-f0-9]{12}$/.test(pfId) ? await redis.get('pfimg:' + pfId) : null, m = typeof d === 'string' && d.match(PF_RE);
       if (!m) return fail('Image inconnue', 404);
       res.setHeader('Content-Type', 'image/' + m[1]); res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       return res.status(200).send(Buffer.from(m[2], 'base64'));
@@ -1088,6 +1126,7 @@ const handler = async (req, res) => {
     await raceSync().catch((e) => console.error('raceSync', e.message));
     await ensureBots().catch((e) => console.error('ensureBots', e.message));
     await ppBackfill().catch((e) => console.error('ppBackfill', e.message));
+    await pfMigrate().catch((e) => console.error('pfMigrate', e.message));
     await runBots().catch((e) => console.error('bots', e.message));
 
     if (b.action === 'register' || b.action === 'login') {
@@ -1140,7 +1179,7 @@ const handler = async (req, res) => {
       if (b.action === 'users') {
         const names = (await redis.smembers('users')).sort();
         const list = names.length ? await redis.mget(...names.map(key)) : [];
-        const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, bd: u.bd || {}, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u), pf: !!u.pf && !isDefPp(u.pf), pp: u.pf || null, push: (u.subs || []).length > 0 }; });
+        const users = list.filter(Boolean).map((u) => { tick(u); return { pseudo: u.pseudo, bot: u.bot || null, coins: u.coins, packs: u.packs, bought: u.bought || {}, cards: u.cards, bd: u.bd || {}, seen: u.bot ? u.lastAct || 0 : u.seen || 0, banned: !!banOf(u), pf: !!u.pf && !isDefPp(u.pf), pp: pfOut(u.pf), push: (u.subs || []).length > 0 }; });
         return ok({ ...(await skinState()), skinc: await skinList(), ...(await maintOp()), lg: await lgOp(), maintPresets: Object.entries(MAINT_PRESETS).map(([k, v]) => ({ k, label: v[0] })), subs: SUBS, users, shop: await shopOf(cat), custom: cu, reports: (await redis.get('reports')) || [], pubs: await pubsAct(), pubreq: await pubReqs(), colreq: await colReqs(), pfpq: await pfpList(), market: (await redis.get('market')) || [], themes: cat });
       }
       if (b.action === 'shop') {
@@ -1639,7 +1678,7 @@ const handler = async (req, res) => {
         if (b.action === 'pfpdel') { if (!u.pf || isDefPp(u.pf)) return fail("Ce joueur n'a pas de photo envoyée"); u.pf = ppRand(); note(u, '🖼️ Le staff a retiré ta photo de profil'); }
         else {
           if (!u.pfpReq) return fail('Aucune demande en attente pour ce joueur');
-          if (b.action === 'pfpok') { u.pf = u.pfpReq.img; u.pfpN = (u.pfpN || 0) + 1; note(u, '✅ Ta nouvelle photo de profil a été validée'); }
+          if (b.action === 'pfpok') { u.pf = await pfStore(u.pfpReq.img); u.pfpN = (u.pfpN || 0) + 1; note(u, '✅ Ta nouvelle photo de profil a été validée'); }
           else note(u, '❌ Ta demande de changement de photo de profil a été refusée');
           delete u.pfpReq;
           await redis.set('pfpq', ((await redis.get('pfpq')) || []).filter((x) => x !== u.pseudo));
@@ -2064,7 +2103,7 @@ const handler = async (req, res) => {
         extra = { pending: true };
       } else {
         if (n === 1) { if (u.coins < PFP_COST) return fail('Pas assez de coins : ' + PFP_COST + ' 🪙 pour ce changement'); u.coins -= PFP_COST; }
-        u.pf = img; u.pfpN = n + 1; extra = { applied: true };
+        u.pf = await pfStore(img); u.pfpN = n + 1; extra = { applied: true };
       }
     } else if (b.action === 'daily') {
       const d = dyInfo(u);
