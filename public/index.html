@@ -1023,7 +1023,7 @@ function lgDraw() {
   el.querySelectorAll('[data-lr]').forEach((r) => (r.onclick = () => lgDetail((lgV === 'l' ? LG.rows : LG.world)[+r.dataset.lr])));
   clearInterval(window.lgT);
   const upd = () => { const e = $('#lgend'); if (!e) return clearInterval(window.lgT); e.textContent = 'Fin de saison dans ' + lgLeft(LG.end - Date.now()); };
-  upd(); window.lgT = setInterval(upd, 30000);
+  upd(); window.lgT = setInterval(upd, 60000);
 }
 let rkSub = 'r', dmWith = null, dmNew = false, dmTh = [], dmPl = null;
 const dmUnread = () => ((S && S.dms) || []).reduce((a, e) => a + (e.n || 0), 0);
@@ -1042,7 +1042,7 @@ function chPills() { return '<div class="pills" style="margin-bottom:8px">' + [[
 function tnInit() {
   clearInterval(chTk);
   const load = async () => { try { const j = await api('tnget', {}); TN = j.tn || null; if (S.ch && S.ch.ok) { const c = await api('chlist', { pl: 1 }); setS(c.state); CHD = c; } tnDraw(); } catch (e) { msg(e.message); } };
-  load(); chTk = setInterval(() => { if (!$('#tnb')) return clearInterval(chTk); if (!chForm && !document.querySelector('.ov')) load(); }, 20000);
+  load(); chTk = setInterval(() => { if (!$('#tnb')) return clearInterval(chTk); if (!chForm && !document.querySelector('.ov')) load(); }, 45000);
 }
 function tnDraw() {
   const el = $('#tnb'); if (!el) return;
@@ -1090,7 +1090,7 @@ function chInit() {
   if (!S.ch || !S.ch.ok) return;
   const load = async () => { try { const j = await api('chlist', { pl: 1 }); setS(j.state); CHD = j; chDraw(); } catch (e) { msg(e.message); } };
   load();
-  chTk = setInterval(() => { if (!$('#chb')) return clearInterval(chTk); if (!chForm && !document.querySelector('.ov')) load(); }, 15000);
+  chTk = setInterval(() => { if (!$('#chb')) return clearInterval(chTk); if (!chForm && !document.querySelector('.ov')) load(); }, 45000);
 }
 function chDraw() {
   const el = $('#chb'); if (!el || !CHD) return;
@@ -1326,7 +1326,7 @@ function raceInit() {
     if (!$('#rtk')) return clearInterval(raceTk);
     n++; const r = S.rc;
     if (r) { const w = r.next - Date.now(), c = $('#rcd'); if (c) { if (w > 0) c.textContent = fmtT(w); else raceHead(); } }
-    if (n % 15 === 0 && !document.querySelector('.ov')) load();
+    if (n % 45 === 0 && !document.querySelector('.ov')) load();
   }, 1000);
 }
 function rkHTML() {
@@ -3064,8 +3064,10 @@ async function opView(m) {
   if (m) { const [i, t] = m.split('|'), el = $('#' + i); el.style.color = '#3fb950'; el.textContent = t; }
 }
 
-async function poll() {
+let pollN = 0;
+async function poll(force) { // toutes les 5 s dans une conversation ouverte, sinon toutes les 15 s (moins de requêtes)
   if (!tok || document.hidden || netOn) return;
+  if (!force && !(tab === 'rk' && rkSub === 'm' && dmWith) && ++pollN % 3) return;
   if (isOp && !asP) { if (opOn) opBell().catch(() => {}); return; }
   try {
     const sig = () => { const m = S.maintinfo || {}; return S.maint ? [m.type, m.until, m.code, m.msg, (m.msgs || []).join('|'), (m.open || []).join(',')].join('~') : ''; };
