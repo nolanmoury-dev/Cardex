@@ -494,6 +494,10 @@ const LV = {
 // Classement d'une course : joueurs réels + bots (un bot reste toujours derrière le meilleur joueur : il peut être 2e, jamais 1er).
 // Cache mémoire (30 s) de la liste complète des joueurs, pour les classements (lecture seule) : évite de relire tous les comptes à chaque ouverture d'un écran.
 // Ne JAMAIS modifier ni réécrire les comptes renvoyés ici. Le compte de celui qui demande (me) est toujours remplacé par sa version à jour.
+// Photo de profil envoyée dans les classements : seulement pour les vrais joueurs vus il y a moins de 3 jours (pas de photo pour les bots ni les absents).
+const pfOk = (v) => (v && !v.bot && Date.now() - (v.seen || 0) < 3 * DAY ? v.pf || null : null);
+// Taille d'une page de classement : 10 par 10 (10 par défaut, 200 au maximum).
+const pageN = (n) => Math.min(200, Math.max(10, Math.ceil((+n || 10) / 10) * 10));
 let AU = null, AUt = 0;
 const allUsers = async (me) => {
   const now = Date.now();
@@ -505,7 +509,7 @@ const allUsers = async (me) => {
 };
 function raceBoard(list, id) {
   const real = list.filter((v) => v && !v.bot && !banOf(v)), pos = (v) => (v.rc && v.rc.w === id ? v.rc.pos : 0), top = Math.max(0, ...real.map(pos));
-  return [...real, ...list.filter((v) => v && v.bot)].map((v) => { const r = v.rc && v.rc.w === id ? v.rc : null, ps = r ? r.pos : 0; return { pseudo: v.pseudo, bot: !!v.bot, pos: v.bot ? Math.min(ps, real.length ? Math.max(0, top - 1) : ps) : ps, tt: (r && r.tt) || 0, car: v.car || null, sk: carSkin(v), pf: v.pf || null }; })
+  return [...real, ...list.filter((v) => v && v.bot)].map((v) => { const r = v.rc && v.rc.w === id ? v.rc : null, ps = r ? r.pos : 0; return { pseudo: v.pseudo, bot: !!v.bot, pos: v.bot ? Math.min(ps, real.length ? Math.max(0, top - 1) : ps) : ps, tt: (r && r.tt) || 0, car: v.car || null, sk: carSkin(v), pf: pfOk(v) }; })
     .sort((a, c) => c.pos - a.pos || a.bot - c.bot || (a.tt || 9e15) - (c.tt || 9e15) || a.pseudo.localeCompare(c.pseudo)).map((x, i) => ({ ...x, rank: i + 1 }));
 }
 // ================= LIGUES (saisons d'une semaine) =================
@@ -609,8 +613,8 @@ async function lgView(u, cat) {
   const c = await lgEnsure(u), L = lgOf(u);
   const list = await allUsers(u), H = (await redis.get('chh')) || [], ob = (await redis.get('lgob')) || [];
   const acc = list.filter((v) => v && !banOf(v) && v.pseudo !== u.pseudo); if (!banOf(u)) acc.push(u);
-  const rowOf = (v) => { const cs = v.cs || csFrom(H, v.pseudo), rr = rarCount(v, cat), vl = v.lg && v.lg.sid === c.id ? v.lg : null; const l5 = H.filter((h) => h.a === v.pseudo || h.b === v.pseudo).slice(0, 5).map((h) => h.w * (h.a === v.pseudo ? 1 : -1)); return { l5, n: v.pseudo, pf: v.pf || null, bi: v.lg ? v.lg.t : 0, ren: rbTot(v), v: cs.w, nu: cs.d, d: cs.l, pts: vl ? Math.floor(vl.pts) : 0, co: v.coins, cards: cardsTot(v, cat, rr), rr, vit: (v.vit || []).filter((id) => v.cards && v.cards[id] && rarOf(cat, id)).slice(0, 3) }; };
-  const obRow = (x) => ({ l5: [], n: x.n, pf: ppByName(x.n), bi: x.t, ren: x.ren, v: x.v, nu: x.nu, d: x.d, pts: x.pts, co: x.co, cards: x.cards, rr: rarSplit(x.cards), vit: [], op: 1 });
+  const rowOf = (v) => { const cs = v.cs || csFrom(H, v.pseudo), rr = rarCount(v, cat), vl = v.lg && v.lg.sid === c.id ? v.lg : null; const l5 = H.filter((h) => h.a === v.pseudo || h.b === v.pseudo).slice(0, 5).map((h) => h.w * (h.a === v.pseudo ? 1 : -1)); return { l5, n: v.pseudo, pf: pfOk(v), bi: v.lg ? v.lg.t : 0, ren: rbTot(v), v: cs.w, nu: cs.d, d: cs.l, pts: vl ? Math.floor(vl.pts) : 0, co: v.coins, cards: cardsTot(v, cat, rr), rr, vit: (v.vit || []).filter((id) => v.cards && v.cards[id] && rarOf(cat, id)).slice(0, 3) }; };
+  const obRow = (x) => ({ l5: [], n: x.n, pf: null, bi: x.t, ren: x.ren, v: x.v, nu: x.nu, d: x.d, pts: x.pts, co: x.co, cards: x.cards, rr: rarSplit(x.cards), vit: [], op: 1 });
   const rows = acc.filter((v) => v.lg && v.lg.sid === c.id && v.lg.t === L.t && v.lg.g === L.g).map(rowOf);
   if (L.g === 0) for (const x of ob) if (x.t === L.t) rows.push(obRow(x));
   rows.sort((a, b) => b.pts - a.pts || b.ren - a.ren || b.co - a.co || a.n.localeCompare(b.n));
@@ -2032,9 +2036,9 @@ const handler = async (req, res) => {
     } else if (b.action === 'racelb') {
       const list = await allUsers(u);
       const all = raceBoard(list, raceWeek()).map(({ bot: _b, ...x }) => x), last = (await redis.get('race:last')) || null;
-      const n = [5, 10].includes(+b.n) ? +b.n : 200, rows = all.slice(0, n), me = all.find((x) => x.pseudo === u.pseudo);
+      const n = pageN(b.n), rows = all.slice(0, n), me = all.find((x) => x.pseudo === u.pseudo);
       if (me && !rows.includes(me)) rows.push(me);
-      extra = { race: { rows: rows.map((x, i) => (i < 10 || x === me ? x : { ...x, pf: null })), total: all.length, end: raceEnd(), name: RACE ? RACE.name : null, kind: RACE ? RACE.kind : 'normal', last: last && last.winner ? { pseudo: last.winner.pseudo, pos: last.winner.pos, name: last.name } : null } };
+      extra = { race: { rows, total: all.length, end: raceEnd(), name: RACE ? RACE.name : null, kind: RACE ? RACE.kind : 'normal', last: last && last.winner ? { pseudo: last.winner.pseudo, pos: last.winner.pos, name: last.name } : null } };
     } else if (b.action === 'wheelspin') {
       const w = (u.rw || [])[0];
       if (!w) return fail('Aucune roue à tourner');
@@ -2111,13 +2115,16 @@ const handler = async (req, res) => {
       extra = { rank: list.filter(Boolean).map((v) => {
         const n = { l: 0, e: 0, r: 0, c: 0 };
         for (const [id, q] of Object.entries(v.cards || {})) { const r = rarOf(cat, id); if (n[r] != null && !id.startsWith('obj:')) n[r] += r === 'l' ? q : 1; } // légendaires : chaque exemplaire compte (2 fois la même = 2 légendaires)
-        return { pseudo: v.pseudo, ...n, rb: Object.values(v.rb || {}).reduce((a, x) => a + x, 0), coins: v.coins, pf: v.pf || null };
-      }).sort((a, b) => b.rb - a.rb || b.l - a.l || b.e - a.e || b.r - a.r || b.c - a.c || b.coins - a.coins).slice(0, [5, 10].includes(+b.n) ? +b.n : 10000).map((x, i) => (i < 10 ? x : { ...x, pf: null })) };
+        return { pseudo: v.pseudo, ...n, rb: Object.values(v.rb || {}).reduce((a, x) => a + x, 0), coins: v.coins, pf: pfOk(v) };
+      }).sort((a, b) => b.rb - a.rb || b.l - a.l || b.e - a.e || b.r - a.r || b.c - a.c || b.coins - a.coins).slice(0, pageN(b.n)) };
     } else if (b.action === 'chrank') { // classement des défis : ouvert à tous, même vide
       const list = await allUsers(u), H = (await redis.get('chh')) || [];
-      const rows = list.filter((v) => v && !v.bot && !banOf(v)).map((v) => { const c = v.cs || csFrom(H, v.pseudo); return { pseudo: v.pseudo, w: c.w, l: c.l, d: c.d, n: c.w + c.l + c.d, pf: v.pf || null }; })
+      const rows = list.filter((v) => v && !v.bot && !banOf(v)).map((v) => { const c = v.cs || csFrom(H, v.pseudo); return { pseudo: v.pseudo, w: c.w, l: c.l, d: c.d, n: c.w + c.l + c.d, pf: pfOk(v) }; })
         .filter((r) => r.n > 0).sort((x, y) => y.w - x.w || y.w / y.n - x.w / x.n || y.n - x.n || x.pseudo.localeCompare(y.pseudo));
-      extra = { chrank: rows.slice(0, [5, 10].includes(+b.n) ? +b.n : 10000).map((x, i) => (i < 10 ? x : { ...x, pf: null })) };
+      rows.forEach((x, i) => { x.rk = i + 1; });
+      const out = rows.slice(0, pageN(b.n)), mine = rows.find((x) => x.pseudo === u.pseudo);
+      if (mine && !out.includes(mine)) out.push(mine);
+      extra = { chrank: out, chtotal: rows.length };
     } else if (b.action === 'vapid') {
       extra = { key: (await vapid()).pub };
     } else if (b.action === 'subscribe') {
