@@ -936,7 +936,7 @@ function jeuHTML() {
     '<div class="box"><h2>🎰 Machine à sous</h2><p>5 rouleaux : il faut au moins 3 symboles identiques (peu importe l’endroit). Gains pour 3 / 4 / 5 identiques : 🚲 ⚽ ×2 / ×6 / ×30 · 🤾 ×2,5 / ×8 / ×40 · 🦁 ×3,5 / ×12 / ×60 · 🏛️ ×5 / ×20 / ×120 · 🚀 ×10 / ×50 / ×400. Limite : 15 parties par jour.</p><div class="row"><input id="sl-b" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button id="sl-go">Lancer</button></div><div id="sl-out" style="text-align:center;font-size:34px;min-height:56px;margin-top:8px"></div><div id="sl-r" style="text-align:center"></div><div id="ml-slots" class="mgl" style="text-align:center;font-size:13px;opacity:.8"></div></div><div class="box"><h2>🪙 Pile ou face / Double ou rien</h2><p>Choisis pile ou face : 48 % de chance, gain ×2. Après une victoire, encaisse ou double (×4, ×8, jusqu’à ×16 ; une défaite fait tout perdre). Limite : 15 parties par jour.</p><div class="row"><input id="fl-b" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button data-fp="pile">Pile</button><button data-fp="face">Face</button></div><div id="fl-out" style="text-align:center;margin-top:8px"></div><div id="ml-flip" class="mgl" style="text-align:center;font-size:13px;opacity:.8"></div></div><div class="box"><h2>🎟️ Ticket à gratter</h2><p>Ticket à 50 🪙. Trouve 3 montants identiques pour gagner ce montant : 50, 100, 200, 500, 2 500 ou 5 000 🪙. Limite : 10 tickets par jour.</p><div class="row"><button id="tk-go">Acheter un ticket (50 🪙)</button><button id="tk-all" disabled>Tout gratter</button></div><div id="tk-g" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:300px;margin:10px auto"></div><div id="tk-r" style="text-align:center;font-size:18px;min-height:28px"></div><div id="ml-scratch" class="mgl" style="text-align:center;font-size:13px;opacity:.8"></div></div><div class="box"><h2>⚔️ Bataille de raretés</h2><p>Toi et l’adversaire tirez une carte au hasard : la plus rare gagne ×1,85 la mise. Égalité : on relance (5 fois max, puis la mise est rendue). Tu ne perds jamais de carte, seulement des coins. Limite : 10 batailles par jour.</p><div class="row"><input id="bt-b" type="number" min="10" max="500" value="100" style="width:110px" aria-label="Mise"><button id="bt-go">⚔️ Combattre</button></div><div id="bt-out" style="margin-top:10px"></div><div id="bt-r" style="text-align:center;font-size:18px;min-height:28px"></div><div id="ml-battle" class="mgl" style="text-align:center;font-size:13px;opacity:.8"></div></div>' +
     '<div class="box"><b>Gains</b><p>🐍 Snake (cartes ramassées) : gain = mise × (cartes − 5) ÷ 10, maximum ×4. Avec 100 coins : 15 cartes rendent 100, 45 cartes rendent 400. Le serpent change de couleur selon ton gain en direct :</p>' + snLegend() + '<p>🧱 Tetris (lignes) : gain = mise × (lignes − 3) ÷ 6, maximum ×4. Avec 100 coins : 9 lignes rendent 100, 27 lignes rendent 400. 5 cartes ou moins (Snake), 3 lignes ou moins (Tetris) : tu perds ta mise.</p></div>';
 }
-let rkN = 10;
+let rkN = 10, rkTot = 0;
 // ================= LIGUES =================
 const LGBADGE = (i, w) => '<span class="lgb" role="img" aria-label="' + esc((LG && LG.names[i]) || '') + '" style="width:' + w + 'px;height:' + Math.round(w * 0.867) + 'px;background-position:' + (i % 5) * 25 + '% ' + Math.floor(i / 5) * 33.3333 + '%"></span>';
 let LG = null, TN = null, lgV = 'l', chSub = 'c';
@@ -1212,14 +1212,15 @@ function chUnlockOv() {
   const ov = overlay('<div class="box" style="max-width:420px;margin:12vh auto;text-align:center"><div class="pk big shake" style="--pc:#f85149;margin:0 auto 12px">⚔️</div><h2>Défis débloqués !</h2><p>Grâce à ta première renaissance, tu peux maintenant défier les autres joueurs avec tes cartes de niveau II à V (et celles des collections dont tu as fait la renaissance). Rendez-vous dans <b>Social → Défis</b>.</p><button id="cuo">Super !</button></div>');
   ov.querySelector('#cuo').onclick = () => { ov.remove(); tab = 'rk'; rkSub = 'd'; playerView(); };
 }
-const rkPills = () => '<div class="pills">' + [[5, 'Top 5'], [10, 'Top 10'], [0, 'Tout']].map(([n, l]) => '<button class="pill' + (rkN === n ? ' on' : '') + '" data-n="' + n + '">' + l + '</button>').join('') + '</div>';
+const rkPills = () => '<div class="pills"><span class="pill on">Top ' + rkN + '</span></div>';
 function chRankHTML() {
   return rkPills() + '<div class="box" style="padding:8px"><div id="ck">Chargement…</div></div><small>Classé par victoires en défi, puis par taux de victoire. V = victoires, N = nuls, D = défaites. Tout le monde peut le consulter ; les défis eux-mêmes se débloquent à la première renaissance.</small>';
 }
 function chRankInit() {
   api('chrank', { n: rkN }).then((j) => {
     const el = $('#ck'); if (!el) return;
-    el.innerHTML = j.chrank.length ? '<table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th>V</th><th>N</th><th>D</th><th>%</th></tr>' + j.chrank.map((x, i) => '<tr' + (x.pseudo === S.pseudo ? ' class="me"' : '') + '><td>' + (i + 1) + '</td><td class="pn">' + esc(x.pseudo) + pfImg(x.pf) + '</td><td>' + x.w + '</td><td>' + x.d + '</td><td>' + x.l + '</td><td>' + Math.round((100 * x.w) / x.n) + '%</td></tr>').join('') + '</table>' : '<p>⚔️ Aucun défi n’a encore été joué : le classement apparaîtra dès le premier combat.</p>';
+    el.innerHTML = j.chrank.length ? '<table class="rt"><tr><th>#</th><th style="text-align:left">Joueur</th><th>V</th><th>N</th><th>D</th><th>%</th></tr>' + j.chrank.map((x, i) => '<tr' + (x.pseudo === S.pseudo ? ' class="me"' : '') + '><td>' + (x.rk || i + 1) + '</td><td class="pn">' + esc(x.pseudo) + pfImg(x.pf) + '</td><td>' + x.w + '</td><td>' + x.d + '</td><td>' + x.l + '</td><td>' + Math.round((100 * x.w) / x.n) + '%</td></tr>').join('') + '</table>' + (j.chtotal > rkN ? '<button class="g" id="rkmore" style="width:100%;margin-top:8px">▼ Voir 10 de plus (' + Math.min(rkN, j.chtotal) + ' / ' + j.chtotal + ')</button>' : '') : '<p>⚔️ Aucun défi n’a encore été joué : le classement apparaîtra dès le premier combat.</p>';
+    const mo = $('#rkmore'); if (mo) mo.onclick = () => { rkN += 10; playerView(); };
   }).catch((e) => msg(e.message));
 }
 // ================= COURSE DE LA SEMAINE =================
@@ -1229,7 +1230,7 @@ const carSVG = (col, pf, nm, sk) => '<div class="car' + (sk ? ' sk-' + sk : '') 
 function raceHTML() {
   if (!S.rc) return '<div class="box"><p>🏁 La course est réservée aux joueurs.</p></div>';
   return '<div class="box"><h2>🏁 ' + esc(S.rc.name || 'Course') + '</h2><div id="rhd"></div></div>'
-    + '<div class="box" style="padding:10px"><div class="pills">' + [[5, 'Top 5'], [10, 'Top 10'], [0, 'Tous']].map(([n, l]) => '<button class="pill' + (raceN === n ? ' on' : '') + '" data-rn="' + n + '">' + l + '</button>').join('') + '</div><div id="rtk">Chargement…</div></div>'
+    + '<div class="box" style="padding:10px"><div class="pills"><span class="pill on">Top ' + raceN + '</span></div><div id="rtk">Chargement…</div></div>'
     + '<div class="box"><h2>🎨 Ma voiture</h2><div id="rcar"></div><div class="err" id="e"></div></div>';
 }
 function raceHead() {
@@ -1264,7 +1265,8 @@ function drawRace(prev, gain) {
   el.innerHTML = RC.rows.map((x) => {
     const me = x.pseudo === S.pseudo;
     return '<div class="rl' + (me ? ' me' : '') + '"><div class="ln"><span>' + (x.rank === 1 ? '👑' : x.rank + '.') + ' <b>' + esc(x.pseudo) + '</b></span><small>' + x.pos + '/' + T + '</small></div><div class="trk">' + carSVG(x.car || avCol(x.pseudo), me ? S.pf || x.pf : x.pf, x.pseudo, x.sk) + '</div></div>';
-  }).join('') + '<small>Piste : de 0 à ' + T + ' points (elle s’allonge quand le leader avance)' + (RC.total > RC.rows.length ? ' · ' + RC.total + ' pilotes au total' : '') + '.</small>';
+  }).join('') + '<small>Piste : de 0 à ' + T + ' points (elle s’allonge quand le leader avance)' + (RC.total > RC.rows.length ? ' · ' + RC.total + ' pilotes au total' : '') + '.</small>' + (RC.total > raceN ? '<button class="g" id="rcmore" style="width:100%;margin-top:8px">▼ Voir 10 de plus</button>' : '');
+  const rmo = $('#rcmore'); if (rmo) rmo.onclick = () => { raceN += 10; RC = null; playerView(); };
   const lanes = [...el.querySelectorAll('.rl')], left = (f) => 'calc((100% - 56px) * ' + Math.min(1, f) + ')';
   const from = (x) => (prev && prev[x.pseudo] != null ? prev[x.pseudo] / pT : 0);
   lanes.forEach((l, i) => { const c = l.querySelector('.car'); c.style.transition = 'none'; c.style.left = left(from(RC.rows[i])); });
