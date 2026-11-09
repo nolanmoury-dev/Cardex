@@ -509,7 +509,10 @@ const allUsers = async (me) => {
 };
 function raceBoard(list, id) {
   const real = list.filter((v) => v && !v.bot && !banOf(v)), pos = (v) => (v.rc && v.rc.w === id ? v.rc.pos : 0), top = Math.max(0, ...real.map(pos));
-  return [...real, ...list.filter((v) => v && v.bot)].map((v) => { const r = v.rc && v.rc.w === id ? v.rc : null, ps = r ? r.pos : 0; return { pseudo: v.pseudo, bot: !!v.bot, pos: v.bot ? Math.min(ps, real.length ? Math.max(0, top - 1) : ps) : ps, tt: (r && r.tt) || 0, car: v.car || null, sk: carSkin(v), pf: pfOk(v) }; })
+  // Seulement 3 bots par course (toujours les mêmes pour une même course : tirés selon l'id de la course)
+  const hs = (t) => { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+  const bots3 = list.filter((v) => v && v.bot).sort((x, y) => hs(id + x.pseudo) - hs(id + y.pseudo)).slice(0, 3);
+  return [...real, ...bots3].map((v) => { const r = v.rc && v.rc.w === id ? v.rc : null, ps = r ? r.pos : 0; return { pseudo: v.pseudo, bot: !!v.bot, pos: v.bot ? Math.min(ps, real.length ? Math.max(0, top - 1) : ps) : ps, tt: (r && r.tt) || 0, car: v.car || null, sk: carSkin(v), pf: pfOk(v) }; })
     .sort((a, c) => c.pos - a.pos || a.bot - c.bot || (a.tt || 9e15) - (c.tt || 9e15) || a.pseudo.localeCompare(c.pseudo)).map((x, i) => ({ ...x, rank: i + 1 }));
 }
 // ================= LIGUES (saisons d'une semaine) =================
